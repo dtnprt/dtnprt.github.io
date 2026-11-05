@@ -39,6 +39,11 @@ code { font-family: ui-monospace, monospace; background: #2a2e33; border-radius:
 pre.cmd { background: #2a2e33; border-radius: 6px; padding: 8px 12px; margin: 6px 0; overflow-x: auto; }
 pre.cmd code { padding: 0; background: none; }
 code.hash { word-break: break-all; }
+.drop { display: block; border: 2px dashed var(--line); border-radius: 8px; padding: 22px; text-align: center; cursor: pointer; margin: 10px 0; }
+.drop:hover, .drop.over { border-color: var(--accent); }
+.drop input { display: none; }
+.patch-status { margin: 8px 0; } .patch-status.ok { color: var(--ok, #6c6); } .patch-status.err { color: var(--warn); }
+a.dl[hidden] { display: none; }
 .tbl { border-collapse: collapse; width: 100%; } .tbl td, .tbl th { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .tbl th { color: var(--muted); font-weight: 500; } .num { text-align: right !important; white-space: nowrap; }
 .hash { font-size: 12px; }
@@ -66,7 +71,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
   <h1><a href="../">Chocolate Plus</a> <span>Custom Firmware</span></h1>
   <div class="row">
     <a class="btn" href="../">Home</a>
-    <a class="btn" href="#build">How to build</a>
+    <a class="btn" href="#build">Get the firmware</a>
     <a class="btn" href="#install">How to flash</a>
     <a class="btn primary" href="../webconfig/">Open Web Config ↗</a>
   </div>
@@ -78,7 +83,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       <div class="big">Custom firmware for the M-VAVE <b>Chocolate Plus</b> MIDI foot controller.</div>
       <div class="muted">Faster footswitches, startup screen with version, battery and mode, clearer bank display, dimmed LED.</div>
     </div>
-    <a class="dl primary" href="#build">Build it yourself</a>
+    <a class="dl primary" href="#build">Get the firmware</a>
   </section>
 
   <section class="card">
@@ -97,31 +102,47 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       <div class="notes"><h3>Footswitches</h3><ul><li>Faster response: a press is recognised about twice as fast as with the original firmware.</li><li>Short, quick taps are no longer missed.</li><li>Pressing two switches together (A+B, C+D) works as before.</li></ul><h3>Boot greeting</h3><ul><li>On boot the screen shows information about the version, the battery status in percent and the chosen mode.</li></ul><h3>Advanced custom mode</h3><ul><li>The screen shows bank and switch at a glance, e.g. <b>2-3</b> for bank 2, switch C.</li><li>The current bank is shown right after switching the pedal on, and switching banks down from the first bank correctly jumps to the last one.</li></ul><h3>Status LED</h3><ul><li>The status LED is dimmed.</li></ul></div>
     </section>
   <section class="card" id="build">
-    <h2>How to build the firmware</h2>
+    <h2>Get the firmware</h2>
     <p class="muted" style="margin:0 0 10px">The custom firmware is not offered as a download, because it contains
-      M-VAVE's original code. Instead, you patch the original firmware yourself with a small Python script.
-      This takes about two minutes and works on Windows, macOS and Linux.</p>
+      M-VAVE's original code. Instead, you patch the original firmware yourself, right here in your browser.
+      The file is processed on your computer and is not uploaded anywhere.</p>
     <ol>
-      <li><b>Install Python 3</b> from <a href="https://www.python.org/downloads/">python.org</a>
-        (on Windows tick <i>Add python.exe to PATH</i> during setup). No extra packages are needed.</li>
       <li><b>Download the original firmware 012</b> (<code>FootCtrlPlus_012.fwsc</code>) from the
         <a href="https://www.cuvave.com/product?id=chocolate-plus">M-VAVE Chocolate Plus page</a>.</li>
-      <li><b>Download the patch script:</b> <a href="https://github.com/dtnprt/chocolate-plus-re/archive/refs/heads/main.zip">chocolate-plus-re (ZIP)</a> and unpack it.
-        You need the two files <code>build.py</code> and <code>fwsctool.py</code> from its <code>firmware</code> folder.</li>
-      <li><b>Copy</b> <code>FootCtrlPlus_012.fwsc</code> into that <code>firmware</code> folder.</li>
-      <li><b>Open a terminal in that folder</b> (Windows: type <code>cmd</code> in the Explorer address bar and press Enter)
-        and run:
-        <pre class="cmd"><code>python build.py FootCtrlPlus_012.fwsc</code></pre>
-        On macOS and Linux use <code>python3</code> instead of <code>python</code>.</li>
-      <li>The script first checks that your file is exactly the original firmware 012, and stops with an error for
-        any other file (another version, an incomplete download, or an already patched file). Then it applies the patches and writes
-        <code>FootCtrlPlus_141-dtnprt.fwsc</code> into the same folder:
-        <pre class="cmd"><code>OK: FootCtrlPlus_012.fwsc is the original firmware 012
+      <li><b>Drop it here</b> (or click to choose it). It is checked first: only the original firmware 012 is accepted.
+        <label class="drop" id="patch-drop">
+          <input type="file" id="patch-file" accept=".fwsc,.ufw">
+          Drop <code>FootCtrlPlus_012.fwsc</code> here or <u>choose the file</u>
+        </label>
+        <div class="patch-status" id="patch-status"></div>
+        <a class="dl primary" id="patch-save" hidden>⬇ Save</a></li>
+      <li><b>Save</b> <code>FootCtrlPlus_141-dtnprt.fwsc</code> and flash it as described <a href="#install">below</a>.
+        Don't rename the file.</li>
+    </ol>
+    <details style="margin-top:12px">
+      <summary>Alternative: patch with Python</summary>
+      <p class="muted">The same patch as a Python script, e.g. to check what it does. The result is identical.</p>
+      <ol>
+        <li><b>Install Python 3</b> from <a href="https://www.python.org/downloads/">python.org</a>
+          (on Windows tick <i>Add python.exe to PATH</i> during setup). No extra packages are needed.</li>
+        <li><b>Download the original firmware 012</b> (<code>FootCtrlPlus_012.fwsc</code>), see step 1 above.</li>
+        <li><b>Download the patch script:</b> <a href="https://github.com/dtnprt/chocolate-plus-re/archive/refs/heads/main.zip">chocolate-plus-re (ZIP)</a> and unpack it.
+          You need the two files <code>build.py</code> and <code>fwsctool.py</code> from its <code>firmware</code> folder.</li>
+        <li><b>Copy</b> <code>FootCtrlPlus_012.fwsc</code> into that <code>firmware</code> folder.</li>
+        <li><b>Open a terminal in that folder</b> (Windows: type <code>cmd</code> in the Explorer address bar and press Enter)
+          and run:
+          <pre class="cmd"><code>python build.py FootCtrlPlus_012.fwsc</code></pre>
+          On macOS and Linux use <code>python3</code> instead of <code>python</code>.</li>
+        <li>The script first checks that your file is exactly the original firmware 012, and stops with an error for
+          any other file (another version, an incomplete download, or an already patched file). Then it applies the patches and writes
+          <code>FootCtrlPlus_141-dtnprt.fwsc</code> into the same folder:
+          <pre class="cmd"><code>OK: FootCtrlPlus_012.fwsc is the original firmware 012
 written: .\FootCtrlPlus_141-dtnprt.fwsc
 SHA-256: fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837
 Identical to the official build. Flash it with SincoOTA (do not rename the file).</code></pre></li>
-      <li>Flash <code>FootCtrlPlus_141-dtnprt.fwsc</code> as described <a href="#install">below</a>.</li>
-    </ol>
+        <li>Flash <code>FootCtrlPlus_141-dtnprt.fwsc</code> as described <a href="#install">below</a>.</li>
+      </ol>
+    </details>
     <details>
       <summary>Checksums</summary>
       <table class="tbl" style="margin-top:10px"><tbody>
@@ -161,6 +182,7 @@ Identical to the official build. Flash it with SincoOTA (do not rename the file)
     </details>
   </section>
 </main>
+<script src="patch.js"></script>
 <footer>Unofficial firmware, not affiliated with M-VAVE / Sinco. Flash at your own risk.<br>
   <a href="https://github.com/dtnprt/chocolate-plus-re">Source code on GitHub</a></footer>
 <div id="toast">SHA-256 copied</div>

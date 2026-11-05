@@ -40,6 +40,11 @@ code { font-family: ui-monospace, monospace; background: #2a2e33; border-radius:
 pre.cmd { background: #2a2e33; border-radius: 6px; padding: 8px 12px; margin: 6px 0; overflow-x: auto; }
 pre.cmd code { padding: 0; background: none; }
 code.hash { word-break: break-all; }
+.drop { display: block; border: 2px dashed var(--line); border-radius: 8px; padding: 22px; text-align: center; cursor: pointer; margin: 10px 0; }
+.drop:hover, .drop.over { border-color: var(--accent); }
+.drop input { display: none; }
+.patch-status { margin: 8px 0; } .patch-status.ok { color: var(--ok, #6c6); } .patch-status.err { color: var(--warn); }
+a.dl[hidden] { display: none; }
 .tbl { border-collapse: collapse; width: 100%; } .tbl td, .tbl th { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .tbl th { color: var(--muted); font-weight: 500; } .num { text-align: right !important; white-space: nowrap; }
 .hash { font-size: 12px; }
@@ -101,7 +106,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       </ul>
       <div class="row">
         <a class="btn primary" href="firmware/">Details</a>
-        <a class="btn" href="firmware/#build">How to build</a>
+        <a class="btn" href="firmware/#build">Get the firmware</a>
         <a class="btn" href="firmware/#install">How to flash</a>
       </div>
     </section>
