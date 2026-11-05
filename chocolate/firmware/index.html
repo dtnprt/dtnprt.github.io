@@ -119,30 +119,8 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       <li><b>Save</b> <code>FootCtrlPlus_141-dtnprt.fwsc</code> and flash it as described <a href="#install">below</a>.
         Don't rename the file.</li>
     </ol>
-    <details style="margin-top:12px">
-      <summary>Alternative: patch with Python</summary>
-      <p class="muted">The same patch as a Python script, e.g. to check what it does. The result is identical.</p>
-      <ol>
-        <li><b>Install Python 3</b> from <a href="https://www.python.org/downloads/">python.org</a>
-          (on Windows tick <i>Add python.exe to PATH</i> during setup). No extra packages are needed.</li>
-        <li><b>Download the original firmware 012</b> (<code>FootCtrlPlus_012.fwsc</code>), see step 1 above.</li>
-        <li><b>Download the patch script:</b> <a href="https://github.com/dtnprt/chocolate-plus-re/archive/refs/heads/main.zip">chocolate-plus-re (ZIP)</a> and unpack it.
-          You need the two files <code>build.py</code> and <code>fwsctool.py</code> from its <code>firmware</code> folder.</li>
-        <li><b>Copy</b> <code>FootCtrlPlus_012.fwsc</code> into that <code>firmware</code> folder.</li>
-        <li><b>Open a terminal in that folder</b> (Windows: type <code>cmd</code> in the Explorer address bar and press Enter)
-          and run:
-          <pre class="cmd"><code>python build.py FootCtrlPlus_012.fwsc</code></pre>
-          On macOS and Linux use <code>python3</code> instead of <code>python</code>.</li>
-        <li>The script first checks that your file is exactly the original firmware 012, and stops with an error for
-          any other file (another version, an incomplete download, or an already patched file). Then it applies the patches and writes
-          <code>FootCtrlPlus_141-dtnprt.fwsc</code> into the same folder:
-          <pre class="cmd"><code>OK: FootCtrlPlus_012.fwsc is the original firmware 012
-written: .\FootCtrlPlus_141-dtnprt.fwsc
-SHA-256: fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837
-Identical to the official build. Flash it with SincoOTA (do not rename the file).</code></pre></li>
-        <li>Flash <code>FootCtrlPlus_141-dtnprt.fwsc</code> as described <a href="#install">below</a>.</li>
-      </ol>
-    </details>
+    <p class="muted" style="margin:12px 0 4px">Prefer the command line, or want to see how the patch works?
+      <a href="build/">Build from source: Python patch script, toolchain, patch details →</a></p>
     <details>
       <summary>Checksums</summary>
       <table class="tbl" style="margin-top:10px"><tbody>
