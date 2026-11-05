@@ -69,9 +69,9 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
 
     <section class="card release">
       <h2>Version 14, build 1 <span class="tag">141</span> <span class="status on">Latest</span></h2>
-      <div class="muted">Released 2026-11-05 · based on stock FootCtrlPlus 012 · JieLi AC636N</div>
+      <div class="muted">Released 2026-11-05 · based on the original firmware 012</div>
       <p class="title">First release of the dtnprt custom firmware</p>
-      <div class="notes"><h3>Footswitches</h3><ul><li>A press registers after about 40–45 ms (stock: about 95 ms).</li><li>Short taps are no longer dropped; every tap sends press and release.</li><li>A+B and C+D combos still work (30 ms window to press both switches).</li></ul><h3>Boot greeting</h3><ul><li>Then <code>Uer</code> <code>141</code>, <code>bAt</code> + battery percent, <code>nod</code> + current mode, 0.6 s each.</li><li>In advanced custom mode (3) the greeting ends on the bank screen.</li></ul><h3>Advanced custom mode (3)</h3><ul><li>Bank/switch screen <code>x-z</code>, e.g. <code>2-3</code> for bank 2, switch C (stock: <code>02C</code>).</li><li>Stock bug fixed: after boot the bank showed <code>0</code> and bank-down jumped to an invalid bank. Banks now wrap correctly between 1 and the last bank right away.</li></ul><h3>Status LED</h3><ul><li>Dimmed: the LED is pulsed in step with the display refresh (on 1/3 of the time, about 67 Hz).</li><li>Note: holding B+C for about 2 s switches <b>Bluetooth</b> off and on (stock function); the LED stays dark while Bluetooth is off.</li></ul><h3>Identification</h3><ul><li>The pedal reports <code>FootCtrlPlus_141-dtnprt</code> (CubeSuite shows version 141).</li><li>The Bluetooth name stays <code>FootCtrlPlus</code> on purpose: SincoOTA and CubeSuite only find the pedal by that exact name.</li></ul></div>
+      <div class="notes"><h3>Footswitches</h3><ul><li>Faster response: a press is recognised about twice as fast as with the original firmware.</li><li>Short, quick taps are no longer missed.</li><li>Pressing two switches together (A+B, C+D) works as before.</li></ul><h3>Boot greeting</h3><ul><li>On boot the screen shows information about the version, the battery status in percent and the chosen mode.</li></ul><h3>Advanced custom mode</h3><ul><li>The screen shows bank and switch at a glance, e.g. <b>2-3</b> for bank 2, switch C.</li><li>The current bank is shown right after switching the pedal on, and switching banks down from the first bank correctly jumps to the last one.</li></ul><h3>Status LED</h3><ul><li>The status LED is dimmed.</li></ul></div>
       <h3>Assets</h3>
       <table class="tbl assets">
         <thead><tr><th>File</th><th class="num">Size</th><th>SHA-256</th></tr></thead>
@@ -97,7 +97,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
     <h2>How to flash</h2>
     <ol>
       <li>Install <b>SincoOTA</b> on an Android phone and copy the <code>.fwsc</code> file to the phone.
-        Keep the file name as it is: SincoOTA reads name and version from it.</li>
+        Don't rename the file.</li>
       <li>Set the pedal switch to <b>H</b> (wireless). Close CubeSuite, turn off Bluetooth on the PC.</li>
       <li><b>Do not pair</b> the pedal with the phone. If it is paired, remove it first
         (phone Bluetooth settings → FootCtrlPlus → Forget).</li>
@@ -112,14 +112,14 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
   <section class="card">
     <h2>Configure</h2>
     <p class="muted" style="margin:0 0 10px">The Web Config edits the pedal's settings (modes, MIDI messages, banks) over Bluetooth in Chrome or Edge.
-      It shows the firmware version the pedal reports, e.g. <code>FootCtrlPlus v141-dtnprt</code>.</p>
+      It also shows which firmware version is installed on the pedal.</p>
     <a class="btn primary" href="webconfig/index.html">Open Web Config ↗</a>
   </section>
 
   <section class="card">
     <details>
       <summary>Previous builds</summary>
-      <table class="tbl" style="margin-top:10px"><tbody><tr><td><span class="tag">015</span></td><td>Longer display times, bank number fix, bank screen after boot.</td></tr><tr><td><span class="tag">014 + LED</span></td><td>Status LED dimmed; pairing crash of the previous build fixed.</td></tr><tr><td><span class="tag">014 + greeting v4</span></td><td>Mode key/value and <code>x-z</code> screen. Crashed on Bluetooth pairing (withdrawn).</td></tr><tr><td><span class="tag">014 + greeting v1–v3</span></td><td>Boot greeting: frames, then key/value, then scrolling text.</td></tr><tr><td><span class="tag">014</span></td><td>Faster footswitches and short-tap fix; new name/version reply.</td></tr><tr><td><span class="tag">013-CUSTOM</span></td><td>First test build (version string only); proved the flashing pipeline.</td></tr></tbody></table>
+      <table class="tbl" style="margin-top:10px"><tbody><tr><td><span class="tag">015</span></td><td>Longer display times, bank number fix, bank screen right after switching on.</td></tr><tr><td><span class="tag">014</span></td><td>Faster footswitches, boot greeting, new bank screen, dimmed LED (test builds).</td></tr><tr><td><span class="tag">013</span></td><td>First test build.</td></tr></tbody></table>
     </details>
   </section>
 </main>
