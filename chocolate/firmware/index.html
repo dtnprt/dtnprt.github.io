@@ -74,7 +74,6 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       <div class="big">Custom firmware for the M-VAVE <b>Chocolate Plus</b> MIDI foot controller.</div>
       <div class="muted">Faster footswitches, startup screen with version, battery and mode, clearer bank display, dimmed LED.</div>
     </div>
-    <a class="dl primary" href="FootCtrlPlus_141-dtnprt.fwsc" download>⬇ Download 141</a>
   </section>
 
   <section class="card">
@@ -91,31 +90,11 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       <div class="muted">Released 2026-11-05 · based on the original firmware 012</div>
       <p class="title">First release of the dtnprt custom firmware</p>
       <div class="notes"><h3>Footswitches</h3><ul><li>Faster response: a press is recognised about twice as fast as with the original firmware.</li><li>Short, quick taps are no longer missed.</li><li>Pressing two switches together (A+B, C+D) works as before.</li></ul><h3>Boot greeting</h3><ul><li>On boot the screen shows information about the version, the battery status in percent and the chosen mode.</li></ul><h3>Advanced custom mode</h3><ul><li>The screen shows bank and switch at a glance, e.g. <b>2-3</b> for bank 2, switch C.</li><li>The current bank is shown right after switching the pedal on, and switching banks down from the first bank correctly jumps to the last one.</li></ul><h3>Status LED</h3><ul><li>The status LED is dimmed.</li></ul></div>
-      <h3>Downloads</h3>
-      <table class="tbl assets">
-        <thead><tr><th>File</th><th class="num">Size</th><th>SHA-256</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><a class="dl primary" href="FootCtrlPlus_141-dtnprt.fwsc" download>⬇ FootCtrlPlus_141-dtnprt.fwsc</a>
-              <div class="muted small">Custom firmware</div></td>
-            <td class="num">570 KB</td>
-            <td><code class="hash" title="SHA-256">fb479aa2da0efe27…</code>
-              <button class="small" data-copy="fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837" title="Copy SHA-256">copy</button></td>
-          </tr>
-          <tr>
-            <td><a class="dl " href="FootCtrlPlus_012.fwsc" download>⬇ FootCtrlPlus_012.fwsc</a>
-              <div class="muted small">Stock firmware 012 (recovery)</div></td>
-            <td class="num">570 KB</td>
-            <td><code class="hash" title="SHA-256">9deb9d90691415aa…</code>
-              <button class="small" data-copy="9deb9d90691415aa7f4514103842237a1500c681db34fe35e5f5136d173cb3bc" title="Copy SHA-256">copy</button></td>
-          </tr>
-        </tbody>
-      </table>
     </section>
   <section class="card" id="install">
     <h2>How to flash</h2>
     <ol>
-      <li>Install <b>SincoOTA</b> on an Android phone and copy the <code>.fwsc</code> file to the phone.
+      <li>Install <b>SincoOTA</b> on an Android phone and copy the firmware file to the phone.
         Don't rename the file.</li>
       <li>Set the pedal switch to <b>H</b> (wireless). Close CubeSuite, turn off Bluetooth on the PC.</li>
       <li><b>Do not pair</b> the pedal with the phone. If it is paired, remove it first
@@ -124,7 +103,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       <li>The pedal restarts into its update loader once in between and then into the new firmware.
         If it stays in update mode, use SincoOTA's <b>Mandatory upgrade</b> with the same file.</li>
     </ol>
-    <div class="banner">Recovery: flash <code>FootCtrlPlus_012.fwsc</code> (original firmware) the same way. The update
+    <div class="banner">Recovery: flash the original firmware 012 the same way. The update
       loader is never overwritten, so the pedal can always be flashed again.</div>
   </section>
 
