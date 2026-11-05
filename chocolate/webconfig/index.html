@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<!--
+  Chocolate Plus Web Config: single-file configurator for Sinco FootCtrlPlus / GAM-10 pedals
+  (FootControl2 layout). Everything (markup, CSS, JS) is in this file; no build step, no dependencies.
+
+  Run: Chrome/Edge. Double-click works; for "Reconnect" (pedal paired with Windows) serve it from
+  http://localhost (start.bat / start.sh / start.command). Android: embedded by ../android/build_apk.py (BLE via window.AndroidBle).
+  Protocol/layout notes: ../CubeSuite_analysis.md
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chocolate Plus Web Config</title>
+  <style>
+[hidden] { display: none !important; }
+:root {
+  --bg: #15171a; --card: #1f2226; --line: #33373d; --fg: #e8eaed; --muted: #8a9099;
+  --accent: #33eab8; --accent-dim: #1d7d63; --warn: #f0b429; --err: #ef5350;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; }
+h1 { margin: 0; font-size: 20px; } h1 span { color: var(--accent); font-weight: 400; }
+h2 { margin: 0 0 12px; font-size: 16px; display: flex; gap: 12px; align-items: center; }
+.conn, .toolbar, .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toolbar { padding: 10px 20px; border-bottom: 1px solid var(--line); }
+.sep { flex: 0 0 12px; }
+main { padding: 16px 20px; display: grid; gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.log { margin: 0 20px 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 12px 20px; align-items: end; }
+label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+label.check, .small label, label.small { flex-direction: row; align-items: center; gap: 6px; }
+label.check { color: var(--fg); }
+button, select, input[type=number], input[type=text] {
+  background: #2a2e33; color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; font: inherit; }
+input[type=number] { width: 70px; }
+button { cursor: pointer; } button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent-dim); border-color: var(--accent); }
+button.small, .small { font-size: 12px; } button.small { padding: 2px 8px; }
+button.icon { padding: 2px 8px; }
+.muted { color: var(--muted); }
+.status { padding: 3px 10px; border-radius: 12px; font-size: 12px; }
+.status.off { background: #333; } .status.on { background: var(--accent-dim); } .status.busy { background: #6b5514; }
+.banner { padding: 10px 20px; } .banner.warn { background: #3a3015; color: var(--warn); } .banner.err { background: #3d1c1c; color: #ff8a80; }
+.explain { color: var(--muted); margin: 12px 0 0; }
+.tabs { display: flex; gap: 4px; }
+.tabs button.active { background: var(--accent-dim); border-color: var(--accent); }
+.switches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
+.sw { border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+.sw h3 { margin: 0 0 8px; font-size: 14px; color: var(--accent); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tbl { border-collapse: collapse; width: 100%; } .tbl td, .tbl th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.tbl th { color: var(--muted); font-weight: 500; }
+.msgs { display: grid; gap: 4px; margin-top: 8px; }
+.msg { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.msg .idx { width: 22px; color: var(--muted); text-align: right; }
+.msg input.hexin { flex: 1; min-width: 200px; font-family: ui-monospace, monospace; }
+.empty { color: var(--muted); font-style: italic; }
+pre#log { max-height: 220px; overflow: auto; margin: 0; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
+pre#log .err { color: var(--err); } pre#log .warn { color: var(--warn); } pre#log .ok { color: var(--accent); }
+progress { width: 160px; accent-color: var(--accent); }
+main.disabled { opacity: .5; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Chocolate Plus <span>Web Config</span></h1>
+  <div class="conn">
+    <span id="status" class="status off">Not connected</span>
+    <button id="btnReconnect" class="primary" hidden title="Connect to a previously chosen pedal without scanning (works while Windows has it connected)">Reconnect</button>
+    <button id="btnConnect" class="primary">Connect pedal</button>
+    <button id="btnDemo" title="Use a simulated pedal to try the editor">Simulated pedal</button>
+    <button id="btnDisconnect" hidden>Disconnect</button>
+    <label class="small"><input type="checkbox" id="optAll"> show all BLE devices</label>
+  </div>
+</header>
+
+
+<div id="errorBanner" class="banner err" hidden></div>
+<div id="unsupported" class="banner warn" hidden>
+  Web Bluetooth is not available. Use Chrome or Edge on desktop/Android, served from <code>localhost</code> or HTTPS.
+  You can still edit and export <code>.fcp</code> files offline.
+</div>
+
+<section class="toolbar">
+  <button id="btnRead">Read from pedal</button>
+  <button id="btnWrite" class="primary">Write changes</button>
+  <button id="btnWriteAll" title="Write the complete 23646-byte block">Write all</button>
+  <label class="small"><input type="checkbox" id="optAuto"> auto-send changes</label>
+  <label class="small" title="Send a harmless query every 10 s so the pedal doesn't drop an idle connection"><input type="checkbox" id="optKeepAlive" checked> keep-alive</label>
+  <span class="sep"></span>
+  <button id="btnRevert">Revert</button>
+  <button id="btnImport">Import .fcp</button>
+  <button id="btnExport">Export .fcp</button>
+  <input type="file" id="fileInput" accept=".fcp,application/octet-stream" hidden>
+  <span id="dirty" class="small muted"></span>
+  <progress id="progress" max="1" value="0" hidden></progress>
+</section>
+
+<main id="editor">
+  <section class="card">
+    <h2>General</h2>
+    <div class="grid">
+      <label>Mode <select id="mode"></select></label>
+      <label>MIDI channel <select id="channel"></select></label>
+      <label>TRS jack
+        <select id="trs"><option value="0">Expression pedal</option><option value="1">TRS MIDI out</option></select>
+      </label>
+      <label class="check"><input type="checkbox" id="polar"> Polarity reversal</label>
+      <label class="check"><input type="checkbox" id="bankMidi"> Bank MIDI</label>
+      <label class="check" id="pcdispWrap"><input type="checkbox" id="pcdisp"> PC display</label>
+      <label id="bankMaxWrap">Max group count <select id="bankMax"></select></label>
+    </div>
+    <p id="modeExplain" class="explain"></p>
+  </section>
+
+  <section class="card" id="panelCustom" hidden>
+    <h2>Custom control</h2>
+    <table class="tbl" id="customTable"></table>
+  </section>
+
+  <section class="card" id="panelAdv" hidden>
+    <h2>Advanced custom mode</h2>
+    <div class="row">
+      <label>Active group on pedal <select id="usrpage"></select></label>
+      <span class="small muted">Edit group:</span>
+      <div class="tabs" id="advTabs"></div>
+    </div>
+    <div class="switches" id="advSwitches"></div>
+  </section>
+
+  <section class="card" id="panelKey" hidden>
+    <h2>Custom keyboard mode</h2>
+    <div class="row">
+      <label>Active group on pedal <select id="hidpage"></select></label>
+      <span class="small muted">Edit group:</span>
+      <div class="tabs" id="keyTabs"></div>
+    </div>
+    <table class="tbl" id="keyTable"></table>
+  </section>
+
+  <section class="card" id="panelMix" hidden>
+    <h2>Mixed key mode</h2>
+    <div class="row">
+      <label>Active group on pedal <select id="mixpage"></select></label>
+      <span class="small muted">Edit group:</span>
+      <div class="tabs" id="mixTabs"></div>
+    </div>
+    <div class="switches" id="mixSwitches"></div>
+  </section>
+
+  <section class="card">
+    <h2>Expression pedal (Interface) MIDI</h2>
+    <p class="small muted">Up to 16 CC messages sent by the expression pedal, each scaled to its min–max range.</p>
+    <div id="tapList"></div>
+  </section>
+</main>
+
+<section class="card log">
+  <h2>Log <button id="btnClearLog" class="small">clear</button>
+    <label class="small"><input type="checkbox" id="optHex"> show TX/RX bytes</label></h2>
+  <pre id="log"></pre>
+</section>
+
+<script>
+(() => {
+'use strict';
+// ================================================================================================
+// CC / command name tables (generated from CubeSuite Global.java)
+// ================================================================================================
+// Generated from CubeSuite com.cubeSuite.Global.Global.BluetoothPedalCustomCommand
+const CUSTOM_COMMAND_STR = ["Bank Select MSB", "Modulation Wheel MSB", "Breath Control MSB", "Undefined", "Foot Control MSB", "Portamento Time MSB", "Data Entry MSB", "Channel Volume MSB", "Balance MSB", "Undefined", "Pan MSB", "Expression MSB", "Effect Control 1MSB", "Effect Control 2 MSB", "Undefined", "Undefined", "General Purpose 1 MSB", "General Purpose 2 MSB", "General Purpose 3 MSB", "General Purpose 4 MSB", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Bank Select LSB", "Modulation Wheel LSB", "Breath Control LSB", "Undefined", "Foot Control LSB", "Portamento Time LSB", "Data Entry LSB", "Channel Volume LSB", "Balance LSB", "Undefined", "Pan LSB", "Expression LSB", "Effect Control 1 LSB", "Effect Control 2 LSB", "Undefined", "Undefined", "General Purpose 1 LSB", "General Purpose 2 LSB", "General Purpose 3 LSB", "General Purpose 4 LSB", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Sustain Pedal On/Off", "Portamento On/Off", "Sostenuto On/Off", "Soft Pedal On/Off", "Legato Footswitch", "Hold 2", "Sound Variation", "Timbre", "Release Time", "Attack Time", "Brightness", "Decay Time", "Vibrato Rate", "Vibrato Depth", "Vibrato Delay", "Undefined", "General Purpose 5", "General Purpose 6", "General Purpose 7", "General Purpose 8", "Portamento Control", "Undefined", "Undefined", "Undefined", "High Res. Velocity", "Undefined", "Undefined", "Effect 1 Depth", "Effect 2 Depth", "Effect 3 Depth", "Effect 4 Depth", "Effect 5 Depth", "Data Increment", "Data Decrement", "NRPN LSB", "NRPN MSB", "RPN LSB", "RPN MSB", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "All Sound Off", "Reset All Controllers", "Local Control On/Off", "All Notes Off", "Omni Mode Off", "Omni Mode On", "Mono Mode On", "Poly Mode On", "Mono Afertouch", "Start current sequence", "Stop current sequence", "Continue where stopped", "Pin Receiver", "Restore power-up state"];
+const MIDICC_STR = ["MIDI CC1", "MIDI CC1", "MIDI CC2", "MIDI CC3", "MIDI CC4", "MIDI CC5", "MIDI CC6", "MIDI CC7", "MIDI CC8", "MIDI CC9", "MIDI CC10", "MIDI CC11", "MIDI CC12", "MIDI CC13", "MIDI CC14", "MIDI CC15", "MIDI CC16", "MIDI CC17", "MIDI CC18", "MIDI CC19", "MIDI CC20", "MIDI CC21", "MIDI CC22", "MIDI CC23", "MIDI CC24", "MIDI CC25", "MIDI CC26", "MIDI CC27", "MIDI CC28", "MIDI CC29", "MIDI CC30", "MIDI CC31", "MIDI CC32", "MIDI CC33", "MIDI CC34", "MIDI CC35", "MIDI CC36", "MIDI CC37", "MIDI CC38", "MIDI CC39", "MIDI CC40", "MIDI CC41", "MIDI CC42", "MIDI CC43", "MIDI CC44", "MIDI CC45", "MIDI CC46", "MIDI CC47", "MIDI CC48", "MIDI CC49", "MIDI CC50", "MIDI CC51", "MIDI CC52", "MIDI CC53", "MIDI CC54", "MIDI CC55", "MIDI CC56", "MIDI CC57", "MIDI CC58", "MIDI CC59", "MIDI CC60", "MIDI CC61", "MIDI CC62", "MIDI CC63", "MIDI CC64", "MIDI CC65", "MIDI CC66", "MIDI CC67", "MIDI CC68", "MIDI CC69", "MIDI CC70", "MIDI CC71", "MIDI CC72", "MIDI CC73", "MIDI CC74", "MIDI CC75", "MIDI CC76", "MIDI CC77", "MIDI CC78", "MIDI CC79", "MIDI CC80", "MIDI CC81", "MIDI CC82", "MIDI CC83", "MIDI CC84", "MIDI CC85", "MIDI CC86", "MIDI CC87", "MIDI CC88", "MIDI CC89", "MIDI CC90", "MIDI CC91", "MIDI CC92", "MIDI CC93", "MIDI CC94", "MIDI CC95", "MIDI CC96", "MIDI CC97", "MIDI CC98", "MIDI CC99", "MIDI CC100", "MIDI CC101", "MIDI CC102", "MIDI CC103", "MIDI CC104", "MIDI CC105", "MIDI CC106", "MIDI CC107", "MIDI CC108", "MIDI CC109", "MIDI CC110", "MIDI CC111", "MIDI CC112", "MIDI CC113", "MIDI CC114", "MIDI CC115", "MIDI CC116", "MIDI CC117", "MIDI CC118", "MIDI CC119", "MIDI CC120", "MIDI CC121", "MIDI CC122", "MIDI CC123", "MIDI CC124", "MIDI CC125", "MIDI CC126", "MIDI CC127", "Channel Pressure", "Start", "Stop", "Continue", "Active Sensing", "Reset All Receivers"];
+const MIDICC_STR_KNOB = ["MIDI CC1", "MIDI CC1", "MIDI CC2", "MIDI CC3", "MIDI CC4", "MIDI CC5", "MIDI CC6", "MIDI CC7", "MIDI CC8", "MIDI CC9", "MIDI CC10", "MIDI CC11", "MIDI CC12", "MIDI CC13", "MIDI CC14", "MIDI CC15", "MIDI CC16", "MIDI CC17", "MIDI CC18", "MIDI CC19", "MIDI CC20", "MIDI CC21", "MIDI CC22", "MIDI CC23", "MIDI CC24", "MIDI CC25", "MIDI CC26", "MIDI CC27", "MIDI CC28", "MIDI CC29", "MIDI CC30", "MIDI CC31", "MIDI CC32", "MIDI CC33", "MIDI CC34", "MIDI CC35", "MIDI CC36", "MIDI CC37", "MIDI CC38", "MIDI CC39", "MIDI CC40", "MIDI CC41", "MIDI CC42", "MIDI CC43", "MIDI CC44", "MIDI CC45", "MIDI CC46", "MIDI CC47", "MIDI CC48", "MIDI CC49", "MIDI CC50", "MIDI CC51", "MIDI CC52", "MIDI CC53", "MIDI CC54", "MIDI CC55", "MIDI CC56", "MIDI CC57", "MIDI CC58", "MIDI CC59", "MIDI CC60", "MIDI CC61", "MIDI CC62", "MIDI CC63", "MIDI CC64", "MIDI CC65", "MIDI CC66", "MIDI CC67", "MIDI CC68", "MIDI CC69", "MIDI CC70", "MIDI CC71", "MIDI CC72", "MIDI CC73", "MIDI CC74", "MIDI CC75", "MIDI CC76", "MIDI CC77", "MIDI CC78", "MIDI CC79", "MIDI CC80", "MIDI CC81", "MIDI CC82", "MIDI CC83", "MIDI CC84", "MIDI CC85", "MIDI CC86", "MIDI CC87", "MIDI CC88", "MIDI CC89", "MIDI CC90", "MIDI CC91", "MIDI CC92", "MIDI CC93", "MIDI CC94", "MIDI CC95", "MIDI CC96", "MIDI CC97", "MIDI CC98", "MIDI CC99", "MIDI CC100", "MIDI CC101", "MIDI CC102", "MIDI CC103", "MIDI CC104", "MIDI CC105", "MIDI CC106", "MIDI CC107", "MIDI CC108", "MIDI CC109", "MIDI CC110", "MIDI CC111", "MIDI CC112", "MIDI CC113", "MIDI CC114", "MIDI CC115", "MIDI CC116", "MIDI CC117", "MIDI CC118", "MIDI CC119", "MIDI CC120", "MIDI CC121", "MIDI CC122", "MIDI CC123", "MIDI CC124", "MIDI CC125", "MIDI CC126", "MIDI CC127", "Program Change", "Channel Pressure"];
+const CUSTOM_COMMAND_STR_KNOB = ["Bank Select MSB", "Modulation Wheel MSB", "Breath Control MSB", "Undefined", "Foot Control MSB", "Portamento Time MSB", "Data Entry MSB", "Channel Volume MSB", "Balance MSB", "Undefined", "Pan MSB", "Expression MSB", "Effect Control 1MSB", "Effect Control 2 MSB", "Undefined", "Undefined", "General Purpose 1 MSB", "General Purpose 2 MSB", "General Purpose 3 MSB", "General Purpose 4 MSB", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Bank Select LSB", "Modulation Wheel LSB", "Breath Control LSB", "Undefined", "Foot Control LSB", "Portamento Time LSB", "Data Entry LSB", "Channel Volume LSB", "Balance LSB", "Undefined", "Pan LSB", "Expression LSB", "Effect Control 1 LSB", "Effect Control 2 LSB", "Undefined", "Undefined", "General Purpose 1 LSB", "General Purpose 2 LSB", "General Purpose 3 LSB", "General Purpose 4 LSB", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Sustain Pedal On/Off", "Portamento On/Off", "Sostenuto On/Off", "Soft Pedal On/Off", "Legato Footswitch", "Hold 2", "Sound Variation", "Timbre", "Release Time", "Attack Time", "Brightness", "Decay Time", "Vibrato Rate", "Vibrato Depth", "Vibrato Delay", "Undefined", "General Purpose 5", "General Purpose 6", "General Purpose 7", "General Purpose 8", "Portamento Control", "Undefined", "Undefined", "Undefined", "High Res. Velocity", "Undefined", "Undefined", "Effect 1 Depth", "Effect 2 Depth", "Effect 3 Depth", "Effect 4 Depth", "Effect 5 Depth", "Data Increment", "Data Decrement", "NRPN LSB", "NRPN MSB", "RPN LSB", "RPN MSB", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "Undefined", "All Sound Off", "Reset All Controllers", "Local Control On/Off", "All Notes Off", "Omni Mode Off", "Omni Mode On", "Mono Mode On", "Poly Mode On", "Select Preset", "Mono Aftertouch"];
+
+// ================================================================================================
+// Protocol: framing, checksum, request/response client (port of Communication / CommunicationUtil)
+// ================================================================================================
+// Sinco / CubeSuite control protocol (ported from com.cubeSuite.communication.Communication
+// and CommunicationUtil). All multi-byte fields are little-endian.
+//
+//   frame = 00 59 | cmd | len(u24) | payload[len] | checksum
+//   checksum = ~(sum of payload bytes) & 0xFF
+//
+//   READ  (0x23) payload: type(u8) addr(u32) n(u24)            -> reply 0x23 with same header + data
+//   WRITE (0x22) payload: type(u8) addr(u32) n(u24) data[n]    -> reply ack: 00 59 00 len(u24) result(0=ok) chk
+//   ERASE (0x21) payload: type(u8) addr(u32)                   -> reply ack
+//   QUERY (0x11 name/version, 0x13 fw, 0x17 dev type, ...)     -> reply same cmd with data
+
+const HEAD = [0x00, 0x59];
+
+const CMD = {
+  ACK: 0x00,
+  QUERY_NAME_VER: 0x11,
+  QUERY_SHORT_MSG: 0x12,
+  QUERY_FIRMWARE_VER: 0x13,
+  MIDI_WRITE: 0x15,
+  QUERY_DEV_TYPE: 0x17,
+  QUERY_SOUND_DATA_ADDR: 0x1b,
+  QUERY_CODEC_VAL: 0x20,
+  ERASE: 0x21,
+  WRITE: 0x22,
+  READ: 0x23,
+};
+
+const MEM = { NOR: 0, NAND: 1, SD: 2, EFF: 3, DEV: 4, USR: 5, RAM: 6, RSV2: 7 };
+
+// Chunk sizes used by the Android app.
+const READ_CHUNK = 1000;
+const WRITE_CHUNK = 173;
+
+const u24 = (n) => [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff];
+const u32 = (n) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
+const rd24 = (b, i) => b[i] | (b[i + 1] << 8) | (b[i + 2] << 16);
+const rd32 = (b, i) => (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0;
+
+function checksum(payload) {
+  let s = 0;
+  for (const b of payload) s = (s + b) & 0xff;
+  return ~s & 0xff;
+}
+
+function buildFrame(cmd, payload = []) {
+  return Uint8Array.from([...HEAD, cmd, ...u24(payload.length), ...payload, checksum(payload)]);
+}
+
+const buildRead = (type, addr, n) => buildFrame(CMD.READ, [type, ...u32(addr), ...u24(n)]);
+const buildWrite = (type, addr, data) =>
+  buildFrame(CMD.WRITE, [type, ...u32(addr), ...u24(data.length), ...data]);
+const buildErase = (type, addr) => buildFrame(CMD.ERASE, [type, ...u32(addr)]);
+const buildQuery = (cmd) => buildFrame(cmd, []);
+const buildMidi = (bytes) => buildFrame(CMD.MIDI_WRITE, [...bytes]);
+
+const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(' ');
+
+// ---------------------------------------------------------------------------
+// Response matchers. Each takes the receive buffer and returns
+//   null                       -> need more data
+//   { consumed, value }        -> matched (consumed = bytes to drop from buffer)
+// They scan for 00 59 like the Java state machines and skip anything that doesn't fit.
+
+function findHead(buf, from) {
+  for (let i = from; i + 1 < buf.length; i++) if (buf[i] === 0x00 && buf[i + 1] === 0x59) return i;
+  return -1;
+}
+
+/** Write/erase ack: 00 59 00 xx xx xx RESULT CHK  (result 0 = success) */
+function matchAck(buf) {
+  let i = 0;
+  while ((i = findHead(buf, i)) >= 0) {
+    if (i + 2 >= buf.length) return null;
+    if (buf[i + 2] !== CMD.ACK) { i += 1; continue; }
+    if (i + 7 >= buf.length) return null; // need result + checksum
+    return { consumed: i + 8, value: buf[i + 6] === 0 };
+  }
+  return null;
+}
+
+/** Query reply: 00 59 CMD len(u24) data[len] CHK */
+function matchQuery(cmd) {
+  return (buf) => {
+    let i = 0;
+    while ((i = findHead(buf, i)) >= 0) {
+      if (i + 2 >= buf.length) return null;
+      if (buf[i + 2] !== cmd) { i += 1; continue; }
+      if (i + 6 > buf.length) return null;
+      const len = rd24(buf, i + 3);
+      const end = i + 6 + len;
+      if (end >= buf.length) return null;
+      const data = buf.slice(i + 6, end);
+      if (checksum(data) !== buf[end]) { i += 1; continue; }
+      return { consumed: end + 1, value: data };
+    }
+    return null;
+  };
+}
+
+/** Read reply: 00 59 23 len(u24 = n+8) type addr(u32) n(u24) data[n] CHK */
+function matchRead(type, addr, n) {
+  return (buf) => {
+    let i = 0;
+    while ((i = findHead(buf, i)) >= 0) {
+      if (i + 2 >= buf.length) return null;
+      if (buf[i + 2] !== CMD.READ) { i += 1; continue; }
+      if (i + 14 > buf.length) return null;
+      if (rd24(buf, i + 3) !== n + 8 || buf[i + 6] !== type || rd32(buf, i + 7) !== addr >>> 0 || rd24(buf, i + 11) !== n) {
+        i += 1; continue;
+      }
+      const end = i + 14 + n;
+      if (end >= buf.length) return null;
+      const payload = buf.slice(i + 6, end);
+      if (checksum(payload) !== buf[end]) { i += 1; continue; }
+      return { consumed: end + 1, value: buf.slice(i + 14, end) };
+    }
+    return null;
+  };
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Protocol client on top of a link: { send(Uint8Array): Promise, onData: (cb) => void }.
+ * Transactions are serialised; the receive buffer is a byte stream (notifications may be fragmented).
+ */
+class Client {
+  constructor(link, { log = () => {}, timeout = 3000 } = {}) {
+    this.link = link;
+    this.log = log;
+    this.timeout = timeout;
+    this.rx = new Uint8Array(0);
+    this.waiter = null;
+    this.queue = Promise.resolve();
+    link.onData((chunk) => this._onData(chunk));
+  }
+
+  _onData(chunk) {
+    this.log('rx', chunk);
+    const n = new Uint8Array(this.rx.length + chunk.length);
+    n.set(this.rx);
+    n.set(chunk, this.rx.length);
+    this.rx = n;
+    this._check();
+  }
+
+  _check() {
+    if (!this.waiter) return;
+    const r = this.waiter.match(this.rx);
+    if (r) {
+      this.rx = this.rx.slice(r.consumed);
+      const w = this.waiter;
+      this.waiter = null;
+      clearTimeout(w.timer);
+      w.resolve(r.value);
+    }
+  }
+
+  _transact(frame, match, timeout = this.timeout) {
+    const run = () =>
+      new Promise((resolve, reject) => {
+        this.rx = new Uint8Array(0);
+        const timer = setTimeout(() => {
+          this.waiter = null;
+          reject(new Error(`Timeout waiting for reply to ${hex(frame.slice(0, 14))}…`));
+        }, timeout);
+        this.waiter = { match, resolve, reject, timer };
+        this.log('tx', frame);
+        this.link.send(frame).catch((e) => {
+          clearTimeout(timer);
+          this.waiter = null;
+          reject(e);
+        });
+      });
+    const p = this.queue.then(run, run);
+    this.queue = p.catch(() => {});
+    return p;
+  }
+
+  async query(cmd) {
+    return this._transact(buildQuery(cmd), matchQuery(cmd));
+  }
+
+  async queryNameAndVersion() {
+    const data = await this.query(CMD.QUERY_NAME_VER);
+    let s = '';
+    for (let i = 0; i < data.length - 1; i++) s += String.fromCharCode(data[i]);
+    s = s.replace(/\0[\s\S]*$/, '');           // stop at NUL padding
+    // "NAME_VVV" or custom "NAME_VVV-tag": name before the first '_', version = everything after it
+    const sep = s.indexOf('_');
+    const name = sep < 0 ? s : s.slice(0, sep);
+    const ver = sep < 0 ? '' : s.slice(sep + 1);
+    return { raw: s, name, version: ver };
+  }
+
+  async read(type, addr, length, onProgress = () => {}) {
+    const out = new Uint8Array(length);
+    let done = 0;
+    while (done < length) {
+      const n = Math.min(READ_CHUNK, length - done);
+      const data = await this._transact(buildRead(type, addr + done, n), matchRead(type, addr + done, n), this.timeout + 4000);
+      out.set(data, done);
+      done += n;
+      onProgress(done / length);
+    }
+    return out;
+  }
+
+  async write(type, addr, data, onProgress = () => {}) {
+    let done = 0;
+    while (done < data.length) {
+      const n = Math.min(WRITE_CHUNK, data.length - done);
+      const ok = await this._transact(buildWrite(type, addr + done, data.slice(done, done + n)), matchAck);
+      if (!ok) throw new Error(`Device rejected write at 0x${(addr + done).toString(16)}`);
+      done += n;
+      onProgress(done / data.length);
+    }
+  }
+
+  async erase(type, addr, blocks = 1) {
+    for (let i = 0; i < blocks; i++) {
+      const ok = await this._transact(buildErase(type, addr + i * 4096), matchAck);
+      if (!ok) throw new Error('Erase rejected');
+    }
+  }
+
+  /** Send raw MIDI bytes through the pedal (cmd 0x15). No reply is expected. */
+  async sendMidi(bytes) {
+    const frame = buildMidi(bytes);
+    this.log('tx', frame);
+    await this.link.send(frame);
+  }
+}
+
+// ================================================================================================
+// Transports: Web Bluetooth (BleLink) and Android bridge (NativeLink)
+// ================================================================================================
+// Web Bluetooth link to the Sinco control service (com.cubeSuite.config.BleEnum).
+
+const SINCO_SERVICE = '0000ae40-0000-1000-8000-00805f9b34fb';
+const SINCO_WRITE = '0000ae41-0000-1000-8000-00805f9b34fb';
+const SINCO_NOTIFY = '0000ae42-0000-1000-8000-00805f9b34fb';
+const DEVICE_INFO = 0x180a;
+const FW_REVISION = 0x2a26;
+
+// Name prefixes of devices that use the FootControl2 layout (BleHandle: FOOTCTRLPLUS=30, GAM-10=45)
+// plus the older FootCtrl so it shows up in the chooser.
+const NAME_PREFIXES = ['FootCtrl', 'GAM-10'];
+
+class BleLink {
+  constructor({ log = () => {}, onDisconnect = () => {} } = {}) {
+    this.log = log;
+    this.onDisconnect = onDisconnect;
+    this.listeners = [];
+    this.maxWrite = 0; // 0 = send whole frame in one write; set after a failure
+  }
+
+  static supported() {
+    return !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
+  }
+
+  /** getDevices() is behind a flag on desktop Chromium ("Web Bluetooth new permissions backend"). */
+  static canReconnect() {
+    return !!(navigator.bluetooth && navigator.bluetooth.getDevices);
+  }
+
+  /** Pedals this origin was granted access to earlier (no scan needed, works while Windows holds the link). */
+  static async knownDevices() {
+    if (!BleLink.canReconnect()) return [];
+    const all = await navigator.bluetooth.getDevices();
+    return all.filter((d) => !d.name || NAME_PREFIXES.some((p) => d.name.startsWith(p)));
+  }
+
+  async connect({ acceptAll = false, device = null } = {}) {
+    if (device) {
+      this.device = device;
+    } else {
+      const opts = acceptAll
+        ? { acceptAllDevices: true, optionalServices: [SINCO_SERVICE, DEVICE_INFO] }
+        : {
+            filters: [...NAME_PREFIXES.map((namePrefix) => ({ namePrefix })), { services: [SINCO_SERVICE] }],
+            optionalServices: [SINCO_SERVICE, DEVICE_INFO],
+          };
+      this.device = await navigator.bluetooth.requestDevice(opts);
+    }
+    this.device.addEventListener('gattserverdisconnected', () => this.onDisconnect());
+    // GATT connects on Windows/Chromium often fail on the first try; retry a few times.
+    const attempts = 3;
+    for (let i = 1; ; i++) {
+      this.log('info', `Connecting to ${this.device.name || this.device.id}… (attempt ${i}/${attempts})`);
+      try {
+        this.server = await this.device.gatt.connect();
+        break;
+      } catch (e) {
+        if (i >= attempts || e.name !== 'NetworkError') throw e;
+        this.log('warn', `${e.name}: ${e.message} – retrying`);
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+
+    let svc;
+    try {
+      svc = await this.server.getPrimaryService(SINCO_SERVICE);
+    } catch (e) {
+      throw new Error(`Device has no Sinco control service (ae40). ${e.message}`);
+    }
+    this.wr = await svc.getCharacteristic(SINCO_WRITE);
+    this.nt = await svc.getCharacteristic(SINCO_NOTIFY);
+    this.nt.addEventListener('characteristicvaluechanged', (ev) => {
+      const v = ev.target.value;
+      const chunk = new Uint8Array(v.buffer, v.byteOffset, v.byteLength).slice();
+      for (const l of this.listeners) l(chunk);
+    });
+    await this.nt.startNotifications();
+    this.withoutResponse = this.wr.properties.writeWithoutResponse;
+    this.log('info', `Connected. Write mode: ${this.withoutResponse ? 'without response' : 'with response'}`);
+    return this.device.name || '';
+  }
+
+  async firmwareRevision() {
+    try {
+      const svc = await this.server.getPrimaryService(DEVICE_INFO);
+      const ch = await svc.getCharacteristic(FW_REVISION);
+      const v = await ch.readValue();
+      return new TextDecoder().decode(v).replace(/\0+$/, '');
+    } catch {
+      return null;
+    }
+  }
+
+  onData(cb) {
+    this.listeners.push(cb);
+  }
+
+  async _write(bytes) {
+    if (this.withoutResponse) await this.wr.writeValueWithoutResponse(bytes);
+    else await this.wr.writeValueWithResponse(bytes);
+  }
+
+  async send(frame) {
+    if (!this.maxWrite) {
+      try {
+        await this._write(frame);
+        return;
+      } catch (e) {
+        // Most likely the negotiated MTU is smaller than the frame (the Android app asks for MTU 203).
+        this.log('warn', `Single ${frame.length}-byte write failed (${e.message}); falling back to 20-byte packets.`);
+        this.maxWrite = 20;
+      }
+    }
+    for (let i = 0; i < frame.length; i += this.maxWrite) await this._write(frame.slice(i, i + this.maxWrite));
+  }
+
+  disconnect() {
+    if (this.device && this.device.gatt.connected) this.device.gatt.disconnect();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Link for the Android wrapper app: BLE is done natively (Android WebView has no Web Bluetooth) and
+// exposed as window.AndroidBle. Native -> JS callbacks arrive on window.__ble.
+
+const b64enc = (bytes) => btoa(String.fromCharCode(...bytes));
+const b64dec = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+class NativeLink {
+  static available() {
+    return typeof window.AndroidBle !== 'undefined';
+  }
+
+  constructor({ log = () => {}, onDisconnect = () => {} } = {}) {
+    this.log = log;
+    this.listeners = [];
+    this.pending = new Map();
+    this.nextId = 1;
+    this.connectWaiter = null;
+    this.fwWaiter = null;
+    window.__ble = {
+      onData: (s) => {
+        const chunk = b64dec(s);
+        for (const l of this.listeners) l(chunk);
+      },
+      onLog: (msg) => log('info', msg),
+      onConnected: (name) => { this.connectWaiter?.resolve(name); this.connectWaiter = null; },
+      onError: (msg) => { this.connectWaiter?.reject(new Error(msg)); this.connectWaiter = null; },
+      onDisconnected: () => {
+        for (const p of this.pending.values()) p.reject(new Error('Disconnected'));
+        this.pending.clear();
+        onDisconnect();
+      },
+      onWriteDone: (id, err) => {
+        const p = this.pending.get(id);
+        if (!p) return;
+        this.pending.delete(id);
+        err ? p.reject(new Error(err)) : p.resolve();
+      },
+      onFirmware: (v) => { this.fwWaiter?.(v || null); this.fwWaiter = null; },
+    };
+  }
+
+  connect({ acceptAll = false } = {}) {
+    return new Promise((resolve, reject) => {
+      this.connectWaiter = { resolve, reject };
+      window.AndroidBle.connect(!!acceptAll);
+    });
+  }
+
+  firmwareRevision() {
+    return new Promise((resolve) => {
+      this.fwWaiter = resolve;
+      window.AndroidBle.readFirmware();
+      setTimeout(() => { if (this.fwWaiter) { this.fwWaiter = null; resolve(null); } }, 3000);
+    });
+  }
+
+  onData(cb) {
+    this.listeners.push(cb);
+  }
+
+  send(frame) {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      window.AndroidBle.write(id, b64enc(frame));
+    });
+  }
+
+  disconnect() {
+    window.AndroidBle.disconnect();
+  }
+
+  /** Save bytes through Android's "create document" picker (blob downloads don't work in WebView). */
+  static saveFile(name, bytes) {
+    window.AndroidBle.saveFile(name, b64enc(bytes));
+  }
+}
+
+// ================================================================================================
+// FootControl2 memory layout, labels, simulated pedal
+// ================================================================================================
+// FootControl2 / FootCtrlPlus configuration layout (com.cubeSuite.entity.fc2.FC2Struct).
+// The whole block lives in memory type DEV (4) at address 0 and is 23646 bytes long.
+// A ".fcp" file exported by the CubeSuite app is exactly this block.
+
+
+const FC2_SIZE = 23646;
+const MEM_TYPE = MEM.DEV;
+
+const PAGES_ADV = 8; // advCustom1[8][4]
+const PAGES_KEY = 6; // customKey[6][4][3]
+const PAGES_MIX = 6; // mixKey[6][4]
+const SWITCHES = 4; // A..D
+const MIDI_SLOTS = 16;
+const SYSEX_SIZE = 128; // byte 0 = length, bytes 1..127 = data
+
+const MIDICODE_SIZE = 5; // isEnable, channel, type, data1, data2
+const ADV_SIZE = 1 + MIDI_SLOTS * MIDICODE_SIZE * 2 + SYSEX_SIZE * 2; // 417
+const MIX_SIZE = 2 + 3 + ADV_SIZE; // 422
+
+const OFF = {
+  state: 0,
+  trs: 1,
+  ch: 2,
+  usr: 3, // usr[5][2] : [toggle, command] for A,B,C,D,pedal
+  midiCodeTap: 13, // 16 x MidiCode, expression pedal ("Interface") CC list
+  advCustom: 93, // 8 pages x 4 switches x ADV_SIZE
+  customKey: 13437, // 6 pages x 4 switches x [mod1, mod2, key]
+  mixKey: 13509, // 6 pages x 4 switches x MIX_SIZE
+  bankMax: 23637, // [3]
+  usrpage: 23640,
+  hidpage: 23641,
+  polar: 23642,
+  bankMidi: 23643,
+  pcdisp: 23644,
+  mixpage: 23645,
+};
+
+// AdvCustomStruct1 inner offsets
+const ADV = { mode: 0, midiA: 1, midiB: 1 + 80, sysExA: 161, sysExB: 161 + 128 };
+// MixKeyStruct inner offsets
+const MIX = { type: 0, tunerdat: 1, hidkeydat: 2, adv: 5 };
+
+const usrAddr = (sw, j) => OFF.usr + sw * 2 + j;
+const tapAddr = (i) => OFF.midiCodeTap + i * MIDICODE_SIZE;
+const advAddr = (page, sw) => OFF.advCustom + (page * SWITCHES + sw) * ADV_SIZE;
+const keyAddr = (page, sw) => OFF.customKey + (page * SWITCHES + sw) * 3;
+const mixAddr = (page, sw) => OFF.mixKey + (page * SWITCHES + sw) * MIX_SIZE;
+
+// Sanity check of the layout against the struct size.
+if (OFF.mixKey + PAGES_MIX * SWITCHES * MIX_SIZE !== OFF.bankMax) throw new Error('FC2 layout mismatch');
+
+// ---------------------------------------------------------------------------
+// Labels (from the app's strings.xml / popup windows)
+
+const MODES = [
+  ['Program change A', 'A–D send PC, E/F switch groups. 128 sounds total; PC number shown as a plain number.'],
+  ['Program change B', 'A–D send CC, E/F switch groups. 128 sounds total; CC number shown as a plain number.'],
+  ['Custom control', 'Assign a MIDI CC or common MIDI command to each switch and the pedal.'],
+  ['Advanced custom mode', 'Fully custom MIDI message lists per switch, 8 groups. E/F switch groups.'],
+  ['Manufacturer control', "Control the manufacturer's equipment (see that device's manual)."],
+  ['Touch screen (Android)', 'A = swipe up, B = swipe down, C = swipe left, D = swipe right.'],
+  ['Video mode', 'A = rewind, B = fast forward, C = play/pause, D = loop (Chrome extension; YouTube/Bilibili).'],
+  ['Keyboard A', 'A = Up, B = Down, C = Left, D = Right.'],
+  ['Keyboard B', 'A = Page up, B = Page down, C = Space, D = Enter.'],
+  ['Multimedia keyboard', 'A = previous track, B = next track, C = volume −, D = volume +.'],
+  ['Custom keyboard mode', 'Assign a keyboard shortcut (up to two modifiers + key) to each switch, 6 groups.'],
+  ['Mixed key mode', 'Each switch can be custom MIDI, a keyboard shortcut or a page turner key, 6 groups. E/F switch groups.'],
+  ['Speaker mode', 'Speaker control.'],
+];
+
+const SWITCH_NAMES = ['A', 'B', 'C', 'D'];
+
+const ADV_MODES = [
+  'Single step (one bank of messages)',
+  'Single step (alternate between two banks)',
+  'Press / release (two sets of messages)',
+  'Long press',
+  'Short press or long press',
+];
+// Modes that use only message list A (EditAdvMode1ListPopupWindow hides the A/B selector for these).
+const ADV_SINGLE_LIST = new Set([0, 3]);
+const ADV_LIST_NAMES = {
+  1: ['Bank 1', 'Bank 2'],
+  2: ['Press', 'Release'],
+  4: ['Short press', 'Long press'],
+};
+
+const MIDI_TYPES = ['PC', 'CC', 'Note On', 'Note Off', 'SysEx'];
+const SYSEX_TYPE = 4;
+
+const MIX_TYPES = ['Custom MIDI', 'Custom keyboard', 'Page turner'];
+const TURNER_KEYS = ['↑', '↓', '←', '→', 'Page up', 'Page down', 'Previous song', 'Next song', 'Vol −', 'Vol +'];
+
+// Keyboard combo encoding (SelectCombKey): modifier = index + 62 (0 = none), key = list index.
+const MODIFIERS = [[0, '—'], [63, 'Ctrl'], [64, 'Shift'], [65, 'Alt'], [66, 'Win / Cmd']];
+const KEYS = (() => {
+  const k = ['—'];
+  for (let i = 0; i < 26; i++) k.push(String.fromCharCode(65 + i));
+  k.push('↑', '↓', '←', '→', 'Page up', 'Page down', 'Space', 'Enter', 'Esc', 'Delete', 'Caps lock', 'Tab');
+  for (let i = 0; i < 10; i++) k.push(String(i));
+  k.push('+', '−');
+  for (let i = 1; i <= 12; i++) k.push('F' + i);
+  return k; // 63 entries, values 0..62
+})();
+
+// bankMax option labels (FC2Fragment.maxGroupCountSpinner31 / 15)
+const BANKMAX_PC = Array.from({ length: 32 }, (_, i) => String(i * 4 + 3));
+const BANKMAX_ADV = Array.from({ length: 8 }, (_, i) => String(i + 1));
+
+// ---------------------------------------------------------------------------
+// Simulated pedal: answers the same protocol so the UI can be tried without hardware.
+
+class MockLink {
+  constructor({ name = 'FootCtrlPlus_012' } = {}) {
+    this.name = name;
+    this.mem = new Uint8Array(FC2_SIZE);
+    this.mem[OFF.state] = 3;
+    this.listeners = [];
+    this.buf = [];
+  }
+  onData(cb) {
+    this.listeners.push(cb);
+  }
+  async firmwareRevision() {
+    return 'simulated';
+  }
+  disconnect() {}
+  _reply(bytes) {
+    // deliver in 20-byte notifications, asynchronously, like a real BLE link
+    const b = Uint8Array.from(bytes);
+    let t = 5;
+    for (let i = 0; i < b.length; i += 20) {
+      const part = b.slice(i, i + 20);
+      setTimeout(() => this.listeners.forEach((l) => l(part)), (t += 1));
+    }
+  }
+  _frame(cmd, payload) {
+    const p = [...payload];
+    return [0x00, 0x59, cmd, p.length & 0xff, (p.length >> 8) & 0xff, (p.length >> 16) & 0xff, ...p, checksum(p)];
+  }
+  async send(frame) {
+    this.buf.push(...frame);
+    for (;;) {
+      const b = this.buf;
+      if (b.length < 6) return;
+      if (b[0] !== 0x00 || b[1] !== 0x59) { b.shift(); continue; }
+      const len = b[3] | (b[4] << 8) | (b[5] << 16);
+      if (b.length < 7 + len) return;
+      const cmd = b[2];
+      const p = b.slice(6, 6 + len);
+      const ok = checksum(p) === b[6 + len];
+      this.buf = b.slice(7 + len);
+      const ack = (r) => this._reply(this._frame(CMD.ACK, [r]));
+      if (!ok) { ack(1); continue; }
+      const addr = (p[1] | (p[2] << 8) | (p[3] << 16) | (p[4] << 24)) >>> 0;
+      const n = p[5] | (p[6] << 8) | (p[7] << 16);
+      if (cmd === CMD.READ) {
+        const data = p[0] === MEM_TYPE ? this.mem.slice(addr, addr + n) : new Uint8Array(n);
+        this._reply(this._frame(CMD.READ, [...p.slice(0, 8), ...data]));
+      } else if (cmd === CMD.WRITE) {
+        if (p[0] === MEM_TYPE && addr + n <= FC2_SIZE) { this.mem.set(p.slice(8, 8 + n), addr); ack(0); } else ack(1);
+      } else if (cmd === CMD.ERASE) {
+        ack(0);
+      } else if (cmd === CMD.QUERY_NAME_VER) {
+        this._reply(this._frame(cmd, [...new TextEncoder().encode(this.name), 0]));
+      }
+    }
+  }
+}
+
+// ================================================================================================
+// UI
+// ================================================================================================
+
+// In the Android wrapper app BLE is native; in the browser it's Web Bluetooth.
+const Link = NativeLink.available() ? NativeLink : BleLink;
+
+const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------------------
+// State
+
+let mem = new Uint8Array(FC2_SIZE); // current edit buffer
+let orig = new Uint8Array(FC2_SIZE); // what we believe is on the pedal
+let origValid = false; // orig was read from (or fully written to) the pedal
+let link = null;
+let client = null;
+let busy = false;
+let deviceLabel = '';
+const view = { advPage: 0, keyPage: 0, mixPage: 0, advList: {}, mixList: {} };
+
+const get = (a) => mem[a];
+function set(a, v) {
+  mem[a] = v & 0xff;
+  changed();
+}
+function setMany(a, bytes) {
+  mem.set(bytes, a);
+  changed();
+}
+
+// ---------------------------------------------------------------------------
+// Log
+
+function log(kind, msg) {
+  if ((kind === 'tx' || kind === 'rx') && !$('optHex').checked) return;
+  const el = $('log');
+  const line = document.createElement('div');
+  line.className = { error: 'err', warn: 'warn', ok: 'ok' }[kind] || '';
+  const text = msg instanceof Uint8Array ? hex(msg.length > 64 ? msg.slice(0, 64) : msg) + (msg.length > 64 ? ` … (${msg.length} B)` : '') : msg;
+  line.textContent = `${new Date().toLocaleTimeString()} ${kind.toUpperCase().padEnd(5)} ${text}`;
+  el.appendChild(line);
+  while (el.childNodes.length > 500) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Connection
+
+function setStatus(text, cls) {
+  const s = $('status');
+  s.textContent = text;
+  s.className = 'status ' + cls;
+}
+
+function updateButtons() {
+  const conn = !!client;
+  $('btnConnect').hidden = conn;
+  $('btnDemo').hidden = conn;
+  $('btnReconnect').hidden = conn || knownPedals.length === 0;
+  if (knownPedals[0]) $('btnReconnect').textContent = `Reconnect ${knownPedals[0].name || 'pedal'}`;
+  $('btnDisconnect').hidden = !conn;
+  $('btnRead').disabled = !conn || busy;
+  $('btnWrite').disabled = !conn || busy || diffRanges().length === 0;
+  $('btnWriteAll').disabled = !conn || busy;
+  $('btnRevert').disabled = busy;
+  $('btnImport').disabled = busy;
+  const n = diffRanges().reduce((s, [a, b]) => s + (b - a), 0);
+  $('dirty').textContent = n ? `${n} byte(s) changed${origValid ? '' : ' (pedal not read yet)'}` : '';
+}
+
+async function attach(newLink, name) {
+  link = newLink;
+  client = new Client(link, { log });
+  deviceLabel = `Connected: ${name}`;
+  setStatus(deviceLabel, 'on');
+  try {
+    const info = await client.queryNameAndVersion();
+    log('ok', `Device reports "${info.raw}" (name ${info.name}, version ${info.version})`);
+    deviceLabel = `${info.name} v${info.version}`;
+    setStatus(deviceLabel, 'on');
+  } catch (e) {
+    log('warn', `Name/version query failed: ${e.message}`);
+  }
+  const fw = await link.firmwareRevision();
+  if (fw) log('info', `Firmware revision (180A/2A26): ${fw}`);
+  updateButtons();
+  connectedAt = Date.now();
+  startKeepAlive();
+  await readAll();
+}
+
+// Keep-alive: some pedals drop idle BLE links after ~30 s. A name/version query is harmless.
+const KEEPALIVE_MS = 10000;
+let keepAliveTimer = null;
+let connectedAt = 0;
+function startKeepAlive() {
+  clearInterval(keepAliveTimer);
+  keepAliveTimer = setInterval(async () => {
+    if (!client || busy || !$('optKeepAlive').checked) return;
+    try {
+      await client.query(0x11);
+    } catch (e) {
+      log('warn', `Keep-alive query failed: ${e.message}`);
+    }
+  }, KEEPALIVE_MS);
+}
+
+function detach() {
+  clearInterval(keepAliveTimer);
+  link = null;
+  client = null;
+  origValid = false;
+  setStatus('Not connected', 'off');
+  const dur = connectedAt ? (Date.now() - connectedAt) / 1000 : 0;
+  const secs = connectedAt ? ` after ${dur.toFixed(1)} s` : '';
+  log('info', `Disconnected${secs} (keep-alive ${$('optKeepAlive').checked ? 'on' : 'off'})`);
+  if (dur > 25 && dur < 35 && !NativeLink.available()) {
+    // ~30 s is the Bluetooth pairing (SMP) timeout: the pedal requested pairing and the PC never answered.
+    showError(`The pedal dropped the connection after ${dur.toFixed(0)} s. That is the Bluetooth pairing timeout: ` +
+      'the pedal wants to be paired. Pair it once in Windows Settings → Bluetooth & devices → Add device, then connect here again.');
+  }
+  connectedAt = 0;
+  updateButtons();
+}
+
+function showError(msg) {
+  const b = $('errorBanner');
+  b.textContent = msg;
+  b.hidden = !msg;
+}
+
+async function explainConnectError(e) {
+  const m = `${e.name || 'Error'}: ${e.message}`;
+  if (/cancel/i.test(e.message)) return null; // user closed the chooser
+  if (e.name === 'SecurityError' || location.protocol === 'file:')
+    return `${m}. Web Bluetooth was blocked for this page. Open it from http://localhost instead (run start.bat, start.sh or start.command).`;
+  if (/globally disabled/i.test(e.message))
+    return `${m}. Enable chrome://flags/#enable-web-bluetooth (needed on Linux), then restart the browser.`;
+  if (e.name === 'NetworkError')
+    return `${m}. The pedal was found but would not accept a connection. Usually it is still connected to another device ` +
+      `(close CubeSuite / turn off Bluetooth on your phone). Otherwise remove "FootCtrlPlus" under Windows Settings → Bluetooth & devices, ` +
+      `switch the pedal off and on, and try again.`;
+  let avail = true;
+  try { avail = await navigator.bluetooth.getAvailability(); } catch {}
+  if (!avail || /adapter/i.test(e.message))
+    return `${m}. No Bluetooth adapter is available. Turn Bluetooth on in the OS settings and allow the browser to use it.`;
+  return m;
+}
+
+const PAIRED_HINT =
+  'A pedal that is paired with Windows stays connected to Windows and no longer shows up in the chooser. ' +
+  'Use "Reconnect" instead (it needs the flag edge://flags/#enable-web-bluetooth-new-permissions-backend ' +
+  '(chrome://flags/… in Chrome) and this page opened from http://localhost, and the pedal must have been picked in the chooser once before).';
+
+async function connectWith(opts) {
+  showError('');
+  setStatus(opts.device ? 'Reconnecting…' : 'Choosing device…', 'busy');
+  const ble = new Link({ log, onDisconnect: detach });
+  try {
+    const name = await ble.connect(opts);
+    refreshKnown();
+    await attach(ble, name);
+  } catch (e) {
+    ble.disconnect();
+    setStatus('Not connected', 'off');
+    const msg = await explainConnectError(e);
+    if (msg) { log('error', msg); showError(msg); }
+    else {
+      log('info', 'No device selected.');
+      if (!NativeLink.available()) log('info', PAIRED_HINT);
+    }
+  }
+}
+
+$('btnConnect').onclick = () => {
+  log('info', 'Opening the browser’s Bluetooth device chooser…');
+  connectWith({ acceptAll: $('optAll').checked });
+};
+
+// Pedals granted earlier can be connected without scanning (needed when Windows holds the link).
+let knownPedals = [];
+async function refreshKnown() {
+  if (NativeLink.available()) return;
+  try { knownPedals = await BleLink.knownDevices(); } catch { knownPedals = []; }
+  updateButtons();
+}
+$('btnReconnect').onclick = () => {
+  const d = knownPedals[0];
+  if (!d) return;
+  log('info', `Reconnecting to ${d.name || d.id} without scanning…`);
+  connectWith({ device: d });
+};
+
+$('btnDemo').onclick = () => attach(new MockLink(), 'simulated FootCtrlPlus');
+
+$('btnDisconnect').onclick = () => {
+  if (link) link.disconnect();
+  detach();
+};
+
+// ---------------------------------------------------------------------------
+// Transfer
+
+async function withBusy(label, fn) {
+  busy = true;
+  updateButtons();
+  setStatus(label, 'busy');
+  const p = $('progress');
+  p.hidden = false;
+  p.value = 0;
+  try {
+    await fn((f) => (p.value = f));
+    return true;
+  } catch (e) {
+    log('error', e.message);
+    return false;
+  } finally {
+    busy = false;
+    p.hidden = true;
+    if (client) setStatus(deviceLabel, 'on');
+    updateButtons();
+  }
+}
+
+async function readAll() {
+  const t0 = performance.now();
+  const ok = await withBusy('Reading…', async (prog) => {
+    const data = await client.read(MEM_TYPE, 0, FC2_SIZE, prog);
+    mem = data.slice();
+    orig = data.slice();
+    origValid = true;
+  });
+  if (ok) log('ok', `Read ${FC2_SIZE} bytes in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  render();
+}
+
+function diffRanges() {
+  // When we never read the pedal, everything counts as changed.
+  if (!origValid) return mem.some((b, i) => b !== orig[i]) ? [[0, FC2_SIZE]] : [];
+  const ranges = [];
+  let i = 0;
+  while (i < FC2_SIZE) {
+    if (mem[i] === orig[i]) { i++; continue; }
+    let j = i + 1;
+    let gap = 0;
+    while (j < FC2_SIZE && gap <= 16) {
+      if (mem[j] !== orig[j]) gap = 0; else gap++;
+      j++;
+    }
+    j -= gap;
+    ranges.push([i, j]);
+    i = j;
+  }
+  return ranges;
+}
+
+async function writeRanges(ranges) {
+  const total = ranges.reduce((s, [a, b]) => s + (b - a), 0);
+  let done = 0;
+  const ok = await withBusy('Writing…', async (prog) => {
+    for (const [a, b] of ranges) {
+      const chunk = mem.slice(a, b);
+      await client.write(MEM_TYPE, a, chunk, (f) => prog((done + f * (b - a)) / total));
+      orig.set(chunk, a);
+      done += b - a;
+    }
+    if (ranges.length === 1 && ranges[0][0] === 0 && ranges[0][1] === FC2_SIZE) origValid = true;
+  });
+  if (ok) log('ok', `Wrote ${total} byte(s) in ${ranges.length} range(s)`);
+}
+
+$('btnRead').onclick = () => {
+  if (diffRanges().length && !confirm('Discard unsent changes and read from pedal?')) return;
+  readAll();
+};
+$('btnWrite').onclick = () => {
+  const r = diffRanges();
+  if (!origValid && !confirm('The pedal was not read in this session, so the complete configuration will be written. Continue?')) return;
+  writeRanges(r);
+};
+$('btnWriteAll').onclick = () => {
+  if (confirm('Write the complete configuration (23646 bytes) to the pedal?')) writeRanges([[0, FC2_SIZE]]);
+};
+$('btnRevert').onclick = () => {
+  mem = orig.slice();
+  render();
+};
+
+let autoTimer = null;
+function changed() {
+  updateButtons();
+  if ($('optAuto').checked && client && origValid && !busy) {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => {
+      const r = diffRanges();
+      if (r.length) writeRanges(r);
+    }, 400);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Import / export (.fcp = raw 23646-byte block, same as the CubeSuite app)
+
+$('btnImport').onclick = () => $('fileInput').click();
+$('fileInput').onchange = async (ev) => {
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  const buf = new Uint8Array(await f.arrayBuffer());
+  if (buf.length !== FC2_SIZE) {
+    log('error', `${f.name}: expected ${FC2_SIZE} bytes, got ${buf.length}`);
+    return;
+  }
+  mem = buf.slice();
+  log('ok', `Imported ${f.name}. Use "Write changes" to send it to the pedal.`);
+  render();
+  changed();
+};
+$('btnExport').onclick = () => {
+  const name = prompt('File name', 'footctrl') || 'footctrl';
+  const fileName = name.replace(/\.fcp$/i, '') + '.fcp';
+  if (NativeLink.available()) return NativeLink.saveFile(fileName, mem);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([mem], { type: 'application/octet-stream' }));
+  a.download = fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+$('btnClearLog').onclick = () => ($('log').textContent = '');
+
+// ---------------------------------------------------------------------------
+// Small DOM helpers
+
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith('on')) e[k] = v;
+    else if (k === 'className') e.className = v;
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children.flat()) if (c != null) e.append(c);
+  return e;
+}
+
+function fillSelect(sel, labels, values) {
+  sel.innerHTML = '';
+  labels.forEach((l, i) => sel.append(el('option', { value: values ? values[i] : i }, l)));
+}
+
+function selectFor(addr, labels, values, onChange) {
+  const s = el('select');
+  fillSelect(s, labels, values);
+  s.value = String(get(addr));
+  if (s.selectedIndex < 0) s.append(el('option', { value: get(addr), selected: true }, `? (${get(addr)})`));
+  s.onchange = () => {
+    set(addr, +s.value);
+    if (onChange) onChange();
+  };
+  return s;
+}
+
+function numberFor(addr, min, max, offset = 0, title = '') {
+  const n = el('input', { type: 'number', min: min + offset, max: max + offset, title });
+  n.value = get(addr) + offset;
+  n.onchange = () => {
+    const v = Math.max(min, Math.min(max, (parseInt(n.value, 10) || 0) - offset));
+    n.value = v + offset;
+    set(addr, v);
+  };
+  return n;
+}
+
+function tabs(container, count, current, onPick) {
+  container.innerHTML = '';
+  for (let i = 0; i < count; i++)
+    container.append(el('button', { className: i === current ? 'active' : '', onclick: () => onPick(i) }, String(i + 1)));
+}
+
+// ---------------------------------------------------------------------------
+// MIDI message list editor (MidiCodeStruct[16] + SysEx buffer), shared by advanced/mixed/interface
+
+function midiCount(base) {
+  let n = 0;
+  while (n < MIDI_SLOTS && get(base + n * MIDICODE_SIZE) !== 0) n++;
+  return n;
+}
+
+function deleteMidi(base, idx) {
+  // shift following entries up, like Fc2AdvMode1MidiItem's delete handler
+  for (let i = idx; i < MIDI_SLOTS - 1; i++) mem.copyWithin(base + i * 5, base + (i + 1) * 5, base + (i + 2) * 5);
+  mem[base + (MIDI_SLOTS - 1) * 5] = 0;
+  changed();
+}
+
+function parseHex(s) {
+  const clean = s.replace(/[^0-9a-fA-F]/g, '');
+  const out = [];
+  for (let i = 0; i + 1 < clean.length && out.length < SYSEX_SIZE - 1; i += 2) out.push(parseInt(clean.substr(i, 2), 16));
+  return out;
+}
+
+function midiListEditor(base, sysexBase, rerender, { interface: iface = false } = {}) {
+  const wrap = el('div', { className: 'msgs' });
+  const count = midiCount(base);
+  const isSys = count > 0 && get(base + 2) === SYSEX_TYPE;
+  if (count === 0) wrap.append(el('div', { className: 'empty' }, 'No messages'));
+  for (let i = 0; i < count; i++) {
+    const a = base + i * MIDICODE_SIZE;
+    const row = el('div', { className: 'msg' }, el('span', { className: 'idx' }, String(i + 1)));
+    if (iface) {
+      row.append(
+        'ch', numberFor(a + 1, 0, 15, 1),
+        'CC', numberFor(a + 2, 0, 127),
+        'min', numberFor(a + 3, 0, 127),
+        'max', numberFor(a + 4, 0, 127),
+      );
+    } else {
+      const type = get(a + 2);
+      const ts = el('select');
+      fillSelect(ts, MIDI_TYPES);
+      ts.value = String(type);
+      ts.onchange = () => {
+        const t = +ts.value;
+        if (t === SYSEX_TYPE) {
+          // a SysEx entry is always the only entry in the list
+          if (count > 1 && !confirm('A SysEx message replaces all other messages in this list. Continue?')) { ts.value = String(type); return; }
+          mem.copyWithin(base, a, a + 5);
+          for (let k = 1; k < MIDI_SLOTS; k++) mem[base + k * 5] = 0;
+        }
+        mem[(t === SYSEX_TYPE ? base : a) + 2] = t;
+        changed();
+        rerender();
+      };
+      row.append(ts);
+      if (type === SYSEX_TYPE) {
+        const len = Math.min(get(sysexBase), SYSEX_SIZE - 1);
+        const h = el('input', { type: 'text', className: 'hexin', placeholder: 'F0 … F7' });
+        h.value = hex(mem.slice(sysexBase + 1, sysexBase + 1 + len)).toUpperCase();
+        h.onchange = () => {
+          const bytes = parseHex(h.value);
+          const buf = new Uint8Array(SYSEX_SIZE);
+          buf[0] = bytes.length;
+          buf.set(bytes, 1);
+          setMany(sysexBase, buf);
+          h.value = hex(bytes).toUpperCase();
+        };
+        row.append(h, el('span', { className: 'small muted' }, `max ${SYSEX_SIZE - 1} bytes`));
+      } else {
+        row.append('ch', numberFor(a + 1, 0, 15, 1));
+        row.append(type === 0 ? 'program' : type === 1 ? 'CC#' : 'note', numberFor(a + 3, 0, 127));
+        if (type !== 0) row.append(type === 1 ? 'value' : 'velocity', numberFor(a + 4, 0, 127));
+      }
+    }
+    row.append(el('button', { className: 'icon', title: 'Remove', onclick: () => { deleteMidi(base, i); rerender(); } }, '✕'));
+    wrap.append(row);
+  }
+  const add = el('button', {
+    className: 'small',
+    disabled: count >= MIDI_SLOTS || isSys,
+    onclick: () => {
+      const a = base + count * MIDICODE_SIZE;
+      mem.set(iface ? [1, get(OFF.ch), 11, 0, 127] : [1, get(OFF.ch), 1, 0, 127], a);
+      changed();
+      rerender();
+    },
+  }, '+ add message');
+  wrap.append(el('div', {}, add));
+  return wrap;
+}
+
+/** Editor for one AdvCustomStruct1 (mode + two message lists). key = UI-state key for the selected list. */
+function advEditor(base, key, store, rerender) {
+  const mode = get(base + ADV.mode);
+  const box = el('div');
+  const ms = selectFor(base + ADV.mode, ADV_MODES, null, rerender);
+  box.append(el('label', {}, 'Trigger mode', ms));
+  let list = ADV_SINGLE_LIST.has(mode) ? 0 : store[key] || 0;
+  if (!ADV_SINGLE_LIST.has(mode)) {
+    const names = ADV_LIST_NAMES[mode] || ['A', 'B'];
+    const t = el('div', { className: 'tabs' });
+    names.forEach((n, i) =>
+      t.append(el('button', { className: i === list ? 'active' : '', onclick: () => { store[key] = i; rerender(); } },
+        `${n} (${midiCount(base + (i ? ADV.midiB : ADV.midiA))})`)));
+    box.append(el('div', { className: 'row', style: 'margin-top:8px' }, t));
+  }
+  box.append(midiListEditor(base + (list ? ADV.midiB : ADV.midiA), base + (list ? ADV.sysExB : ADV.sysExA), rerender));
+  return box;
+}
+
+function comboEditor(addr) {
+  // [mod1, mod2, key]; modifiers must differ (SelectCombKey KeyCombinationError)
+  const mvals = MODIFIERS.map((m) => m[0]);
+  const mlabels = MODIFIERS.map((m) => m[1]);
+  const m1 = selectFor(addr, mlabels, mvals);
+  const m2 = selectFor(addr + 1, mlabels, mvals);
+  const guard = (self, other, a) => () => {
+    if (+self.value && self.value === other.value) {
+      alert('Both modifiers are the same.');
+      self.value = '0';
+      set(a, 0);
+    }
+  };
+  m1.addEventListener('change', guard(m1, m2, addr));
+  m2.addEventListener('change', guard(m2, m1, addr + 1));
+  return [m1, '+', m2, '+', selectFor(addr + 2, KEYS)];
+}
+
+// ---------------------------------------------------------------------------
+// Render
+
+function render() {
+  const state = get(OFF.state);
+  fillSelect($('mode'), MODES.map((m, i) => `${i}: ${m[0]}`));
+  $('mode').value = String(state);
+  $('modeExplain').textContent = (MODES[state] || ['', 'Unknown mode'])[1];
+  fillSelect($('channel'), Array.from({ length: 16 }, (_, i) => String(i + 1)));
+  $('channel').value = String(get(OFF.ch));
+  $('trs').value = String(get(OFF.trs));
+  $('polar').checked = !!get(OFF.polar);
+  $('bankMidi').checked = !!get(OFF.bankMidi);
+  $('pcdisp').checked = !!get(OFF.pcdisp);
+  $('pcdispWrap').hidden = state !== 0;
+
+  const bm = $('bankMax');
+  $('bankMaxWrap').hidden = !(state === 0 || state === 1 || state === 3);
+  if (state === 0 || state === 1) { fillSelect(bm, BANKMAX_PC); bm.value = String(get(OFF.bankMax + state)); }
+  if (state === 3) { fillSelect(bm, BANKMAX_ADV); bm.value = String(get(OFF.bankMax + 2)); }
+
+  $('panelCustom').hidden = state !== 2;
+  $('panelAdv').hidden = state !== 3;
+  $('panelKey').hidden = state !== 10;
+  $('panelMix').hidden = state !== 11;
+  if (state === 2) renderCustom();
+  if (state === 3) renderAdv();
+  if (state === 10) renderKeys();
+  if (state === 11) renderMix();
+  renderTap();
+  updateButtons();
+}
+
+function renderCustom() {
+  const t = $('customTable');
+  t.innerHTML = '';
+  t.append(el('tr', {}, el('th', {}, 'Control'), el('th', {}, 'Toggle'), el('th', {}, 'Command')));
+  for (let i = 0; i < 5; i++) {
+    const knob = i === 4;
+    const cc = knob ? MIDICC_STR_KNOB : MIDICC_STR;
+    const names = knob ? CUSTOM_COMMAND_STR_KNOB : CUSTOM_COMMAND_STR;
+    const labels = names.map((n, k) => (k < 128 ? `CC${k} – ${n}` : `${cc[k]} – ${n}`));
+    const tog = el('input', { type: 'checkbox' });
+    tog.checked = get(usrAddr(i, 0)) === 1;
+    tog.onchange = () => set(usrAddr(i, 0), tog.checked ? 1 : 0);
+    t.append(el('tr', {},
+      el('td', {}, knob ? 'Expression pedal' : `Switch ${SWITCH_NAMES[i]}`),
+      el('td', {}, knob ? '' : tog),
+      el('td', {}, selectFor(usrAddr(i, 1), labels))));
+  }
+}
+
+function pageControls(selId, tabsId, pages, offKey, viewKey, rerender) {
+  const s = $(selId);
+  fillSelect(s, Array.from({ length: pages }, (_, i) => String(i + 1)));
+  s.value = String(get(OFF[offKey]));
+  s.onchange = () => set(OFF[offKey], +s.value);
+  tabs($(tabsId), pages, view[viewKey], (i) => { view[viewKey] = i; rerender(); });
+}
+
+function renderAdv() {
+  pageControls('usrpage', 'advTabs', PAGES_ADV, 'usrpage', 'advPage', renderAdv);
+  const c = $('advSwitches');
+  c.innerHTML = '';
+  for (let sw = 0; sw < SWITCHES; sw++) {
+    const base = advAddr(view.advPage, sw);
+    c.append(el('div', { className: 'sw' }, el('h3', {}, `Switch ${SWITCH_NAMES[sw]}`),
+      advEditor(base, `${view.advPage}.${sw}`, view.advList, renderAdv)));
+  }
+}
+
+function renderKeys() {
+  pageControls('hidpage', 'keyTabs', PAGES_KEY, 'hidpage', 'keyPage', renderKeys);
+  const t = $('keyTable');
+  t.innerHTML = '';
+  t.append(el('tr', {}, el('th', {}, 'Switch'), el('th', {}, 'Shortcut')));
+  for (let sw = 0; sw < SWITCHES; sw++)
+    t.append(el('tr', {}, el('td', {}, SWITCH_NAMES[sw]), el('td', {}, el('div', { className: 'row' }, comboEditor(keyAddr(view.keyPage, sw))))));
+}
+
+function renderMix() {
+  pageControls('mixpage', 'mixTabs', PAGES_MIX, 'mixpage', 'mixPage', renderMix);
+  const c = $('mixSwitches');
+  c.innerHTML = '';
+  for (let sw = 0; sw < SWITCHES; sw++) {
+    const base = mixAddr(view.mixPage, sw);
+    const type = get(base + MIX.type);
+    const card = el('div', { className: 'sw' },
+      el('h3', {}, `Switch ${SWITCH_NAMES[sw]}`, selectFor(base + MIX.type, MIX_TYPES, null, renderMix)));
+    if (type === 0) card.append(advEditor(base + MIX.adv, `${view.mixPage}.${sw}`, view.mixList, renderMix));
+    else if (type === 1) card.append(el('div', { className: 'row' }, comboEditor(base + MIX.hidkeydat)));
+    else card.append(el('label', {}, 'Key', selectFor(base + MIX.tunerdat, TURNER_KEYS)));
+    c.append(card);
+  }
+}
+
+function renderTap() {
+  const c = $('tapList');
+  c.innerHTML = '';
+  c.append(midiListEditor(tapAddr(0), null, renderTap, { interface: true }));
+}
+
+// General controls
+$('mode').onchange = () => { set(OFF.state, +$('mode').value); render(); };
+$('channel').onchange = () => set(OFF.ch, +$('channel').value);
+$('trs').onchange = () => set(OFF.trs, +$('trs').value);
+$('polar').onchange = () => set(OFF.polar, $('polar').checked ? 1 : 0);
+$('bankMidi').onchange = () => set(OFF.bankMidi, $('bankMidi').checked ? 1 : 0);
+$('pcdisp').onchange = () => set(OFF.pcdisp, $('pcdisp').checked ? 1 : 0);
+$('bankMax').onchange = () => {
+  const s = get(OFF.state);
+  set(OFF.bankMax + (s === 3 ? 2 : s), +$('bankMax').value);
+};
+
+// ---------------------------------------------------------------------------
+
+if (!NativeLink.available() && !BleLink.supported()) {
+  $('unsupported').hidden = false;
+  $('btnConnect').disabled = true;
+  $('btnConnect').title = 'Web Bluetooth is not available in this browser';
+}
+log('info', 'Ready. Connect the pedal, use the simulated pedal, or import a .fcp file.');
+render();
+if (!NativeLink.available() && BleLink.supported()) {
+  if (!BleLink.canReconnect())
+    log('info', 'Tip: to use a pedal that is paired with Windows, enable edge://flags/#enable-web-bluetooth-new-permissions-backend ' +
+      'and open this page from http://localhost. A "Reconnect" button then appears after you have picked the pedal once.');
+  else if (location.protocol === 'file:')
+    log('info', 'Tip: open this page from http://localhost so the browser remembers the pedal for "Reconnect".');
+  refreshKnown();
+}
+if (new URLSearchParams(location.search).has('demo')) $('btnDemo').click();
+
+// Internals for test/test.html (harmless to expose).
+window.__fc2 = { buildRead, buildWrite, buildQuery, hex, checksum, Client, CMD, matchAck, matchRead,
+  MockLink, NativeLink, FC2_SIZE, OFF, ADV_SIZE, MIX_SIZE, advAddr, mixAddr, keyAddr, KEYS };
+})();
+</script>
+</body>
+</html>

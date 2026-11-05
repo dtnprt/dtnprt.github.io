@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>FootCtrl web config tests</title></head>
+<body>
+<pre id="out">running…</pre>
+<iframe id="f" src="../index.html?demo" style="width:1200px;height:900px"></iframe>
+<script type="module">
+// Tests ../index.html (served over http, e.g. `python -m http.server` in webconfig/).
+// 1. protocol vectors + memory layout, 2. UI driven against the simulated pedal (?demo),
+// 3. Android bridge (NativeLink) against a fake window.AndroidBle.
+const out = [];
+let fails = 0;
+const ok = (name, cond, extra = '') => { if (!cond) fails++; out.push(`${cond ? 'PASS' : 'FAIL'} ${name} ${extra}`); };
+const eq = (name, got, exp) => ok(name, got === exp, got === exp ? '' : `\n   got: ${got}\n   exp: ${exp}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const f = document.getElementById('f');
+const errors = [];
+await new Promise((r) => f.addEventListener('load', r));
+const W = f.contentWindow;
+W.addEventListener('error', (e) => errors.push(e.message));
+W.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
+const d = f.contentDocument;
+const $ = (id) => d.getElementById(id);
+const fire = (elm, type = 'change') => elm.dispatchEvent(new W.Event(type));
+
+try {
+  const T = W.__fc2;
+  ok('test hook present', !!T);
+
+  // ---- 1. protocol + layout -------------------------------------------------------------
+  // expected frames derived from the Java Communication class (checksum = ~sum(payload))
+  eq('read frame', T.hex(T.buildRead(4, 0, 1000)), '00 59 23 08 00 00 04 00 00 00 00 e8 03 00 10');
+  eq('write frame', T.hex(T.buildWrite(4, 0x10, [1, 2, 3])), '00 59 22 0b 00 00 04 10 00 00 00 03 00 00 01 02 03 e2');
+  eq('query frame', T.hex(T.buildQuery(T.CMD.QUERY_NAME_VER)), '00 59 11 00 00 00 ff');
+  eq('ADV_SIZE', T.ADV_SIZE, 417);
+  eq('MIX_SIZE', T.MIX_SIZE, 422);
+  eq('adv[7][3] end == customKey', T.advAddr(7, 3) + T.ADV_SIZE, T.OFF.customKey);
+  eq('key[5][3] end == mixKey', T.keyAddr(5, 3) + 3, T.OFF.mixKey);
+  eq('mix[5][3] end == bankMax', T.mixAddr(5, 3) + T.MIX_SIZE, T.OFF.bankMax);
+  eq('mixpage is last byte', T.OFF.mixpage, T.FC2_SIZE - 1);
+  eq('keys list length', T.KEYS.length, 63);
+  const ack = Uint8Array.from([0x12, 0x00, 0x59, 0x00, 0x01, 0x00, 0x00, 0x00, 0xff, 0x99]);
+  eq('ack match', JSON.stringify(T.matchAck(ack)), JSON.stringify({ consumed: 9, value: true }));
+  eq('ack partial', T.matchAck(ack.slice(0, 6)), null);
+
+  const dev = new T.MockLink();
+  const c = new T.Client(dev, { timeout: 2000 });
+  const info = await c.queryNameAndVersion();
+  eq('mock name', info.name, 'FootCtrlPlus');
+  eq('mock version', info.version, '012');
+  const pattern = new Uint8Array(T.FC2_SIZE).map((_, i) => (i * 7 + 3) & 0xff);
+  await c.write(4, 0, pattern);
+  ok('mock write+read round trip', (await c.read(4, 0, T.FC2_SIZE)).every((b, i) => b === pattern[i]));
+  eq('partial read', T.hex(await c.read(4, 12345, 10)), T.hex(pattern.slice(12345, 12355)));
+
+  // ---- 2. UI against the simulated pedal -------------------------------------------------
+  for (let i = 0; i < 100 && !$('log').textContent.includes('Read 23646'); i++) await sleep(100);
+  ok('initial read from simulated pedal', $('log').textContent.includes('Read 23646'));
+  ok('status shows device', $('status').textContent.includes('FootCtrlPlus'), $('status').textContent);
+  ok('mode 3 panel visible', !$('panelAdv').hidden);
+  ok('PC display hidden in mode 3', $('pcdispWrap').hidden);
+  [...$('advSwitches').querySelectorAll('button')].find((b) => b.textContent.includes('add message')).click();
+  ok('message added', $('advSwitches').querySelectorAll('.msg').length === 1);
+  ok('dirty counter', /changed/.test($('dirty').textContent), $('dirty').textContent);
+  const typeSel = $('advSwitches').querySelector('.msg select');
+  typeSel.value = '4'; fire(typeSel);
+  const hexIn = $('advSwitches').querySelector('input.hexin');
+  ok('sysex input shown', !!hexIn);
+  hexIn.value = 'f0 7f 01 f7'; fire(hexIn);
+  $('btnWrite').click();
+  for (let i = 0; i < 50 && !$('log').textContent.includes('Wrote'); i++) await sleep(100);
+  ok('write changes', $('log').textContent.includes('Wrote'), ($('log').textContent.match(/Wrote[^\n]*/) || [''])[0]);
+  ok('nothing dirty after write', $('dirty').textContent === '', $('dirty').textContent);
+  for (let m = 0; m < 13; m++) { $('mode').value = String(m); fire($('mode')); }
+  $('mode').value = '2'; fire($('mode'));
+  ok('custom panel (mode 2)', !$('panelCustom').hidden && $('customTable').querySelectorAll('select').length === 5);
+  $('mode').value = '10'; fire($('mode'));
+  ok('keyboard panel (mode 10)', !$('panelKey').hidden && $('keyTable').querySelectorAll('select').length === 12);
+  $('mode').value = '11'; fire($('mode'));
+  ok('mixed panel (mode 11)', !$('panelMix').hidden);
+  const mt = $('mixSwitches').querySelector('h3 select'); mt.value = '2'; fire(mt);
+  ok('mixed turner select', [...$('mixSwitches').querySelectorAll('select')].some((s) => s.options.length === 10));
+  [...$('tapList').querySelectorAll('button')].find((b) => b.textContent.includes('add')).click();
+  ok('expression pedal message added', $('tapList').querySelectorAll('.msg').length === 1);
+
+  // every $('id') used by the script must exist in the markup
+  const src = await (await fetch('../index.html')).text();
+  const ids = [...new Set([...src.matchAll(/\$\('([A-Za-z0-9_]+)'\)/g)].map((m) => m[1]))];
+  const missing = ids.filter((id) => !d.getElementById(id));
+  ok(`all ${ids.length} referenced element ids exist`, missing.length === 0, missing.join(', '));
+
+  // Connect error path (no user gesture / no adapter in headless) must show the banner, not throw
+  const errCount = errors.length;
+  $('btnConnect').click();
+  for (let i = 0; i < 50 && $('errorBanner').hidden; i++) await sleep(100);
+  ok('connect failure shows error banner', !$('errorBanner').hidden, $('errorBanner').textContent.slice(0, 80));
+  ok('connect failure throws no JS error', errors.length === errCount, errors.slice(errCount).join(' | '));
+
+  // ---- 3. Android bridge -----------------------------------------------------------------
+  const b64 = (u8) => btoa(String.fromCharCode(...u8));
+  const unb64 = (s) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
+  const nd = new T.MockLink();
+  nd.onData((chunk) => setTimeout(() => W.__ble.onData(b64(chunk)), 0));
+  const later = (fn) => setTimeout(fn, 2);
+  W.AndroidBle = {
+    connect: () => later(() => W.__ble.onConnected('FootCtrlPlus')),
+    write: (id, s) => later(async () => { await nd.send(unb64(s)); W.__ble.onWriteDone(id, null); }),
+    readFirmware: () => later(() => W.__ble.onFirmware('1.2')),
+    disconnect: () => later(() => W.__ble.onDisconnected()),
+    saveFile: (name, s) => { W.saved = [name, unb64(s).length]; },
+  };
+  ok('native available', T.NativeLink.available());
+  let disc = false;
+  const link = new T.NativeLink({ onDisconnect: () => (disc = true) });
+  eq('native connect', await link.connect(), 'FootCtrlPlus');
+  eq('native firmware', await link.firmwareRevision(), '1.2');
+  const nc = new T.Client(link, { timeout: 2000 });
+  eq('native query', (await nc.queryNameAndVersion()).name, 'FootCtrlPlus');
+  const data = new Uint8Array(T.FC2_SIZE).map((_, i) => (i * 13) & 0xff);
+  await nc.write(4, 0, data);
+  ok('native write/read round trip', (await nc.read(4, 0, T.FC2_SIZE)).every((b, i) => b === data[i]));
+  T.NativeLink.saveFile('x.fcp', data.slice(0, 100));
+  ok('native saveFile', W.saved && W.saved[1] === 100);
+  link.disconnect();
+  await sleep(20);
+  ok('native disconnect callback', disc);
+  W.AndroidBle.connect = () => later(() => W.__ble.onError('Device selection cancelled'));
+  let err = '';
+  try { await new T.NativeLink().connect(); } catch (e) { err = e.message; }
+  ok('native connect error propagates', /cancel/.test(err), err);
+
+  ok('no JS errors in page', errors.length === 0, errors.join(' | '));
+} catch (e) {
+  fails++;
+  out.push('EXCEPTION ' + e.stack);
+}
+out.push(fails ? `${fails} FAILED` : 'ALL PASSED');
+document.getElementById('out').textContent = out.join('\n');
+document.title = fails ? 'FAIL' : 'OK';
+</script>
+</body></html>

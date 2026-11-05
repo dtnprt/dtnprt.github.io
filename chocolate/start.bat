@@ -1,7 +1,6 @@
 @echo off
-rem Serves the configurator on http://localhost:8000 (needed for "Reconnect" / remembered pedals).
+rem Serves the website (release page + Web Config) on http://localhost:8002.
+rem Run tools\make_site.py first so websiteirmware\ exists.
 cd /d "%~dp0"
-echo FootCtrlPlus Web Config
-echo Open http://localhost:8000/ in Chrome or Edge. Press Ctrl+C to stop.
-echo.
-python -m http.server 8000 --bind 127.0.0.1
+echo Chocolate Plus - open http://localhost:8002/ in Chrome or Edge. Ctrl+C to stop.
+python -m http.server 8002 --bind 127.0.0.1
