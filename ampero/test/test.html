@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ampero web – tests</title>
+  <style>
+    body { background: #141414; color: #ddd; font: 13px Consolas, monospace; padding: 16px; }
+    .ok { color: #3fb950; } .fail { color: #e5484d; } h1 { font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1 id="summary">running…</h1>
+  <pre id="out"></pre>
+  <script type="module">
+    import * as lzo from '../js/lzo1x.js';
+    import { CMD, DamagedFrameError, MAX_NAME, Reassembler, compareStored, encodeTransfer, presetChain, presetRouting, presetSlots, MODULES, setPresetName, setPresetStyle, presetInfo, parsePresetList, presetLabel } from '../js/protocol.js';
+    import { makeZip, readZip, crc32 } from '../js/zip.js';
+    import { buildBackup, loadBackup } from '../js/backup.js';
+    import { decodePrst, encodePrst } from '../js/prst.js';
+    import { Assembler, describe, parseTraceText } from '../js/sniffer.js';
+
+    const out = document.getElementById('out');
+    let pass = 0, fail = 0;
+    const hex = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (h) => parseInt(h, 16));
+    function check(name, cond, detail = '') {
+      const line = document.createElement('span');
+      line.className = cond ? 'ok' : 'fail';
+      line.textContent = `${cond ? 'PASS' : 'FAIL'}  ${name}${!cond && detail ? '  – ' + detail : ''}\n`;
+      out.appendChild(line);
+      cond ? pass++ : fail++;
+    }
+
+    try {
+      const fx = await (await fetch('fixtures.json')).json();
+
+      for (const c of fx.lzo) {
+        const plain = unhex(c.plain);
+        const comp = hex(lzo.compress(plain));
+        check(`lzo compress ${c.name} (${plain.length} B)`, comp === c.lzo,
+          `len ${comp.length / 2} vs ${c.lzo.length / 2}, first diff at ${[...comp].findIndex((ch, i) => ch !== c.lzo[i]) >> 1}`);
+        check(`lzo decompress ${c.name}`, hex(lzo.decompress(unhex(c.lzo))) === c.plain);
+      }
+
+      let encOk = 0;
+      for (const c of fx.encode) {
+        const frames = encodeTransfer(c.cmd, unhex(c.payload), c.kind).map(hex);
+        if (frames.join() === c.frames.join()) encOk++;
+        else check(`encode ${c.cmd.toString(16)}`, false, `${frames[0]} vs ${c.frames[0]}`);
+      }
+      check(`encode: ${encOk}/${fx.encode.length} host transfers byte-identical to capture`, encOk === fx.encode.length);
+
+      const got = [];
+      const errors = [];
+      const r = new Reassembler((t) => got.push(t), (e) => errors.push(e.message));
+      for (const f of fx.receive.frames) r.push(unhex(f));
+      const exp = fx.receive.transfers;
+      const same = got.length === exp.length && got.every((t, i) => t.cmd === exp[i].cmd && hex(t.payload) === exp[i].payload);
+      check(`reassemble: ${got.length}/${exp.length} device transfers`, same, errors.join('; '));
+
+      // interleaving: frames of two answers mixed (as seen on the real device)
+      {
+        const d = got.filter((t) => t.cmd === CMD.PRESET_DUMP);
+        const fa = encodeTransfer(CMD.PRESET_DUMP, d[1].payload, 0x12);   // preset 0
+        const fb = encodeTransfer(CMD.PRESET_DUMP, d[2].payload, 0x12);   // preset 8
+        // second stream with the same total: copy of fa with one data nibble changed in frame 3
+        const fa5 = fa.map((f) => f.slice());
+        fa5[1][40] ^= 0x01;
+        const fl = encodeTransfer(CMD.PRESET_LIST, list0(got), 0x12);     // other total
+        const small = encodeTransfer(0x010a0003, new Uint8Array(8), 0x12);
+        const run = (frames) => {
+          const res = [], errs = [];
+          const ra = new Reassembler((t) => res.push(t), (e) => errs.push(e.message));
+          frames.forEach((f) => ra.push(f));
+          return { res, errs };
+        };
+        const solo = run(fa5); // what fa5 decodes to on its own (if anything)
+        const p5 = solo.res.length ? solo.res[0].payload : null;
+        // single-frame messages between the frames of a dump
+        let r1 = run(fa.flatMap((f) => [f, ...small]));
+        check('dump with single-frame messages in between', r1.res.filter((t) => t.cmd === CMD.PRESET_DUMP).length === 1 &&
+          !r1.res.some((t) => t.ambiguous) && hex(r1.res.find((t) => t.cmd === CMD.PRESET_DUMP).payload) === hex(d[1].payload));
+        // two transfers with different totals interleaved -> both decoded correctly
+        const mix = [];
+        for (let i = 0; i < Math.max(fa.length, fl.length); i++) { if (fa[i]) mix.push(fa[i]); if (fl[i]) mix.push(fl[i]); }
+        let r2 = run(mix);
+        check('interleaved transfers with different totals are separated', r2.res.length === 2 && !r2.res.some((t) => t.ambiguous) &&
+          hex(r2.res.find((t) => t.cmd === CMD.PRESET_DUMP).payload) === hex(d[1].payload));
+        // two dumps with the same total interleaved -> flagged as ambiguous (or rejected), never silently wrong
+        const mix2 = [];
+        for (let i = 0; i < fa.length; i++) mix2.push(fa[i], fa5[i]);
+        let r3 = run(mix2);
+        // every result that is not flagged must be exactly one of the two original transfers
+        const unflagged = r3.res.filter((t) => !t.ambiguous);
+        const genuine = (t) => hex(t.payload) === hex(d[1].payload) || (p5 && hex(t.payload) === hex(p5));
+        check(`same-total interleave never silently wrong (${r3.res.length} results, ${r3.errs.length} errors, ambiguous: ${r3.res.length - unflagged.length})`,
+          unflagged.every(genuine));
+        // different totals of the same cmd interleaved
+        const mix3 = [];
+        for (let i = 0; i < Math.max(fa.length, fb.length); i++) { if (fa[i]) mix3.push(fa[i]); if (fb[i]) mix3.push(fb[i]); }
+        let r5 = run(mix3);
+        check('two dumps with different totals interleaved', r5.res.length === 2 && !r5.res.some((t) => t.ambiguous) &&
+          r5.res.some((t) => hex(t.payload) === hex(d[1].payload)) && r5.res.some((t) => hex(t.payload) === hex(d[2].payload)));
+        // a frame from the middle of nowhere is reported, not merged
+        let r4 = run([fa[2], ...fb]);
+        check('stray frame reported and ignored', r4.errs.length === 1 && r4.res.length === 1 && hex(r4.res[0].payload) === hex(d[2].payload));
+      }
+      // replay of a real trace from the web app (Windows, Edge): ~1 % of the frames miss bytes
+      if (fx.trace) {
+        const res = [], errs = [];
+        const ra = new Reassembler((t) => res.push(t), (e) => errs.push(e));
+        fx.trace.frames.forEach((f, i) => ra.push(unhex(f), i * 10));
+        const damaged = errs.filter((e) => e instanceof DamagedFrameError).length;
+        const dumpsOk = res.filter((t) => t.cmd === CMD.PRESET_DUMP).every((t) => {
+          try { presetInfo(t.payload.slice(4)); return !t.ambiguous; } catch { return false; }
+        });
+        const idx = new Set(res.filter((t) => t.cmd === CMD.PRESET_DUMP).map((t) => t.payload[0] | (t.payload[1] << 8)));
+        check(`trace ${fx.trace.name}: ${fx.trace.frames.length} frames, ${damaged} damaged detected, ` +
+          `${res.length} transfers, all dumps valid, ${idx.size} different presets`, damaged === 15 && dumpsOk && idx.size >= 300);
+      }
+      // restore as done by the Hotone editor (captured): frames byte-identical, 183-byte chunks accepted
+      if (fx.write) {
+        const frames = encodeTransfer(CMD.PRESET_WRITE, unhex(fx.write.payload), 0x12).map(hex);
+        check(`write: ${frames.length} frames byte-identical to the editor (slot ${unhex(fx.write.payload)[0] | (unhex(fx.write.payload)[1] << 8)})`,
+          frames.join() === fx.write.frames.join(), `${frames[0].slice(0, 40)} vs ${fx.write.frames[0].slice(0, 40)}`);
+        const res = [], errs = [];
+        const ra = new Reassembler((t) => res.push(t), (e) => errs.push(e.message));
+        fx.write.frames.forEach((f) => ra.push(unhex(f)));
+        check('183-byte frames reassemble without errors', errs.length === 0 && res.length === 1 && hex(res[0].payload) === fx.write.payload, errs.join('; '));
+        const ack = unhex(fx.write.ack);
+        check(`write ack: ${fx.write.ack}`, (ack[0] | ack[1] << 8 | ack[2] << 16 | ack[3] << 24) >>> 0 === CMD.PRESET_WRITE);
+      }
+      // pedal's normalization of never-saved "Empty" presets (format version 2 -> 3)
+      {
+        const raw = got.filter((t) => t.cmd === CMD.PRESET_DUMP)[0].payload.slice(4);
+        const tag1 = 8 + 10 + 8, tag2 = tag1 + 101 + 8;   // data offsets: tag0 (10 B), tag1 (101 B), tag2
+        const oldFmt = raw.slice(); oldFmt[tag1] = 2; oldFmt.set([0xff, 0xff, 0xff], tag2 + 3);
+        const stored = raw.slice(); stored[tag1] = 3; stored.set([0, 0, 0], tag2 + 3);
+        const c1 = compareStored(oldFmt, stored);
+        check(`compareStored: empty v2 -> v3 recognized (${c1.diff} bytes)`, !c1.identical && c1.upgraded && c1.diff === 4);
+        const other = stored.slice(); other[2000] ^= 1;
+        const c2 = compareStored(oldFmt, other);
+        check('compareStored: any other difference is reported', !c2.upgraded && c2.diff === 5);
+        check('compareStored: identical', compareStored(raw, raw.slice()).identical);
+      }
+      // sniffer: same trace through the sniffer's assembler (tolerant, keeps damaged frames as entries)
+      if (fx.trace) {
+        const a = new Assembler();
+        fx.trace.frames.forEach((f, i) => a.push({ t: i, dir: 'IN', bytes: unhex(f) }));
+        const tr = a.entries.filter((e) => e.type === 'transfer');
+        const dmg = a.entries.filter((e) => e.type === 'damaged').length;
+        const dumps = tr.filter((e) => e.cmd === CMD.PRESET_DUMP && describe(e).summary.includes('"'));
+        check(`sniffer assembler: ${tr.length} transfers, ${dmg} damaged frames, ${dumps.length} named preset dumps`, dmg === 15 && dumps.length >= 300);
+        const back = parseTraceText(' 12.5 IN f0 21 25 4d 50 00 00 0d 11 08 00 00 00 01 07 00 00 00 00 00 05 00 00 00 00 00 00 00 00 f7\n');
+        check('parseTraceText', back.length === 1 && back[0].t === 12.5 && back[0].bytes.length === 30);
+      }
+      function list0(g) { return g.find((t) => t.cmd === CMD.PRESET_LIST).payload; }
+
+      const dumps = got.filter((t) => t.cmd === CMD.PRESET_DUMP);
+      for (const d of dumps) {
+        const info = presetInfo(d.payload.slice(4));
+        check(`preset dump ${presetLabel(d.payload[0] | (d.payload[1] << 8))}: "${info.name}" [${info.scenes.join(' | ')}] (${d.payload.length - 4} B)`, info.name.length > 0);
+      }
+      const list = got.find((t) => t.cmd === CMD.PRESET_LIST);
+      if (list) {
+        const names = parsePresetList(list.payload);
+        check(`preset list: ${presetLabel(0)} "${names[0]}", ${presetLabel(299)} "${names[299]}"`, names.length === 300 && names[0].length > 0);
+      }
+
+      const files = [{ name: 'a.txt', data: 'hello' }, { name: 'dir/ü.bin', data: Uint8Array.of(1, 2, 3, 0, 255) }];
+      const z = await readZip(new Uint8Array(await makeZip(files).arrayBuffer()));
+      check('zip roundtrip', new TextDecoder().decode(z.get('a.txt')) === 'hello' && hex(z.get('dir/ü.bin')) === '01020300ff');
+      check('crc32("123456789") = cbf43926', crc32(new TextEncoder().encode('123456789')) === 0xcbf43926);
+
+      // style and name in the info block (tag 1)
+      if (fx.metal) {
+        const metal = unhex(fx.metal.raw);
+        check(`style of the software's "Metal" export: "${presetInfo(metal).style}"`, presetInfo(metal).style === 'Metal');
+        const none = setPresetStyle(metal, '');
+        check('setPresetStyle(\'\') clears it', presetInfo(none).style === '' && none.length === metal.length);
+        const back = setPresetStyle(none, 'Metal');
+        check('setPresetStyle(\'Metal\') writes exactly the bytes of the software', hex(back) === hex(metal));
+        const renamed = setPresetName(metal, 'New Name 123');
+        let d = 0;
+        for (let k = 0; k < metal.length; k++) if (renamed[k] !== metal[k]) d++;
+        check(`setPresetName: "${presetInfo(renamed).name}", style kept, ${d} bytes changed`,
+          presetInfo(renamed).name === 'New Name 123' && presetInfo(renamed).style === 'Metal' && d <= 17);
+        let threw = 0;
+        try { setPresetName(metal, 'x'.repeat(MAX_NAME + 1)); } catch { threw++; }
+        try { setPresetName(metal, 'Grün'); } catch { threw++; }
+        check('setPresetName rejects too long / non-ASCII names', threw === 2);
+        // chain as the Hotone software shows Le Chug (screenshot): positions via order[], scene 1 on/off
+        const chain = presetChain(metal);
+        const shown = chain.map((c) => (c.code === 0xffffffff ? '-' : MODULES[c.code >>> 24] + (c.on[0] ? '' : '(off)'))).join(' ');
+        check(`presetChain(Le Chug) scene 1: ${shown}`,
+          shown === 'DYN - AMP - NAM(off) IR - - DYN(off) EQ DLY(off) RVB');
+        const slots = presetSlots(metal);
+        check(`presetSlots: ${slots.filter((c) => c !== 0xffffffff).length} effects, first 0x${slots[0].toString(16)}`, slots.length === 12);
+      }
+
+      // routing as the Hotone software draws it (screenshots): row 1 with split (S) / merge (M) nodes
+      if (fx.routing) {
+        const expect = {
+          'A00-1': 'DYN WAH DRV AMP CAB VOL S | serial',
+          'A00-3': 'DYN AMP CAB VOL S DLY M RVB',
+          'A07-2': 'DYN S AMP CAB M MOD DLY RVB',
+          'A08-3': 'DYN DYN AMP S CAB M DLY RVB',
+        };
+        for (const r of fx.routing) {
+          const raw = unhex(r.raw);
+          const rt = presetRouting(raw);
+          const ch = presetChain(raw);
+          const parts = [];
+          for (let k = 0; k <= 6; k++) {
+            if (rt.split === k) parts.push('S');
+            if (rt.merge === k) parts.push('M');
+            if (k < 6 && ch[k].code !== 0xffffffff) parts.push(MODULES[ch[k].code >>> 24]);
+          }
+          const got = parts.join(' ') + (rt.serial ? ' | serial' : '');
+          check(`routing ${r.label} ${r.name}: ${got} (${rt.name})`, got === expect[r.label], `expected ${expect[r.label]}`);
+        }
+      }
+
+      // .prst like the Hotone software
+      if (fx.prst) {
+        const mine = new TextDecoder().decode(encodePrst(unhex(fx.prst.raw)));
+        check(`encodePrst byte-identical to the software's export "${fx.prst.name}" (${mine.length} B)`, mine === fx.prst.prst);
+        check('decodePrst of the software\'s export', hex(decodePrst(new TextEncoder().encode(fx.prst.prst))) === fx.prst.raw);
+      }
+
+      const presets = dumps.map((d) => ({ index: d.payload[0] | (d.payload[1] << 8), ...presetInfo(d.payload.slice(4)), raw: d.payload.slice(4) }));
+      const { blob, fileName, manifest } = buildBackup(presets, { firmware: 'V2.5.0' });
+      const zipFiles = await readZip(new Uint8Array(await blob.arrayBuffer()));
+      const prstNames = [...zipFiles.keys()].filter((n) => n.endsWith('.prst'));
+      check(`backup contains .prst files: ${prstNames.join(', ')}`, prstNames.length === presets.length &&
+        prstNames.includes('presets/A99-1-Le Chug.prst') && manifest.version === 2);
+      check('backup .prst files decode to the presets', prstNames.every((n) => {
+        const e = manifest.presets.find((x) => x.file === n);
+        return hex(decodePrst(zipFiles.get(n))) === hex(presets.find((p) => p.index === e.index).raw);
+      }));
+      const back = await loadBackup(new Uint8Array(await blob.arrayBuffer()));
+      check(`backup roundtrip ${fileName}`, back.presets.length === presets.length &&
+        back.presets.every((p, i) => p.index === presets[i].index && hex(p.raw) === hex(presets[i].raw)));
+
+      // version 1 backups (.raw files) are still read
+      const v1 = {
+        format: 'ampero2-stomp-backup', version: 1, created: new Date().toISOString(), firmware: 'V2.5.0',
+        presets: presets.map((p) => ({ index: p.index, label: presetLabel(p.index), name: p.name,
+          file: `presets/${String(p.index).padStart(3, '0')}_x.raw`, size: p.raw.length, crc32: crc32(p.raw) })),
+      };
+      const v1zip = makeZip([{ name: 'manifest.json', data: JSON.stringify(v1) },
+        ...presets.map((p, i) => ({ name: v1.presets[i].file, data: p.raw }))]);
+      const back1 = await loadBackup(new Uint8Array(await v1zip.arrayBuffer()));
+      check('version 1 backup (.raw) still loads', back1.presets.every((p, i) => hex(p.raw) === hex(presets[i].raw)));
+    } catch (e) {
+      check('exception', false, e.stack);
+    }
+    const s = document.getElementById('summary');
+    s.textContent = `${pass} passed, ${fail} failed`;
+    s.className = fail ? 'fail' : 'ok';
+    document.title = s.textContent;
+  </script>
+</body>
+</html>

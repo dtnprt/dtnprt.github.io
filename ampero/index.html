@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ampero II – Web Editor</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">AMPERO II <small>web</small></div>
+    <nav class="tabs">
+      <button class="tab" data-tab="edit">Edit</button>
+      <button class="tab" data-tab="backup">Backup &amp; Restore</button>
+      <button class="tab" data-tab="global">Global Settings</button>
+      <button class="tab tab-tool" data-tab="sniffer" title="MIDI traffic analyzer">Sniffer</button>
+    </nav>
+    <div class="conn">
+      <select id="inPort" title="MIDI input"></select>
+      <select id="outPort" title="MIDI output"></select>
+      <button id="connectBtn" class="primary">Connect</button>
+      <span id="model" class="model" hidden></span>
+      <span id="status" class="status off">offline</span>
+    </div>
+  </header>
+
+  <div id="otherHostNotice" class="notice warn-banner" hidden>
+    <div><b>The Hotone software (or another program) is talking to the pedal.</b><br>
+      This app is now quiet – no automatic refresh, no reading or writing – because the Hotone software can crash
+      when it receives answers it did not ask for. Close it, then click Resume.</div>
+    <button id="resumeBtn" class="primary">Resume</button>
+  </div>
+
+  <main class="layout">
+    <!-- preset list: only on the Edit page -->
+    <aside class="sidebar" id="sidebar">
+      <div class="current-box">
+        <div class="muted small">Current preset</div>
+        <div><span id="curLabel" class="cur-lbl">–</span> <span id="curName"></span></div>
+        <div id="curScene" class="muted small"></div>
+      </div>
+      <div class="list-tabs">
+        <button id="viewAll" class="on">All</button>
+        <button id="viewStyle">Style</button>
+      </div>
+      <div class="side-head">
+        <input id="search" type="search" placeholder="Search">
+        <button id="refreshCurBtn" class="small-btn" disabled title="ask the pedal for the current preset and scene">↻ Current</button>
+        <button id="refreshAllBtn" class="small-btn" disabled title="re-read all preset names from the pedal">↻ All</button>
+      </div>
+      <div id="styleInfo" class="style-info muted small" hidden></div>
+      <ul id="presetList" class="preset-list"></ul>
+      <p class="hint muted">Click: select on the pedal · right-click or ☰: import, export, rename, style</p>
+    </aside>
+
+    <!-- ===================================================== Edit (mockup) -->
+    <section class="content page" id="page-edit" hidden>
+      <div class="mockup-note">Mockup – editing effects is not implemented yet. The chain shows the modules of the
+        current preset when the app knows it (after a backup, a read, or when you switch presets on the pedal).</div>
+      <div class="card editor-head">
+        <div class="preset-title">
+          <span id="edLabel" class="cur-lbl">–</span>
+          <span id="edName">No preset</span>
+          <span id="edStyle" class="style-tag" hidden></span>
+        </div>
+        <div class="mock-meters">
+          <span class="muted small">BPM</span><span class="meter"><span style="width: 40%"></span></span><span>120</span>
+          <span class="muted small">Volume</span><span class="meter"><span style="width: 100%"></span></span><span>100</span>
+        </div>
+      </div>
+      <div class="card editor-chain">
+        <div class="scenes" id="edScenes">
+          <button class="scene on">Scene 1</button><button class="scene">Scene 2</button><button class="scene">Scene 3</button>
+        </div>
+        <div class="chain-wrap">
+          <div id="chainMode" class="chain-mode muted small"></div>
+          <div class="chain" id="chain">
+            <div class="chain-side" id="chainLeft"></div>
+            <div class="chain-row" id="chainRowA"></div>
+            <div class="chain-row" id="chainRowB"></div>
+            <div class="chain-side" id="chainRight"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card editor-params">
+        <div class="mock-modules">
+          <div class="muted small">Modules</div>
+          <ul>
+            <li>DYN</li><li>FREQ</li><li>WAH</li><li>DRV</li><li>AMP</li><li>PRE AMP</li><li>CAB</li><li>IR</li>
+            <li>EQ</li><li>MOD</li><li>DLY</li><li>RVB</li><li>FX LOOP</li><li>VOL</li><li>CLONE</li><li>NAM</li>
+          </ul>
+        </div>
+        <div class="mock-knobs">
+          <div class="knob"><div class="dial"></div><span>Param 1</span></div>
+          <div class="knob"><div class="dial"></div><span>Param 2</span></div>
+          <div class="knob"><div class="dial"></div><span>Param 3</span></div>
+          <div class="knob"><div class="dial"></div><span>Param 4</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== Backup & Restore -->
+    <section class="content page" id="page-backup" hidden>
+      <div class="card">
+        <h2>Backup all presets</h2>
+        <p class="muted">Reads every preset slot from the device and saves them in one ZIP file with one
+          <code>.prst</code> file per preset (e.g. <code>presets/A02-1-Juicy Fusion.prst</code>) – the same format the
+          Hotone software exports, so single presets can also be imported there. List a backup with
+          <code>python tools/ampero_preset.py decode &lt;backup&gt;.zip</code>. Takes about 3 minutes.</p>
+        <div class="notice"><b>Close the Hotone Ampero software first</b> – if it runs in the background, it talks
+          to the pedal at the same time and answers get mixed up.<br>
+          The pedal <b>loads every preset while it is read</b> (the display switches through them, the sound
+          changes). <b>Save unsaved edits on the pedal first</b> – they are lost. Stored presets are not changed,
+          and the preset that was active before is selected again at the end.</div>
+        <div class="row">
+          <label>From <select id="fromSlot"></select></label>
+          <label>to <select id="toSlot"></select></label>
+          <button id="dumpBtn" class="primary" disabled>Backup presets</button>
+          <button id="cancelBtn" disabled>Cancel</button>
+        </div>
+        <div class="progress"><div id="progressBar"></div></div>
+        <div id="progressText" class="muted"></div>
+      </div>
+
+      <div class="card">
+        <h2>Restore</h2>
+        <div class="row">
+          <label class="file">Open backup… <input id="backupFile" type="file" accept=".zip"></label>
+          <span id="backupInfo" class="muted"></span>
+        </div>
+        <div class="row" id="restoreTools" hidden>
+          <span class="group-label">Show</span>
+          <div class="segmented">
+            <button id="showAll" class="on">All slots</button>
+            <button id="showDiff" title="only slots whose name in the backup differs from the name on the device">Different names</button>
+          </div>
+          <span class="group-label">Select</span>
+          <button id="selAll" title="select all shown slots">All</button>
+          <button id="selNone">None</button>
+          <span id="selCount" class="muted"></span>
+          <span class="spacer"></span>
+          <button id="restoreBtn" class="danger" disabled>Restore selected</button>
+        </div>
+        <div class="table-wrap">
+          <table id="restoreTable" hidden>
+            <thead><tr><th></th><th>Slot</th><th>Backup</th><th>On device</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== Global Settings (mockup) -->
+    <section class="content page" id="page-global" hidden>
+      <div class="mockup-note">Mockup – global settings are not read from or written to the pedal yet.</div>
+      <div class="settings-grid">
+        <div class="card">
+          <h2>Input / Output</h2>
+          <label class="setting">Input mode (L) <select disabled><option>Instrument</option></select></label>
+          <label class="setting">Input mode (R) <select disabled><option>Mic</option></select></label>
+          <label class="setting">Output to <select disabled><option>Bal. &amp; HP</option></select></label>
+          <label class="setting">Ground lift <input type="checkbox" disabled></label>
+          <label class="setting">USB audio <select disabled><option>Input CH 1/2</option></select></label>
+        </div>
+        <div class="card">
+          <h2>Tuner</h2>
+          <label class="setting">Reference pitch <input type="number" value="440" disabled> Hz</label>
+          <label class="setting">Mode <select disabled><option>Mute</option></select></label>
+          <label class="setting">High precision <input type="checkbox" disabled></label>
+          <label class="setting">Link VOL <input type="checkbox" disabled></label>
+        </div>
+        <div class="card">
+          <h2>Global EQ</h2>
+          <label class="setting">Low cut <input type="range" disabled></label>
+          <label class="setting">Low shelf <input type="range" disabled></label>
+          <label class="setting">High shelf <input type="range" disabled></label>
+          <label class="setting">High cut <input type="range" disabled></label>
+        </div>
+        <div class="card">
+          <h2>Controls</h2>
+          <label class="setting">FS mode <select disabled><option>Patch mode</option><option>Stomp mode</option></select></label>
+          <label class="setting">EXP 1 calibrate <button disabled>Calibrate</button></label>
+          <label class="setting">EXP 2 calibrate <button disabled>Calibrate</button></label>
+          <label class="setting">Bypass mode <select disabled><option>DSP bypass</option></select></label>
+        </div>
+        <div class="card">
+          <h2>MIDI</h2>
+          <label class="setting">MIDI channel <select disabled><option>1</option></select></label>
+          <label class="setting">Clock out <select disabled><option>USB</option></select></label>
+          <label class="setting">MIDI thru <input type="checkbox" disabled></label>
+        </div>
+        <div class="card">
+          <h2>Display</h2>
+          <label class="setting">Brightness <input type="range" disabled></label>
+          <label class="setting">LED strip color <select disabled><option>Orange</option></select></label>
+          <label class="setting">Global tempo <input type="number" value="120" disabled> BPM</label>
+        </div>
+      </div>
+    </section>
+    <!-- ===================================================== Sniffer -->
+    <section class="content page sniffer" id="page-sniffer" hidden>
+      <div class="card sn-toolbar">
+        <div class="row">
+          <select id="snInput" title="MIDI input to listen to (when the app is not connected)"></select>
+          <button id="snLive" class="primary">● Start live</button>
+          <label class="file">Open capture… <input id="snFile" type="file" accept=".pcapng,.txt"></label>
+          <button id="snSave" title="save the messages as a trace file (.txt)">Save</button>
+          <button id="snClear">Clear</button>
+          <span class="spacer"></span>
+          <span id="snStats" class="muted small"></span>
+        </div>
+        <div class="row">
+          <input id="snFilter" type="search" placeholder="Filter: command (e.g. 0109), name or value">
+          <label><input type="checkbox" id="snHideMeters" checked> hide level meters</label>
+          <label><input type="checkbox" id="snHidePoll"> hide current preset/scene</label>
+          <label><input type="checkbox" id="snOnlyUnknown"> only unknown</label>
+          <label><input type="checkbox" id="snShowOther"> show non-Ampero MIDI</label>
+        </div>
+        <div class="muted small">Live capture only listens and sends nothing. While the app is connected it shows the
+          app's own traffic (both directions); otherwise it listens to the selected input – the browser then sees only
+          what the pedal sends (its answers, also to the Hotone software, and forwarded set commands), not the Hotone
+          software's requests. For both directions open a Wireshark/USBPcap <code>.pcapng</code>.</div>
+      </div>
+      <details class="card sn-probe" id="prBox">
+        <summary>Probe – ask the pedal for every known command (read-only)</summary>
+        <div class="row">
+          <button id="prRun" class="primary" disabled>Probe pedal</button>
+          <button id="prCancel" disabled>Cancel</button>
+          <label class="file">Open probe… <input id="prFile" type="file" accept=".json"></label>
+          <button id="prSave" disabled>Save</button>
+          <label class="small"><input type="checkbox" id="prOnlyChanged"> only changed</label>
+          <span class="spacer"></span>
+          <span id="prStatus" class="muted small"></span>
+        </div>
+        <div class="muted small">Asks the pedal for all ~180 command codes of the firmware's command table (like the Hotone
+          software asks, kind 0x11) and records the answers – system commands (save, connect …), preset dump/write and
+          chain-template selection are skipped. Then change <b>one</b> setting on the pedal and probe again: the codes and
+          bytes that changed are highlighted. Takes about 1–2 minutes.</div>
+        <div class="pr-wrap">
+          <table class="sn-table">
+            <thead><tr><th>Command</th><th>Group</th><th>Asked with</th><th>Bytes</th><th>Answer</th><th>Before</th></tr></thead>
+            <tbody id="prRows"></tbody>
+          </table>
+        </div>
+      </details>
+      <div class="card sn-list">
+        <div class="sn-list-wrap" id="snListWrap">
+          <table class="sn-table">
+            <thead><tr><th>#</th><th>Time</th><th>Dir</th><th>Kind</th><th>Command</th><th>Name</th><th>Bytes</th><th>Summary</th></tr></thead>
+            <tbody id="snRows"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card sn-detail">
+        <div class="row">
+          <span id="snDetailTitle" class="small"></span>
+          <span class="spacer"></span>
+          <div class="segmented">
+            <button id="snViewPayload" class="on">Payload</button>
+            <button id="snViewFrames">Raw frames</button>
+          </div>
+          <label class="small"><input type="checkbox" id="snAllBytes"> all bytes</label>
+        </div>
+        <div class="sn-panes">
+          <ul id="snFields" class="sn-fields"></ul>
+          <div id="snHex" class="sn-hex"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- log: on every page -->
+  <footer class="log-panel" id="logPanel">
+    <div class="log-head">
+      <button id="logToggle" class="small-btn" title="show / hide the log">Log ▴</button>
+      <span id="logLast" class="muted small"></span>
+      <span class="spacer"></span>
+      <button id="traceBtn" class="small-btn" disabled title="raw MIDI frames of this connection – send this file when something goes wrong">Save trace</button>
+    </div>
+    <pre id="log"></pre>
+  </footer>
+
+  <!-- confirmation with a table of slots -->
+  <div id="dialog" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+      <h3 id="dlgTitle"></h3>
+      <p id="dlgText"></p>
+      <div class="dlg-table">
+        <table>
+          <thead><tr id="dlgHead"></tr></thead>
+          <tbody id="dlgRows"></tbody>
+        </table>
+      </div>
+      <div class="row dlg-buttons">
+        <span class="spacer"></span>
+        <button id="dlgCancel">Cancel</button>
+        <button id="dlgOk" class="danger">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- text input (rename) -->
+  <div id="promptDialog" class="overlay" hidden>
+    <div class="dialog small-dialog" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+      <h3 id="promptTitle"></h3>
+      <p id="promptText"></p>
+      <input id="promptInput" type="text" autocomplete="off" spellcheck="false">
+      <div id="promptError" class="prompt-error"></div>
+      <div class="row dlg-buttons">
+        <span class="spacer"></span>
+        <button id="promptCancel">Cancel</button>
+        <button id="promptOk" class="primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <input id="importFile" type="file" accept=".prst,.raw" hidden>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
