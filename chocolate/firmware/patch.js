@@ -1,7 +1,7 @@
 // Chocolate Plus firmware patcher - runs entirely in the browser, the file never leaves the computer.
-// JavaScript port of public-repo/firmware/build.py + fwsctool.py (settings of release 141).
+// JavaScript port of public-repo/firmware/build.py + fwsctool.py (settings of release 142).
 // Input:  the original M-VAVE firmware FootCtrlPlus_012.fwsc (or the .ufw inside it), checked by SHA-256.
-// Output: FootCtrlPlus_141-dtnprt.fwsc, only handed out if it is byte-identical to the official build.
+// Output: FootCtrlPlus_142-dtnprt.fwsc, only handed out if it is byte-identical to the official build.
 'use strict';
 (function (global) {
 
@@ -12,10 +12,11 @@ const STOCK_SHA256 = {
 const KNOWN_OTHER = {
   'b5ba2041482640315c7dc70a0f7c79c9e81d24989226763868dc36dab81801c3': 'the original firmware 013',
   'fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837': 'the already patched custom firmware 141',
+  'eadd20b993b149753651f83a683d1af25fb4f966d340e0b269a33b300f2e3ba2': 'the already patched custom firmware 142',
 };
-const VERSION = 141, SUFFIX = '-dtnprt', NAME = 'FootCtrlPlus';
+const VERSION = 142, SUFFIX = '-dtnprt', NAME = 'FootCtrlPlus';
 const OUT_NAME = `${NAME}_${VERSION}${SUFFIX}.fwsc`;
-const RESULT_SHA256 = 'fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837';
+const RESULT_SHA256 = 'eadd20b993b149753651f83a683d1af25fb4f966d340e0b269a33b300f2e3ba2';
 
 // ---- JieLi .ufw LFSR cipher, CRC16, Sinco .fwsc wrapper (fwsctool.py) ----
 function lfsrNext(v) {
@@ -122,21 +123,27 @@ const a = (vaddr) => vaddr - VBASE;
 const D = 3, F = 6;                                     // debounce / combo window (5 ms ticks)
 const CALL_CAVE = hex('80ea41a0'), CAVE = hex('00f80902c2ff3e20e10180f803c8c2ff8820e101d2008000'), CAVE_ADDR = 0x1e26088;
 const IDENT_ADDR = 0x1e18c8e, IDENT_SLOT = 27, IDENT = `${NAME}_${VERSION}${SUFFIX}`;
-const TEXT_TABLE = 0x1e19308, TEXT_TABLE_MAX = 32;
-const TEXTS = hex('20202064746e50727420202000556572313431624174006e6f64');  // '   dtnPrt   ', Uer 141 bAt, nod
-// boot greeting, mode-3 bank screen, dimmed LED: [address, stock bytes, new bytes]
+const TEXT_TABLE = 0x1e19308, TEXT_TABLE_MAX = 16;
+const TEXTS = hex('202020556572313432624174006e6f64');  // '   ' Uer 142 bAt, nod (0xff padded)
+const FF_INIT = 0x1e00100;     // 32 bytes 0xff: new start values of the Bluetooth link scheduler (must stay 0xff)
+// boot greeting, mode-3 bank screen, dimmed LED, USB/timer/BLE fixes: [address, stock bytes, new bytes] (= build.py GREET)
 const GREET = [
   [0x1e144ca, 'bfeacef1', 'bfea9c5f'],
-  [0x1e00406, '7904041680ea274a4520bfeadafe0816c9ffa0930100049f50a3901806e1d8026716776006e81670786e84e8fa01706660e17f0440e17a0ff06690ea0de100e1e803f06550ec700080ea094a70166116bfeaeafec52185f8df0538ece803', '7604c6ff90340100c4ff0893e1014539484049414a4281ea402e4c814842f0584c834d3c484049414a4281ea362e4c834840f05880ea317080ea718b484149424a4381ea2a2e684080ea698b684080f8020680ea909768413604c0ea0392'],
-  [0x1e11b06, '75040416bfea31f850e81b0a4d61055635e94000552052d641624020bfeacdf768e808454861081f81d7c861814350ee4501004440223504ffeaf3f7619e4020', '100400e1301049202217ca31432080eaef03c0ff9494010000ef800d0004412af4e100212316131b8b1e482082f902144831fa3601e1302002e13030c0eaada2'],
+  [0x1e00406, '7904041680ea274a4520bfeadafe0816c9ffa0930100049f50a3901806e1d8026716776006e81670786e84e8fa01706660e17f0440e17a0ff06690ea0de100e1e803f06550ec700080ea094a70166116bfeaeafec52185f8df0538ece803', '7604c6ff90340100c4ff0893e1014d3c484049414a4281ea402e4c834840f05880ea3b700190484149424a4381ea352e68400189684080f8020680ea9c9768413604c0ea0f92412af4e100212316131b8b1e482082f902144831fa3601e1302002e13030c1ea192e'],
   [0x1e1305a, 'c0ffa093010050ee0a12402af4e1103000e13030e3e10a30991e41e13010d22122174320bfea', '80ea8f01c0ea100000ef0100ffeac6fc52eeeb11c0ff00501e0002ef01008142c2ef01008000'],
   [0x1e13322, '30e1ff4f', '38810000'],
   [0x1e13346, '4881', '3881'],
-  [0x1e13370, '402af4e1304000e13040d121', '12163116bfeac7f3c0ea0900'],
-  [0x1e1337c, '1217e1e10a40391e41e130104320bfea', 'c3ffe890010039403a461981ffeabdf3'],
+  [0x1e13370, '402af4e1304000e13040d121', '1216311680ead02fc0ea0900'],
+  [0x1e1337c, '1217e1e10a40391e41e130104320bfea', 'c3ffe890010039403a461981c0eac62f'],
   [0x1e129ee, '00ef0100', 'c0ea3803'],
   [0x1e11d78, '52eeeb11', '80ea7709'],
   [0x1e260a0, 'ffffffffffffffffffffffffffffffff', '43201004bfea276150168804d7ea648e'],
+  [0x1e19318, 'ffffffffffffffffffffffffffffffff', '00e1301059382217ca314320ffeae7c7'],
+  [0x1e18c8b, '00', '10'],
+  [0x1e13a84, 'c1ffcfcfcf00', 'c1ff00000000'],
+  [0x1e13aa0, 'c1ffcfcfcf00', 'c1ff00000000'],
+  [0x1e15b06, 'bfea7e54', '00000000'],
+  [0x1e1cc26, '0893e101', '0001e001'],
 ];
 
 function check(cond, msg) { if (!cond) throw new Error(msg); }
@@ -178,6 +185,7 @@ function patchMember(member) {
   const identStock = new Uint8Array(IDENT_SLOT); identStock.set(new TextEncoder().encode('FootCtrlPlus_012'));
   const identNew = new Uint8Array(IDENT_SLOT); identNew.set(new TextEncoder().encode(IDENT));
   replace(d, IDENT_ADDR, identStock, identNew, 'name/version');
+  check(d.subarray(a(FF_INIT), a(FF_INIT) + 32).every((x) => x === 0xff), 'unexpected original bytes at ' + FF_INIT.toString(16));
   for (const [addr, stock, repl] of GREET) replace(d, addr, hex(stock), hex(repl), 'display patch');
   replace(d, TEXT_TABLE, new Uint8Array(TEXT_TABLE_MAX).fill(0xff), TEXTS, 'text table');
   rebuildAreaCrcs(d);

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chocolate Plus Custom Firmware 141 - Build from source</title>
+  <title>Chocolate Plus Custom Firmware 142 - Build from source</title>
   <style>
 :root {
   --bg: #15171a; --card: #1f2226; --line: #33373d; --fg: #e8eaed; --muted: #8a9099;
@@ -80,7 +80,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
 
 <main>
   <section class="card">
-    <div class="big">How the custom firmware 141 is made, and how to make it yourself.</div>
+    <div class="big">How the custom firmware 142 is made, and how to make it yourself.</div>
     <p class="muted" style="margin:8px 0 0">For just getting the firmware, the <a href="../#build">patcher on the firmware page</a> is
       easier: it does exactly the same in your browser. This page is for the command line, for checking what the patch does,
       and for changing the patch code. Everything starts from the original M-VAVE firmware 012, which is not included here:
@@ -103,18 +103,18 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
         On macOS and Linux use <code>python3</code> instead of <code>python</code>.</li>
       <li>The script first checks that your file is exactly the original firmware 012, and stops with an error for
         any other file (another version, an incomplete download, or an already patched file). Then it applies the patches and writes
-        <code>FootCtrlPlus_141-dtnprt.fwsc</code> into the same folder:
+        <code>FootCtrlPlus_142-dtnprt.fwsc</code> into the same folder:
         <pre class="cmd"><code>OK: FootCtrlPlus_012.fwsc is the original firmware 012
-written: .\FootCtrlPlus_141-dtnprt.fwsc
-SHA-256: fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837
+written: .\FootCtrlPlus_142-dtnprt.fwsc
+SHA-256: eadd20b993b149753651f83a683d1af25fb4f966d340e0b269a33b300f2e3ba2
 Identical to the official build. Flash it with SincoOTA (do not rename the file).</code></pre></li>
-      <li>Flash <code>FootCtrlPlus_141-dtnprt.fwsc</code> as described on the <a href="../#install">firmware page</a>.</li>
+      <li>Flash <code>FootCtrlPlus_142-dtnprt.fwsc</code> as described on the <a href="../#install">firmware page</a>.</li>
     </ol>
     <h3>Options</h3>
     <table class="tbl"><tbody>
       <tr><td><code>-o &lt;folder&gt;</code></td><td>output folder (default: the current folder)</td></tr>
       <tr><td><code>--extras</code></td><td>also write the <code>.ufw</code> (firmware without the Sinco wrapper), the decrypted patched
-        app area <code>FootCtrlPlus_141-dtnprt_app.bin</code> and the decrypted original app area
+        app area <code>FootCtrlPlus_142-dtnprt_app.bin</code> and the decrypted original app area
         <code>FootCtrlPlus_012_app.bin</code> (offset 0 = address <code>0x01e00000</code>, input of <code>gen_table.py</code>)</td></tr>
     </tbody></table>
     <h3>Checks on every run</h3>
@@ -122,7 +122,7 @@ Identical to the official build. Flash it with SincoOTA (do not rename the file)
       <li>Input: SHA-256 must be the original firmware 012 (<code class="hash">9deb9d90691415aa7f4514103842237a1500c681db34fe35e5f5136d173cb3bc</code>, or the <code>.ufw</code> inside it).</li>
       <li>The original checksums must verify, and rebuilding the checksum chain of the original must reproduce it exactly.</li>
       <li>Every patch location must contain the expected original bytes before it is changed.</li>
-      <li>Output: compared with the official build <code class="hash">fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837</code>.</li>
+      <li>Output: compared with the official build <code class="hash">eadd20b993b149753651f83a683d1af25fb4f966d340e0b269a33b300f2e3ba2</code>.</li>
     </ul>
   </section>
 
@@ -176,9 +176,12 @@ tar -xJf jieli-linux-toolchains-20260730.1.tar.xz -C ~/jltc
       <tr><td>Pending / combo window</td><td><code>if (r1 &lt; 0xf)</code> @ <code>0x1e12090</code></td><td>15 ticks</td><td>6 ticks</td></tr>
       <tr><td>Short taps not dropped</td><td><code>call 0x1e26088</code> @ <code>0x1e12002</code> + 24-byte cave in free space</td>
         <td>taps under ~95 ms lost</td><td>press + release sent</td></tr>
-      <tr><td>Name / version reply</td><td>27-byte slot @ <code>0x1e18c8e</code></td><td><code>FootCtrlPlus_012</code></td><td><code>FootCtrlPlus_141-dtnprt</code></td></tr>
+      <tr><td>Name / version reply</td><td>27-byte slot @ <code>0x1e18c8e</code></td><td><code>FootCtrlPlus_012</code></td><td><code>FootCtrlPlus_142-dtnprt</code></td></tr>
       <tr><td>Boot greeting</td><td>hook @ <code>0x1e144ca</code> → <code>greet</code></td><td>normal screen</td>
-        <td><code>dtnPrt</code> scrolls in, then version, battery percent and mode</td></tr>
+        <td>blank, then version, battery percent and mode</td></tr>
+      <tr><td>Start screen</td><td>modes 2/3 @ <code>0x1e13a84</code> / <code>0x1e13aa0</code></td><td><code>000</code></td><td>blank</td></tr>
+      <tr><td>Space for the patches</td><td><code>call</code> @ <code>0x1e15b06</code> removed; <code>0x1e1cc26</code> → <code>0x1e00100</code></td>
+        <td>timer function / <code>0xff</code> block in use</td><td>freed (LRC calibration keeps its 10 ms period)</td></tr>
       <tr><td>Status LED dimmed</td><td>LED timer @ <code>0x1e129ee</code>, display timer @ <code>0x1e11d78</code></td><td>on = always lit</td>
         <td>lit 1/3 of the time at ~67 Hz</td></tr>
       <tr><td>Advanced custom mode screen</td><td>2 places @ <code>0x1e13064</code> / <code>0x1e13370</code> → <code>bank_sw</code></td>
