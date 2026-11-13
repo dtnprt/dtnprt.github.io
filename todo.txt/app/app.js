@@ -110,6 +110,7 @@ const state = {
   recent: [],          // desktop: the last 20 opened files, newest first (todo.cfg `recent=`)
   browserList: null,   // web: name of the list kept in the browser storage (localStorage), see browserStorageDialog
   statusBar: true,
+  hideInput: true,     // minimal mode: the input bar slides away until the mouse is over the window (Settings -> Appearance; todo.cfg `hideinput=`)
   scrollbars: true,    // thin themed scrollbars (visible on hover / while scrolling); Settings -> View
   touchBar: isAndroid || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches),   // helper bar under the input (touch screens); Settings -> General
   noCapture: false,     // desktop only (todo.cfg `nocapture=`): hide the window from screenshots / screen sharing
@@ -133,7 +134,7 @@ function persist() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       lines: state.browserList && webEncrypt ? null : state.lines, browserList: state.browserList, opened: state.opened, fileName: state.fileName, path: state.path, folder: isTauri ? state.folder : null, dirty: state.dirty,
-      sort: state.sort, showDone: state.showDone, sidebar: state.sidebar, calendar: state.calendar, minimal: state.minimal, statusBar: state.statusBar, scrollbars: state.scrollbars, touchBar: state.touchBar, showDates: state.showDates, cornerName: state.cornerName, theme: state.theme,
+      sort: state.sort, showDone: state.showDone, sidebar: state.sidebar, calendar: state.calendar, minimal: state.minimal, statusBar: state.statusBar, scrollbars: state.scrollbars, hideInput: state.hideInput, touchBar: state.touchBar, showDates: state.showDates, cornerName: state.cornerName, theme: state.theme,
     }));
   } catch { /* storage unavailable or full: ignore */ }
   scheduleAutoSave();
@@ -166,6 +167,7 @@ function restore() {
     state.minimal = !!s.minimal;
     state.statusBar = s.statusBar !== false;
     state.scrollbars = s.scrollbars !== false;
+    state.hideInput = s.hideInput !== false;
     if (typeof s.touchBar === 'boolean') state.touchBar = s.touchBar;
     if (typeof s.showDates === 'boolean') state.showDates = s.showDates;
     if (typeof s.cornerName === 'boolean') state.cornerName = s.cornerName;
@@ -271,7 +273,7 @@ async function readAny(p) {
   if (isRemote(p)) {
     const entry = davEntry(p);
     if (!entry) throw new Error('No WebDAV server is configured for this address (Settings → WebDAV).');
-    return withUnlock(() => invoke('webdav_get', { entry, url: p }));
+    return withUnlock(() => withBusy('Loading…', () => invoke('webdav_get', { entry, url: p })));
   }
   return { text: await readLocal(p), etag: null, missing: false };
 }
@@ -387,6 +389,30 @@ function askPassword({ title, message, confirm = false }) {
 }
 
 /** Run `fn`; when it fails because a password is needed, ask for it (dialog, keyring or Windows Hello) and run it again. */
+// ---------- busy overlay: reading, decrypting, encrypting can take a moment ----------
+let busyCount = 0;
+let busyEl = null;
+let busyTimer = null;
+/** Run `fn`; if it takes longer than a short moment a small spinner overlay says what is going on (so it does not look like a crash). */
+async function withBusy(text, fn) {
+  busyCount++;
+  if (busyCount === 1) {
+    busyTimer = setTimeout(() => {
+      busyEl = el('div', { className: 'busy-overlay', role: 'status', 'aria-live': 'polite' },
+        el('div', { className: 'busy-box' }, el('div', { className: 'busy-spin' }), el('span', { id: 'busyText', textContent: text })));
+      document.body.append(busyEl);
+    }, 350);
+  }
+  try { return await fn(); }
+  finally {
+    busyCount--;
+    if (busyCount === 0) {
+      clearTimeout(busyTimer);
+      if (busyEl) { busyEl.remove(); busyEl = null; }
+    }
+  }
+}
+
 async function withUnlock(fn, interactive = true) {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -405,8 +431,8 @@ async function withUnlock(fn, interactive = true) {
     }
   }
 }
-const readLocal = (p, interactive = true) => withUnlock(() => invoke('read_text', { path: p }), interactive);
-const writeLocal = (p, text) => withUnlock(() => invoke('write_text', { path: p, text }));
+const readLocal = (p, interactive = true) => withUnlock(() => (interactive ? withBusy('Loading…', () => invoke('read_text', { path: p })) : invoke('read_text', { path: p })), interactive);
+const writeLocal = (p, text) => withUnlock(() => withBusy('Saving…', () => invoke('write_text', { path: p, text })));
 
 
 // Browser (no Rust): the same file format through WebCrypto (web/crypt.js). The password stays in memory only.
@@ -425,7 +451,7 @@ async function webDecode(text, interactive = true) {
       C.setSession(a.password);
     }
     try {
-      const plain = await C.open(text, C.getSession());
+      const plain = await withBusy('Decrypting…', () => C.open(text, C.getSession()));
       if (!webEncrypt) setWebEncrypt(true);   // an encrypted file stays encrypted when it is saved
       return plain;
     } catch (e) {
@@ -582,7 +608,7 @@ async function webEncode(text) {
     if (!a) throw new Error('not saved: no password');
     C.setSession(a.password);
   }
-  return C.seal(text, C.getSession());
+  return withBusy('Encrypting…', () => C.seal(text, C.getSession()));
 }
 
 /** Files that are converted when encryption is switched on/off or the password changes (local only). */
@@ -648,7 +674,7 @@ async function setEncryption(on) {
       if (dir) await invoke('crypt_set_dir', { dir, entry: isRemote(dir) ? davEntry(isRemote(state.path || '') ? state.path : dir) : null, encrypt: on });
     }
     const t = cryptTargets();
-    const n = await invoke('crypt_convert', { folder: t.folder, files: t.files, encrypt: on, newPassword: null });
+    const n = await withBusy(on ? 'Encrypting files…' : 'Decrypting files…', () => invoke('crypt_convert', { folder: t.folder, files: t.files, encrypt: on, newPassword: null }));
     // a WebDAV list is not converted on disk: write it again so it is stored in the new form
     if (state.path && isRemote(state.path)) { state.dirty = true; await save(); }
     uiAlert(on ? `Encryption is on. ${n} local file(s) encrypted.` : `Encryption is off. ${n} local file(s) decrypted.`);
@@ -859,7 +885,7 @@ async function setFolderEncryption(dir, entry, on) {
       if (a.remember) await invoke('crypt_remember');
     }
     await withUnlock(() => invoke('crypt_set_dir', { dir, entry, encrypt: on }));
-    if (!isRemote(dir)) await withUnlock(() => invoke('crypt_convert', { folder: dir, files: [], encrypt: on, newPassword: null }));
+    if (!isRemote(dir)) await withUnlock(() => withBusy(on ? 'Encrypting files…' : 'Decrypting files…', () => invoke('crypt_convert', { folder: dir, files: [], encrypt: on, newPassword: null })));
     else if (state.path && isRemote(state.path) && davParent(state.path) === dir) { state.dirty = true; await save(); }
   } catch (e) { uiAlert(`Could not change the folder: ${e}`); }
   refreshFolderInfo(true);
@@ -1748,6 +1774,7 @@ async function loadAutoSave() {
     if (/^\s*showdates\s*=/m.test(cfg)) state.showDates = flag('showdates');
     if (/^\s*cornername\s*=/m.test(cfg)) state.cornerName = flag('cornername');
     if (/^\s*scrollbars\s*=/m.test(cfg)) state.scrollbars = flag('scrollbars');
+    if (/^\s*hideinput\s*=/m.test(cfg)) state.hideInput = flag('hideinput');
     if (/^\s*statusbar\s*=/m.test(cfg)) state.statusBar = flag('statusbar');   // shared with the terminal app
   } catch { /* no config yet: off */ }
   render();
@@ -2394,6 +2421,8 @@ function render() {
   $('#minimalToggle').setAttribute('aria-checked', state.minimal);
   $('#statusToggle').setAttribute('aria-checked', state.statusBar);
   $('#scrollbarToggle').setAttribute('aria-checked', state.scrollbars);
+  $('#hideInputToggle').setAttribute('aria-checked', state.hideInput);
+  document.body.classList.toggle('keep-input', !state.hideInput);   // minimal mode: the input bar stays visible
   document.body.classList.toggle('noscrollbars', !state.scrollbars);
   $('#touchToggle').setAttribute('aria-checked', state.touchBar);
   $('#datesToggle').setAttribute('aria-checked', state.showDates);
@@ -2923,6 +2952,7 @@ document.querySelectorAll('[data-sort]').forEach((b) => {
 $('#showDone').onclick = () => { state.showDone = !state.showDone; persist(); render(); };
 $('#viewToggle').onclick = () => { state.view = state.view === 'list' ? 'text' : 'list'; render(); };
 $('#statusToggle').onclick = () => { state.statusBar = !state.statusBar; if (isTauri) setCfg('statusbar', state.statusBar); persist(); render(); };
+$('#hideInputToggle').onclick = () => { state.hideInput = !state.hideInput; if (isTauri) setCfg('hideinput', state.hideInput); persist(); render(); };
 $('#scrollbarToggle').onclick = () => { state.scrollbars = !state.scrollbars; if (isTauri) setCfg('scrollbars', state.scrollbars); persist(); render(); };
 // show the scrollbar of a scroll area while it is scrolled (it is otherwise only visible on hover)
 document.addEventListener('scroll', (e) => {
@@ -2992,7 +3022,7 @@ document.addEventListener('mousedown', (e) => {
     //  * every element of the settings overlay that does not have to be clicked (text, headings, hints, the box, the backdrop).
     const row = state.minimal && state.editing === null && t instanceof Element ? t.closest('#list .task') : null;
     const inSettings = !settingsEl.hidden && t instanceof Element && t.closest('#settings');
-    const clickable = t instanceof Element && t.closest('button, a, input, select, textarea, label, [role=tab], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], .grip, .dd, .actions, .chip, .edit, .scroll-area');
+    const clickable = t instanceof Element && t.closest('button, a, input, select, textarea, label, .grip, .dd, .actions, .chip, .edit');
     if ((row && !clickable) || (inSettings && !(t instanceof Element && t.closest('button, a, input, select, textarea, label, [role=tab], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], .kf-row, #themeMenu, #knownFiles, #knownFolders')))) {
       const x0 = e.clientX, y0 = e.clientY;
       const stop = () => { document.removeEventListener('mousemove', move, true); document.removeEventListener('mouseup', stop, true); };
@@ -3232,6 +3262,19 @@ document.addEventListener('keydown', (e) => {
     document.body.classList.add('show-input');   // minimal mode: show the (hidden) bar first, a hidden element cannot take the focus
     $('#addInput').focus();
   }
+});
+
+// A click anywhere in the window focuses the add / search bar - also on an entry - unless something else is clicked (checkbox,
+// button, link, input, menu, dialog, the settings ...) or a line is being edited. (Not on touch screens: it would pop up the keyboard.)
+document.addEventListener('click', (e) => {
+  if (isAndroid || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches)) return;
+  if (state.editing !== null || e.button !== 0) return;
+  const t = e.target;
+  if (!(t instanceof Element) || !t.isConnected) return;
+  if (t.closest('button, a, input, select, textarea, label, [role=tab], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], .grip, .dd, .dd-menu, .actions, .chip, .edit, .ac, .help, .ui-dialog, .busy-overlay, .paste-panel, .note-field, #settings, #scrim, #raw')) return;
+  if (state.view === 'text') return;
+  document.body.classList.add('show-input');   // minimal mode: show the bar first, a hidden element cannot take the focus
+  $('#addInput').focus({ preventScroll: true });
 });
 
 // Drag & drop a file anywhere on the page.

@@ -569,7 +569,7 @@ body .set-tabs button[role="tab"][aria-selected="true"] { border-bottom-color: v
 /* sub-entries: line number / grip and checkbox stay in their columns; the indent starts at the priority button, marked by an
    L-shaped connector (colours follow the theme) */
 .task[data-level] .pri-dd { position: relative; margin-left: calc((var(--lvl, 1) - 1) * 22px); padding-left: 18px; }
-.task[data-level] .pri-dd::before { content: ""; position: absolute; left: 3px; top: -12px; width: 10px; height: calc(50% + 12px); border-left: 2px solid var(--muted); border-bottom: 2px solid var(--muted); border-bottom-left-radius: 4px; opacity: .7; pointer-events: none; }
+.task[data-level] .pri-dd::before { content: ""; position: absolute; left: 3px; top: 7px; width: 10px; height: calc(50% - 7px); border-left: 2px solid var(--muted); border-bottom: 2px solid var(--muted); border-bottom-left-radius: 4px; opacity: .7; pointer-events: none; }
 
 /* file menu: cloud / git / local groups with icons; known files tab */
 .file-sep { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
@@ -608,7 +608,7 @@ body .set-tabs button[role="tab"][aria-selected="true"] { border-bottom-color: v
 body:not(.android).minimal .composer { position: relative; left: auto; right: auto; bottom: auto; margin-bottom: 0; opacity: 1; transform: none; pointer-events: auto; z-index: auto; }
 /* it slides in from below while the list box shrinks upwards in the same animation (max-height from 0 to the natural height of the bar) */
 body:not(.android).minimal .composer { box-sizing: border-box; max-height: var(--composer-h, 76px); transition: max-height .28s cubic-bezier(.2, .8, .2, 1), padding .28s cubic-bezier(.2, .8, .2, 1), opacity .22s ease, transform .28s cubic-bezier(.2, .8, .2, 1); }
-body:not(.android).minimal:not(.show-input) .composer:not(:focus-within) { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(14px); pointer-events: none; overflow: hidden; }
+body:not(.android).minimal:not(.keep-input):not(.show-input) .composer:not(:focus-within) { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(14px); pointer-events: none; overflow: hidden; }
 body:not(.android).minimal .layout { padding-bottom: 0; }
 body:not(.android).minimal #list > .task:last-child { margin-bottom: 0 !important; }
 /* minimal mode: no offsets are left over from the old floating input bar (they would shift the relative bar sideways) */
@@ -622,4 +622,13 @@ body:not(.android).minimal .layout .composer, body:not(.android).minimal .layout
 /* minimal mode: the small file name / lock in the bottom left corner is never covered by the list: room below the list while the
    input bar is away (the bar's own padding takes over when it slides in and the corner fades out) */
 body:not(.android).minimal .layout { transition: padding-bottom .28s cubic-bezier(.2, .8, .2, 1); }
-body:not(.android).minimal.has-corner:not(.show-input) .layout:not(:has(.composer:focus-within)) { padding-bottom: 22px; }
+body:not(.android).minimal.has-corner:not(.keep-input):not(.show-input) .layout:not(:has(.composer:focus-within)) { padding-bottom: 22px; }
+/* the input bar stays: the corner label sits in its bottom padding and does not fade */
+body.minimal.keep-input .dav-corner { opacity: .3 !important; }
+
+/* loading overlay (decrypting / loading / saving can take a moment) */
+.busy-overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .35); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.busy-box { display: flex; align-items: center; gap: 14px; padding: 16px 22px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+.busy-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: busy-spin .8s linear infinite; }
+@keyframes busy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .busy-spin { animation-duration: 2.4s; } }
