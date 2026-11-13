@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chocolate Plus Custom Firmware 141</title>
+  <title>Chocolate Plus Custom Firmware 142</title>
   <style>
 :root {
   --bg: #15171a; --card: #1f2226; --line: #33373d; --fg: #e8eaed; --muted: #8a9099;
@@ -97,7 +97,13 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
   </section>
 
     <section class="card release">
-      <h2>Version 14, build 1 <span class="tag">141</span> <span class="status on">Latest</span></h2>
+      <h2>Version 14, build 2 <span class="tag">142</span> <span class="status on">Latest</span></h2>
+      <div class="muted">Released 2026-11-09 · based on the original firmware 012</div>
+      <p class="title">USB-MIDI fixed, shorter boot greeting</p>
+      <div class="notes"><h3>USB</h3><ul><li>The pedal is detected again as USB-MIDI device <b>SINCO</b>. In 141 it did not show up over USB: the patches had overwritten a piece of the original USB code that only looked unused.</li></ul><h3>Stability</h3><ul><li>Two more places that the patches used as free space are in use by the original firmware (a clock calibration timer and the Bluetooth link scheduler). Both are restored.</li></ul><h3>Boot greeting</h3><ul><li>Starts with a blank screen (no more <b>000</b>), then version, battery percent and mode. The scrolling name is gone.</li></ul></div>
+    </section>
+    <section class="card release">
+      <h2>Version 14, build 1 <span class="tag">141</span> </h2>
       <div class="muted">Released 2026-11-05 · based on the original firmware 012</div>
       <p class="title">First release of the dtnprt custom firmware</p>
       <div class="notes"><h3>Footswitches</h3><ul><li>Faster response: a press is recognised about twice as fast as with the original firmware.</li><li>Short, quick taps are no longer missed.</li><li>Pressing two switches together (A+B, C+D) works as before.</li></ul><h3>Boot greeting</h3><ul><li>On boot the screen shows information about the version, the battery status in percent and the chosen mode.</li></ul><h3>Advanced custom mode</h3><ul><li>The screen shows bank and switch at a glance, e.g. <b>2-3</b> for bank 2, switch C.</li><li>The current bank is shown right after switching the pedal on, and switching banks down from the first bank correctly jumps to the last one.</li></ul><h3>Status LED</h3><ul><li>The status LED is dimmed.</li></ul></div>
@@ -117,7 +123,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
         </label>
         <div class="patch-status" id="patch-status"></div>
         <a class="dl primary" id="patch-save" hidden>⬇ Save</a></li>
-      <li><b>Save</b> <code>FootCtrlPlus_141-dtnprt.fwsc</code> and flash it as described <a href="#install">below</a>.
+      <li><b>Save</b> <code>FootCtrlPlus_142-dtnprt.fwsc</code> and flash it as described <a href="#install">below</a>.
         Don't rename the file.</li>
     </ol>
     <p class="muted" style="margin:12px 0 4px">Prefer the command line, or want to see how the patch works?
@@ -126,7 +132,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
       <summary>Checksums</summary>
       <table class="tbl" style="margin-top:10px"><tbody>
         <tr><td>Original firmware <code>FootCtrlPlus_012.fwsc</code></td><td><code class="hash">9deb9d90691415aa7f4514103842237a1500c681db34fe35e5f5136d173cb3bc</code></td></tr>
-        <tr><td>Result <code>FootCtrlPlus_141-dtnprt.fwsc</code></td><td><code class="hash">fb479aa2da0efe27e7c92581884171bce0694e41a912a5d755a520129705f837</code></td></tr>
+        <tr><td>Result <code>FootCtrlPlus_142-dtnprt.fwsc</code></td><td><code class="hash">eadd20b993b149753651f83a683d1af25fb4f966d340e0b269a33b300f2e3ba2</code></td></tr>
       </tbody></table>
     </details>
   </section>
@@ -134,7 +140,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 
   <section class="card" id="install">
     <h2>How to flash</h2>
     <ol>
-      <li>Install <b>SincoOTA</b> on an Android phone and copy <code>FootCtrlPlus_141-dtnprt.fwsc</code> to the phone.
+      <li>Install <b>SincoOTA</b> on an Android phone and copy <code>FootCtrlPlus_142-dtnprt.fwsc</code> to the phone.
         Don't rename the file.</li>
       <li>Set the pedal switch to <b>H</b> (host: USB and Bluetooth). Close CubeSuite, turn off Bluetooth on the PC.</li>
       <li><b>Do not pair</b> the pedal with the phone. If it is paired, remove it first

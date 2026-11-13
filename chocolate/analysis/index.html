@@ -130,7 +130,7 @@ table.tbl td, table.tbl th { vertical-align: top; }
       <li>Each name character is stored as <code>char + i + 1</code> (i = position, 0-based), padding is stored as is.
         Example 012: stored <code>GqrxHzytYv…</code> → <code>FootCtrlPlus_012</code>.</li>
       <li>SincoOTA decodes the name with the length of the <b>file name</b>, so the file must keep its name
-        (e.g. <code>FootCtrlPlus_141-dtnprt.fwsc</code>). A renamed file is rejected or misread.</li>
+        (e.g. <code>FootCtrlPlus_142-dtnprt.fwsc</code>). A renamed file is rejected or misread.</li>
       <li>The version digits in the name are what the apps show as firmware version; they must be digits only.</li>
     </ul>
   </section>
@@ -245,12 +245,20 @@ table.tbl td, table.tbl th { vertical-align: top; }
       <tr><td><code>0x1e18c8e</code></td><td>27-byte slot with the name/version reply <code>FootCtrlPlus_012</code></td></tr>
       <tr><td><code>0x1e144ca</code></td><td>call that draws the first screen after start (hook for the boot greeting)</td></tr>
       <tr><td><code>0x1e04a84</code></td><td><b>Bluetooth pairing-record function</b>: looks unused but is reached indirectly. Never overwrite.</td></tr>
+      <tr><td><code>0x1e11b06</code></td><td><b>USB EP0 send function</b> (descriptors during USB detection): looks unused but is reached
+        through a pointer. Overwritten up to 141, so USB-MIDI was not detected. Never overwrite.</td></tr>
+      <tr><td><code>0x1e00406</code></td><td>timer period change (1 s), called by the LRC clock calibration timer <code>0x1e15a40</code></td></tr>
+      <tr><td><code>0x1e19308</code></td><td>32 bytes <code>0xff</code>: start values of the Bluetooth link scheduler <code>0x1e1cc1c</code></td></tr>
+      <tr><td><code>0x1e13a7e</code> / <code>0x1e13a9a</code></td><td>start screen of modes 2 / 3 (<code>000</code>), drawn ~5 ms after power-on</td></tr>
       <tr><td><code>0x193a0 + 0xf4</code></td><td>RAM: u32 display content (left digit in bits 16-23)</td></tr>
       <tr><td><code>0x13490 + 0x5c63</code></td><td>RAM: Bluetooth-off flag (LED stays dark while set)</td></tr>
     </tbody></table>
     <h3>Free space for patches</h3>
-    <p>The flash is almost full. Usable: the unreferenced functions at <code>0x1e00406</code> (104 bytes) and <code>0x1e11b06</code> (68 bytes),
-      the <code>0xff</code> padding at <code>0x1e19308</code> (32 bytes) and <code>0x1e26088</code> (40 bytes).</p>
+    <p>The flash is almost full. Used for the patches: the timer function at <code>0x1e00406</code> (104 bytes; its only caller
+      is removed), the <code>0xff</code> block at <code>0x1e19308</code> (32 bytes; its only reader is pointed to another
+      <code>0xff</code> block) and the <code>0xff</code> padding at <code>0x1e26088</code> (40 bytes).</p>
+    <p><b>"No reference found" does not mean free.</b> Code reached through function pointers has no visible caller:
+      <code>0x1e04a84</code> (Bluetooth pairing) and <code>0x1e11b06</code> (USB, see above) both looked unused.</p>
   </section>
 
   <section class="card" id="switches">
