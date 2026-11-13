@@ -20,6 +20,7 @@
       <a class="l" href="#clients">Web · Desktop · Terminal</a>
       <a class="l" href="#format">Format</a>
       <a class="l" href="#themes">Themes</a>
+      <a class="btn" href="https://github.com/dtnprt/todo.txt/releases" style="padding:6px 14px;font-size:15px">Download</a>
       <a class="btn primary" href="app/" style="padding:6px 14px;font-size:15px">Try it</a>
     </div>
   </header>
@@ -31,7 +32,7 @@
       <div class="cta">
         <a class="btn primary" href="app/">Open the web app</a>
         <a class="btn" href="https://github.com/dtnprt/todo.txt">View on GitHub</a>
-        <a class="btn" href="#clients">Install</a>
+        <a class="btn" href="https://github.com/dtnprt/todo.txt/releases">Download client</a>
       </div>
       <img class="shot" src="img/hero.png" alt="The todo.txt app with a sidebar of projects, contexts and priorities and a list of tasks with due dates" width="1200" height="760">
     </div>
@@ -47,12 +48,13 @@
           <div class="card"><div class="ic">📝</div><h3>Notes</h3><p>Type <code>note:</code> and write as much as you like. The text lives in <code>notes/NAME.txt</code> next to your list – the task line stays short.</p></div>
           <div class="card"><div class="ic">🌳</div><h3>Sub-entries</h3><p>Lines with <code>-</code> to <code>----</code> after the date become sub-entries. Sorting keeps groups together; paste an outline and it is split correctly.</p></div>
           <div class="card"><div class="ic">📋</div><h3>Smart paste</h3><p>Paste several lines: add each as an entry, as an entry with sub-entries, or as one entry with the rest as a note.</p></div>
-          <div class="card"><div class="ic">🗂️</div><h3>Folders</h3><p>Use a whole folder of lists and switch between them. Move projects (with their sub-entries) from one file to another.</p></div>
+          <div class="card"><div class="ic">🗂️</div><h3>Known folders</h3><p>Use a whole folder of lists and switch between them. A hidden <code>.todo.txt</code> folder keeps the folder's settings, notes and images – also on a WebDAV server – and decides what is encrypted. Move projects between files.</p></div>
           <div class="card"><div class="ic">🔄</div><h3>Git &amp; WebDAV sync</h3><p>Opt-in git sync (pull on start, commit and push after every change) or a WebDAV file – with an offline cache and three-way merge.</p></div>
-          <div class="card"><div class="ic">🎨</div><h3>50+ themes</h3><p>Nord, Dracula, Catppuccin, Solarized, Rosé Pine, Tokyo Night, a retro Cupertino 9 and X, Terminal and Accessibility families … Themes are plain CSS files – write your own.</p></div>
+          <div class="card"><div class="ic">🎨</div><h3>50+ themes</h3><p>Nord, Dracula, Catppuccin, Solarized, Rosé Pine, Tokyo Night – and families with variants: Cupertino (Light, Dark, 9, X), Redmond (95, XP, 7), Terminal (Green, Amber, White, Hacker, Pip-Boy), Accessibility. Themes are plain CSS files – write your own.</p></div>
           <div class="card"><div class="ic">↩️</div><h3>Undo, drag &amp; drop, archive</h3><p>Undo and redo everywhere, re-prioritise by dragging, archive finished tasks to <code>done.txt</code>.</p></div>
           <div class="card"><div class="ic">🔁</div><h3>Always in sync with the file</h3><p>Edit the file in your editor, with Syncthing or git – the apps notice and reload it.</p></div>
           <div class="card"><div class="ic">🔒</div><h3>Private by design</h3><p>Nothing is uploaded. Optional, <em>experimental</em> AES-256-GCM encryption of lists, notes and images (git and WebDAV only see ciphertext; other todo.txt apps can then no longer read the files), password in your OS keyring, optional Windows Hello. Hide the window from screenshots and screen sharing.</p></div>
+          <div class="card"><div class="ic">🕘</div><h3>Open, known and recent files</h3><p>Cloud, git and local files side by side in one menu, marked with their icon (and a lock when encrypted). A list of known files, the last 20 recent files, and one hidden folder per project.</p></div>
           <div class="card"><div class="ic">🗜️</div><h3>Zip backups</h3><p>One click (or <code>todo --backup</code>) writes a .zip of lists, notes and images – automatically before archiving done tasks. Encrypted files stay encrypted.</p></div>
         </div>
       </div>
@@ -95,14 +97,35 @@
         <div class="split rev" style="margin-top:56px">
           <div class="txt">
             <h3>Just the list</h3>
-            <p>Minimal mode without the sidebar: nothing but your entries. The input floats over the bottom of the list while you type, and the list scrolls so the last entry is never hidden behind it.</p>
-            <p>Every theme works here – this is Hauro.</p>
+            <p>Minimal mode without the sidebar: nothing but your entries. The input bar slides in from below as soon as the mouse is over the window – the list box gives way in the same motion – and slides away again. A small label in the corner shows where the file lives, with a lock when it is encrypted.</p>
+            <p>Every theme works here – this is Hauro. The sliding input bar can be switched off in the settings.</p>
           </div>
           <img class="shot" src="img/minimal-nosidebar-hauro.png" alt="Minimal mode without a sidebar, Hauro theme" loading="lazy" width="900" height="600">
         </div>
         <div class="split" style="margin-top:56px">
           <img class="shot" src="img/minimal-nosidebar.png" alt="Minimal mode without a sidebar" loading="lazy" width="900" height="600">
           <img class="shot" src="img/minimal-nosidebar-input.png" alt="Minimal mode without a sidebar while adding an entry, with the date picker open" loading="lazy" width="900" height="600">
+        </div>
+        <div class="split" style="margin-top:56px">
+          <img class="shot" src="img/minimal-bar.png" alt="Minimal mode with the input bar slid in from below" loading="lazy" width="900" height="600">
+          <div class="txt">
+            <h3>Quiet until you need it</h3>
+            <p>Move the mouse into the window or just start typing: the input appears, the list shrinks by exactly its height. Clicking anywhere – also on an entry – puts the cursor in the input.</p>
+          </div>
+        </div>
+        <div class="split rev" style="margin-top:56px">
+          <div class="txt">
+            <h3>No file access? No problem</h3>
+            <p>In the browser you can keep lists in the <b>Browser storage</b>: named lists inside the browser, saved automatically while you work. Download a copy whenever you like. Encrypted if you want it.</p>
+          </div>
+          <img class="shot" src="img/storage.png" alt="The Browser storage dialog listing three lists" loading="lazy" width="1200" height="760">
+        </div>
+        <div class="split" style="margin-top:56px">
+          <img class="shot" src="img/settings.png" alt="The settings overlay with the appearance tab" loading="lazy" width="1200" height="760">
+          <div class="txt">
+            <h3>Settings that stay out of the way</h3>
+            <p>Sidebar, status bar, scrollbars, minimal mode, themes, WebDAV servers, known files and folders, encryption – all in one overlay. Drag the window by any empty part of it.</p>
+          </div>
         </div>
         <img class="shot" src="img/light.png" alt="The Cupertino Light theme" loading="lazy" style="margin-top:32px" width="1200" height="760">
       </div>
@@ -120,10 +143,15 @@
           </div>
           <div class="card">
             <h3>🖥️ Desktop</h3>
-            <p>The web app in a <a href="https://tauri.app">Tauri</a> window with native file dialogs, auto save, several remembered files, folder mode, git, WebDAV, a frameless window, always-on-top and your own themes.</p>
+            <p>The web app in a <a href="https://tauri.app">Tauri</a> window with native file dialogs, auto save, known folders and files, recent files, folder mode, git, WebDAV, optional encryption, zip backups, a frameless window, always-on-top and your own themes.</p>
             <pre><code>cargo install tauri-cli --version "^2"
 cd src-tauri
 cargo tauri build</code></pre>
+            <p style="margin-top:12px"><a class="btn primary" href="https://github.com/dtnprt/todo.txt/releases">Download client</a></p>
+          </div>
+          <div class="card">
+            <h3>📱 Android <small>(experimental)</small></h3>
+            <p>The same app as an Android app: lists in the app folder or on the SD card, WebDAV with offline cache, touch toolbar. Built from the same sources; still being tested on real devices.</p>
           </div>
           <div class="card">
             <h3>⬛ Terminal</h3>
@@ -137,7 +165,7 @@ todo -p 3 A        # priority
 todo -u 3 call the bank   # sub-entry</code></pre>
           </div>
         </div>
-        <p class="sub" style="margin-top:28px">Prerequisites: the <a href="https://rustup.rs">Rust toolchain</a> (and the <a href="https://tauri.app/start/prerequisites/">Tauri prerequisites</a> for the desktop app). The web app needs nothing but a browser.</p>
+        <p class="sub" style="margin-top:28px">Installers for Windows, macOS and Linux, the terminal app and a zip of the web app are on the <a href="https://github.com/dtnprt/todo.txt/releases">releases page</a> (built automatically from every new version). To build it yourself, prerequisites: the <a href="https://rustup.rs">Rust toolchain</a> (and the <a href="https://tauri.app/start/prerequisites/">Tauri prerequisites</a> for the desktop app). The web app needs nothing but a browser.</p>
       </div>
     </section>
 
@@ -186,6 +214,8 @@ todo -u 3 call the bank   # sub-entry</code></pre>
           <figure><img class="shot" src="img/theme-cupertino-x.png" alt="Cupertino X: glossy blue gel buttons and pinstripes" loading="lazy" width="1000" height="640"><figcaption>Cupertino X</figcaption></figure>
           <figure><img class="shot" src="img/theme-terminal-green.png" alt="Terminal theme: green phosphor with a pixel font" loading="lazy" width="1000" height="640"><figcaption>Terminal Green</figcaption></figure>
           <figure><img class="shot" src="img/theme-terminal-pipboy.png" alt="Terminal theme, Pip-Boy variant" loading="lazy" width="1000" height="640"><figcaption>Terminal Pip-Boy</figcaption></figure>
+          <figure><img class="shot" src="img/theme-postit.png" alt="Post-it theme: a yellow sticky note" loading="lazy" width="1000" height="640"><figcaption>Post-it</figcaption></figure>
+          <figure><img class="shot" src="img/theme-elvish.png" alt="Elvish theme: a golden forest" loading="lazy" width="1000" height="640"><figcaption>Elvish</figcaption></figure>
           <figure><img class="shot" src="img/theme-accessibility-high-contrast.png" alt="High contrast theme" loading="lazy" width="1000" height="640"><figcaption>Accessibility: High contrast</figcaption></figure>
         </div>
       </div>
@@ -211,6 +241,7 @@ todo --git-auto on</code></pre></div>
         <p class="sub" style="margin-inline:auto">The web app runs entirely in your browser. Open a todo.txt, or start with an empty list.</p>
         <div class="cta" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
           <a class="btn primary" href="app/">Open the web app</a>
+          <a class="btn" href="https://github.com/dtnprt/todo.txt/releases">Download client</a>
           <a class="btn" href="https://github.com/dtnprt/todo.txt">Get the source</a>
         </div>
       </div>

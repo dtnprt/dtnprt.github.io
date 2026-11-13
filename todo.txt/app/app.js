@@ -506,7 +506,8 @@ function browserStorageDialog() {
     if (!names.length) body.append(el('p', { className: 'set-hint', textContent: 'No lists in the browser storage yet.' }));
     for (const n of names) {
       const raw = localStorage.getItem(LIST_KEY + n) || '';
-      const info = C.isEncrypted(raw) ? 'encrypted' : `${raw.split(/\r?\n/).filter((l) => l.trim()).length} tasks`;
+      const cnt = raw.split(/\r?\n/).filter((l) => l.trim()).length;
+      const info = C.isEncrypted(raw) ? 'encrypted' : `${cnt} ${cnt === 1 ? 'task' : 'tasks'}`;
       body.append(el('div', { className: 'bs-row' },
         el('span', { className: 'bs-name', textContent: n + (n === state.browserList ? ' (open)' : '') }),
         el('small', { textContent: info }),
@@ -2536,7 +2537,8 @@ function render() {
     const dc = $('#davCorner');
     const lock = isFileEncrypted();
     dc.hidden = !(state.minimal && ((davShown && state.cornerName) || lock));
-    document.body.classList.toggle('has-corner', !dc.hidden);   // minimal mode: the list leaves room for the small file name
+    document.body.classList.toggle('has-corner', !dc.hidden);
+    window.dispatchEvent(new Event('composer-pad'));   // minimal mode: the list leaves room for the small file name
     dc.replaceChildren(...(lock ? [el('i', { className: 'fa-solid fa-lock corner-lock', title: 'Encrypted' })] : []), document.createTextNode(state.cornerName ? (davShown || (lock ? state.fileName : '')) : ''));
     dc.title = davFull;
   }
@@ -3308,9 +3310,11 @@ if (pendingBrowserList) openBrowserList(pendingBrowserList);
     // natural height of the bar = its parts + the padding of the form (10px + 12px); measured from the children, so it is right
     // while the bar slides in or is collapsed in minimal mode (the form itself is animated there)
     const measure = () => {
-      const h = [...form.children].reduce((n, c) => n + (c.hidden ? 0 : c.offsetHeight), 0) + 22;
+      const padB = parseFloat(getComputedStyle(document.body).getPropertyValue('--composer-pad-b')) || 12;
+      const h = [...form.children].reduce((n, c) => n + (c.hidden ? 0 : c.offsetHeight), 0) + 10 + padB;
       if (h > 30) document.documentElement.style.setProperty('--composer-h', h + 'px');
     };
+    window.addEventListener('composer-pad', () => requestAnimationFrame(measure));
     const ro = new ResizeObserver(measure);
     for (const c of form.children) ro.observe(c);
     measure();
