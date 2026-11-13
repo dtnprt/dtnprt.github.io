@@ -1,0 +1,625 @@
+:root {
+  --bg: #f6f7f9; --panel: #fff; --text: #1c2330; --muted: #6b7686; --line: #e2e6ec;
+  --accent: #2563eb; --accent-text: #fff; --hover: #eef2f8;
+  --danger: #dc2626; --warn: #d97706; --ok: #16a34a;
+  --pA: #dc2626; --pB: #ea580c; --pC: #ca8a04; --pD: #16a34a; --pX: #6b7686;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b; --panel: #1b2029; --text: #e5e9f0; --muted: #8f9bb0; --line: #2b3240;
+    --accent: #5b8cff; --accent-text: #0b1020; --hover: #242b38;
+    --danger: #f87171; --warn: #fbbf24; --ok: #4ade80;
+    --pA: #f87171; --pB: #fb923c; --pC: #facc15; --pD: #4ade80; --pX: #8f9bb0;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding-bottom: 28px; background-color: var(--bg); background-image: var(--bg-image, none); background-attachment: fixed; background-repeat: no-repeat; background-size: cover; color: var(--text); font: var(--font-size, 15px)/1.45 var(--font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+/* Linux frameless window is transparent: the page is clipped to rounded corners (theme token --win-radius, 0 = square) */
+:root { --win-radius: 10px; }
+html.win-round { background: transparent; }
+html.win-round body { clip-path: inset(0 round var(--win-radius)); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--hover); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+input[type=text], input[type=search], select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.spacer { flex: 1; }
+
+.topbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: nowrap; }
+.topbar > *, .topbar .dd-btn, .topbar .icon { flex-shrink: 0; white-space: nowrap; }
+.topbar > #fileDd { flex-shrink: 1; min-width: 0; }
+.topbar #fileDd .file-btn { display: flex; align-items: center; max-width: 100%; min-width: 0; }
+.topbar h1 { font-size: 18px; margin: 0 8px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.file-name { color: var(--muted); }
+.file-btn { display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 4px; color: inherit; }
+.file-btn h1 { margin: 0; }
+.file-btn #fileKind { color: var(--muted); font-size: .85em; flex: none; }
+.file-btn:disabled { opacity: 1; cursor: default; }
+.file-btn:disabled > i { display: none; }
+#fileList { min-width: 260px; }
+#fileList .file-row { display: flex; align-items: center; }
+#fileList .file-row .file-pick { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+#fileList .file-row .file-pick small { color: var(--muted); margin-left: 6px; }
+#fileList .file-row .file-rm { color: var(--muted); padding: 6px 8px; }
+#fileList hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.dirty { color: var(--warn); }
+
+/* Layout: the sidebar sits at the outer left edge, the entries fill the rest (no maximum width, not centred) and the
+   add/search bar spans the whole window below both (`main` is transparent to the grid). The sidebar scrolls by itself. */
+.layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); grid-template-rows: 1fr auto; column-gap: 16px; padding: 16px 16px 0 0; }
+.layout.no-side { grid-template-columns: minmax(0, 1fr); padding-left: 16px; }
+main { display: contents; }
+.layout > .sidebar { grid-column: 1; grid-row: 1; }
+#listWrap, #raw { grid-column: 2; grid-row: 1; align-self: start; }
+.layout.no-side #listWrap, .layout.no-side #raw { grid-column: 1; }
+#raw { align-self: stretch; }
+.sidebar { align-self: start; position: sticky; top: 64px; margin-left: 16px; max-height: calc(100vh - 64px - 28px - var(--composer-h, 76px) - 8px); overflow: auto; }
+body.nostatus .sidebar { max-height: calc(100vh - 64px - var(--composer-h, 76px) - 8px); }
+.sidebar h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 4px; }
+.sidebar h2:first-child { margin-top: 0; }
+.side-item { display: flex; justify-content: space-between; width: 100%; text-align: left; border: 0; background: none; border-radius: 6px; padding: 4px 8px; }
+.side-item.active { background: var(--accent); color: var(--accent-text); }
+.side-item.active span { color: inherit; }
+.side-item .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.side-item.active .n { color: inherit; opacity: .8; }
+.side-empty { color: var(--muted); padding: 4px 8px; font-size: 13px; }
+
+.status { position: fixed; left: 0; right: 0; bottom: 0; height: 28px; line-height: 27px; padding: 0 16px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; z-index: 5; white-space: nowrap; overflow: hidden; }
+.status button { padding: 0 8px; font-size: 12px; }
+
+.tasks { list-style: none; margin: 0; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.tasks:empty { display: none; }
+.task { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.task:last-child { border-bottom: 0; }
+.task:hover { background: var(--hover); }
+.task input[type=checkbox] { margin: 0; width: 16px; height: 16px; flex: none; cursor: pointer; }
+.task .body { flex: 1; min-width: 0; overflow-wrap: anywhere; cursor: text; }
+.task.done .body { color: var(--muted); text-decoration: line-through; }
+.task.done .chip, .task.done .meta { text-decoration: none; }
+.task .actions { display: flex; gap: 2px; flex: none; opacity: 0; }
+.task:hover .actions, .task:focus-within .actions { opacity: 1; }
+.actions button { border: 0; background: none; padding: 2px 6px; color: var(--muted); }
+.actions button:hover { color: var(--text); }
+.actions .del:hover { color: var(--danger); }
+.task .edit { width: 100%; }
+.chip { border: 0; background: none; padding: 0; cursor: pointer; font-weight: 500; }
+.chip.project { color: var(--accent); } .chip.context { color: var(--ok); }
+.chip:hover { text-decoration: underline; }
+.meta { font-size: 12px; background: var(--hover); color: var(--muted); border-radius: 4px; padding: 0 5px; }
+.meta.overdue { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.meta.today { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.body a { color: var(--accent); }
+.dates { display: block; font-size: 12px; color: var(--muted); }
+
+.raw { width: 100%; min-height: 60vh; font: 14px/1.5 ui-monospace, Consolas, monospace; resize: vertical; white-space: pre; }
+.empty { text-align: center; color: var(--muted); padding: 40px 0; }
+.drop { position: fixed; inset: 0; background: color-mix(in srgb, var(--accent) 80%, transparent); color: var(--accent-text); display: grid; place-items: center; font-size: 24px; z-index: 20; pointer-events: none; }
+[hidden] { display: none !important; }
+
+@media (max-width: 720px) {
+  /* too narrow for the sidebar: hide it (the Android drawer is separate) */
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 12px 12px 0; }
+  .layout #listWrap, .layout #raw { grid-column: 1; }
+  body:not(.android) .sidebar { display: none; }
+  .composer { margin-left: 0 !important; }
+  /* the entry buttons (note / edit / delete) float over the text on hover instead of taking space from it */
+  body:not(.android) .task { position: relative; }
+  body:not(.android) .task .actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); z-index: 2; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 2px; opacity: 0; pointer-events: none; }
+  body:not(.android) .task:hover .actions, body:not(.android) .task:focus-within .actions { opacity: 1; pointer-events: auto; }
+}
+
+.dd { position: relative; }
+.dd-menu { position: absolute; left: 0; top: calc(100% + 4px); min-width: 190px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; display: flex; flex-direction: column; box-shadow: 0 8px 24px rgba(0,0,0,.18); z-index: 10; }
+.dd-menu button { display: flex; align-items: center; gap: .35em; border: 0; background: none; text-align: left; padding: 6px 10px; border-radius: 5px; white-space: nowrap; }
+.dd-menu button:hover { background: var(--hover); }
+.dd-menu kbd { margin-left: auto; padding-left: 16px; color: var(--muted); font: 12px inherit; }
+.dd-menu .submenu { display: flex; flex-direction: column; margin: 0 0 4px 12px; padding-left: 4px; border-left: 1px solid var(--line); }
+.dd-menu .submenu[hidden] { display: none; }
+.sub-caret { margin-left: auto; color: var(--muted); }
+.tick { display: inline-block; width: 1.2em; visibility: hidden; }
+[aria-checked=true] > .tick { visibility: visible; }
+button.icon { padding: 4px 9px; font-size: 15px; line-height: 1.3; }
+/* top bar: every button the same height, icon-only ones square */
+.topbar .dd > .dd-btn, .topbar button.icon { box-sizing: border-box; height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; font-size: 15px; line-height: 1; }
+.topbar button.icon { width: 34px; padding: 0; }
+/* toggle buttons in the top bar: highlighted while on (e.g. sidebar shown) */
+.topbar button.icon.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.topbar .dd > .dd-btn i { margin: 0; }
+.topbar .dd > .file-btn { padding: 0 12px; }
+button:disabled.dd-item, .dd-menu button:disabled { opacity: .45; }
+.dd-menu button i { width: 1.2em; text-align: center; margin-right: 4px; }
+.dd-menu .tick i { margin: 0; }
+
+/* composer: add / search input with highlighting and popups */
+.composer { position: sticky; bottom: 28px; background: transparent; padding: 10px 0 12px; margin-top: 10px; }
+.composer-box { position: relative; display: flex; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.composer-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.composer.search .composer-box { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
+.composer .mode { flex: none; width: 40px; align-self: stretch; border: 0; border-right: 1px solid var(--line); border-radius: 5px 0 0 5px; background: none; color: var(--muted); }
+.composer.search .mode { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.field { position: relative; flex: 1; height: 40px; min-width: 0; }
+.field .hl, .field input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0 12px; border: 0; background: transparent; font: inherit; line-height: 40px; letter-spacing: normal; }
+.field .hl { white-space: pre; overflow: hidden; pointer-events: none; color: var(--text); }
+.field input { color: transparent; caret-color: var(--text); outline: none; border-radius: 0 5px 5px 0; }
+.field input::placeholder { color: var(--muted); }
+.field input::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.tk-pri { color: var(--pX); } .tk-pA { color: var(--pA); } .tk-pB { color: var(--pB); } .tk-pC { color: var(--pC); } .tk-pD { color: var(--pD); }
+.tk-project { color: var(--accent); }
+.tk-context { color: var(--ok); }
+.tk-due { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); border-radius: 3px; }
+.tk-meta { color: var(--muted); }
+.tk-code { color: var(--accent); }
+code.code { font: 0.9em ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; padding: 1px 5px; border-radius: 4px; color: var(--text); background: color-mix(in srgb, var(--muted) 18%, transparent); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); white-space: pre-wrap; }
+
+.ac { position: absolute; left: 0; bottom: calc(100% + 6px); min-width: 220px; max-width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px; z-index: 10; }
+.ac.list { display: flex; flex-direction: column; }
+.ac-item { display: flex; justify-content: space-between; gap: 16px; border: 0; background: none; text-align: left; padding: 5px 10px; border-radius: 5px; }
+.ac-item.sel, .ac-item:hover { background: var(--hover); }
+.ac-item.sel { outline: 1px solid var(--accent); }
+.ac-item .n { color: var(--muted); }
+.ac.cal { width: 252px; padding: 8px; }
+.cal-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 6px; }
+.cal-head button, .cal-quick button { border: 0; background: none; padding: 3px 8px; border-radius: 5px; }
+.cal-head button:hover, .cal-quick button:hover { background: var(--hover); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.cal-grid .dow { font-size: 12px; color: var(--muted); }
+.cal-grid .day { border: 0; background: none; padding: 4px 0; border-radius: 5px; }
+.cal-grid .day:hover { background: var(--hover); }
+.cal-grid .day.today { outline: 1px solid var(--accent); }
+.cal-grid .day.sel { background: var(--accent); color: var(--accent-text); }
+.cal-quick { display: flex; justify-content: space-between; margin-top: 6px; border-top: 1px solid var(--line); padding-top: 6px; color: var(--accent); }
+
+.sidebar h2 { display: flex; align-items: center; gap: 6px; }
+.clear-x { margin-left: auto; border: 1px solid var(--accent); background: none; border-radius: 5px; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1; text-transform: none; letter-spacing: 0; color: var(--accent); cursor: pointer; }
+.clear-x:hover { background: var(--accent); color: var(--accent-text); }
+.status { text-align: right; }
+.ac { overflow-y: auto; }
+.ac.below { bottom: auto; top: calc(100% + 6px); }
+
+[data-p=A] { color: var(--pA); } [data-p=B] { color: var(--pB); } [data-p=C] { color: var(--pC); } [data-p=D] { color: var(--pD); }
+
+/* priority dropdown in the task list: same look as the File/View dropdowns */
+.pri-dd { flex: none; }
+.pri-dd .pri-btn, .pri-btn { box-sizing: border-box; min-width: 2.2em; width: 2.2em; height: 2.2em; padding: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; text-align: center; border-radius: 7px; border-color: color-mix(in srgb, var(--line) 40%, transparent); }
+.pri-btn:disabled { opacity: .4; cursor: default; }
+.pri-menu { min-width: 0; width: max-content; max-height: 280px; overflow-y: auto; }
+.pri-menu button { padding-right: 18px; }
+
+/* keep the add/search bar at the bottom of the window, however short the list is */
+body { min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; }
+.layout { flex: 1; width: 100%; box-sizing: border-box; }
+.composer { grid-column: 1 / -1; grid-row: 2; margin-top: 0; margin-left: 16px; }
+.layout.no-side .composer { margin-left: 0; }
+
+/* edit helper */
+.edit-helper { position: relative; display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.edit-helper > button { padding: 1px 8px; font-size: 13px; }
+.helper-pop { bottom: auto; top: calc(100% + 4px); max-height: 260px; }
+.helper-pop.list { width: max-content; min-width: 160px; }
+
+/* drag & drop */
+.grip { flex: none; width: 14px; margin: 0; font-size: 12px; color: var(--muted); text-align: center; cursor: grab; }
+.grip.off { visibility: hidden; cursor: default; }
+.lineno { flex: none; min-width: 2.2ch; margin-top: 2px; font-size: 12px; line-height: 20px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; user-select: none; }
+.slot { flex: none; display: inline-grid; place-items: center; min-width: 2.4ch; }
+.slot > * { grid-area: 1 / 1; }
+.slot .lineno { margin: 0; }
+.slot .grip { display: none; }
+.task:hover .slot .grip:not(.off) { display: block; }
+.task:hover .slot .grip:not(.off) ~ .lineno, .task:hover .slot:has(.grip:not(.off)) .lineno { visibility: hidden; }
+.task.dragging { opacity: .4; }
+/* drop marker: a background gradient (not box-shadow) so themes that reset shadows or set them per due state cannot hide it */
+.task.drop-before, .task.drop-after { background-image: linear-gradient(var(--accent), var(--accent)) !important; background-repeat: no-repeat !important; background-size: 100% 3px !important; }
+.task.drop-before { background-position: 0 0 !important; }
+.task.drop-after { background-position: 0 100% !important; }
+
+/* highlighted edit field inside a task row */
+.field.edit-field { flex: none; width: 100%; height: 32px; background: var(--panel); border: 1px solid var(--accent); border-radius: 6px; }
+.edit-field .hl, .edit-field input { line-height: 30px; }
+.tk-date { color: var(--muted); }
+.tk-done { color: var(--ok); }
+
+/* F1 help overlay */
+.help { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; z-index: 30; }
+.help-box { background: color-mix(in srgb, var(--panel) 90%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.35); padding: 16px 24px; min-width: 300px; }
+.help-box h2 { margin: 0 0 8px; font-size: 16px; }
+.help-row { padding: 3px 0; }
+.help-row kbd { display: inline-block; min-width: 3.5em; font-weight: 600; }
+
+/* checkboxes follow the theme */
+input[type=checkbox] { -webkit-appearance: none; appearance: none; display: inline-grid; place-content: center; width: 16px; height: 16px; margin: 0; background: var(--panel); border: 1.5px solid var(--muted); border-radius: 4px; }
+input[type=checkbox]:hover { border-color: var(--accent); }
+input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+input[type=checkbox]::after { content: ""; width: 4px; height: 8px; margin-top: -2px; border: solid var(--accent-text); border-width: 0 2px 2px 0; transform: rotate(45deg); visibility: hidden; }
+input[type=checkbox]:checked::after { visibility: visible; }
+
+/* folder header in the file list */
+#fileList .file-head { padding: 6px 12px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* due: soon (yellow) -> today (orange) -> overdue (red); rows get a marker stripe */
+:root { --due-soon: #ca8a04; --due-today: #ea580c; --due-over: #dc2626; }
+@media (prefers-color-scheme: dark) { :root { --due-soon: #facc15; --due-today: #fb923c; --due-over: #f87171; } }
+.meta.soon { background: color-mix(in srgb, var(--due-soon) 22%, transparent); color: var(--due-soon); }
+.meta.today { background: color-mix(in srgb, var(--due-today) 24%, transparent); color: var(--due-today); }
+.meta.overdue { background: color-mix(in srgb, var(--due-over) 20%, transparent); color: var(--due-over); }
+.task.due-soon { box-shadow: inset 3px 0 0 var(--due-soon); }
+.task.due-today { box-shadow: inset 3px 0 0 var(--due-today); }
+.task.due-overdue { box-shadow: inset 3px 0 0 var(--due-over); }
+
+/* note */
+.chip.note { color: var(--muted); font-size: 12px; }
+.actions .note-btn.on { color: var(--accent); }
+.note-field { position: relative; flex: 1; min-height: 0; margin: 14px 8px; border: 1px solid var(--line); border-radius: 6px; background: color-mix(in srgb, var(--bg) 60%, transparent); }
+.note-field:focus-within { border-color: var(--accent); }
+.note-field .hl, .note-field textarea { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; margin: 0; padding: 16px 20px; border: 0; background: transparent; resize: none; font: 14px/1.5 ui-monospace, Consolas, monospace; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+.note-field .hl { overflow: hidden; pointer-events: none; color: var(--text); }
+.note-field textarea { color: transparent; caret-color: var(--text); outline: none; overflow: auto; }
+.note-field textarea::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.note-buttons { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+
+/* minimal mode: no top bar, no status bar */
+body.minimal .status, body.nostatus .status { display: none !important; }
+body.minimal, body.nostatus { padding-bottom: 0; }
+body.minimal .composer, body.nostatus .composer { bottom: 0; }
+body.minimal .sidebar { top: 16px; max-height: calc(100vh - 32px); }
+/* minimal mode: the input floats over the entries; shown on hover near the bottom, on typing/focus */
+body.minimal .composer { position: fixed; left: 16px; right: 16px; bottom: 0; margin: 0; z-index: 30; opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .35s ease, transform .35s ease; }
+body.minimal.nosidebar .composer, body.minimal .layout.no-side .composer { left: 16px; }
+body.minimal.show-input .composer, body.minimal .composer:focus-within, body.minimal .composer:hover { opacity: 1; transform: none; pointer-events: auto; }
+body.minimal .topbar { position: fixed; top: 0; left: 0; right: 0; transform: translateY(-110%); transition: transform .15s; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+body.minimal.show-bar .topbar { transform: none; }
+.win-ctl { display: inline-flex; gap: 2px; margin-left: 4px; }
+.win-ctl[hidden] { display: none; }
+#winClose:hover { background: var(--danger); color: #fff; }
+
+/* settings overlay */
+.settings[hidden] { display: none; }
+.set-box { position: fixed; inset: 28px; border-radius: 10px; width: auto; max-width: none; max-height: none; box-sizing: border-box; display: flex; flex-direction: column; padding: 12px 16px; }
+.set-head { display: flex; align-items: center; justify-content: space-between; }
+.set-head h2 { margin: 0; }
+.set-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 8px 0; overflow-x: auto; flex-shrink: 0; }
+.set-tabs button { border: 0; border-radius: 0; background: none; padding: 6px 12px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.set-tabs button[aria-selected="true"] { border-bottom-color: var(--accent); font-weight: 600; }
+.set-pane { overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.set-pane[hidden] { display: none; }
+.set-pane button, #themeMenu button { display: flex; align-items: center; gap: .35em; border: 0; background: none; text-align: left; padding: 6px 10px; border-radius: 5px; }
+.set-pane button:hover { background: var(--hover); }
+.set-pane kbd { margin-left: auto; padding-left: 16px; color: var(--muted); font: 12px inherit; }
+.set-pane .tick i { margin: 0; }
+.dd-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+
+/* status bar: git status left, counts right */
+.status { display: flex; justify-content: flex-start; gap: 16px; }
+.status-right { margin-left: auto; }
+.status[hidden] { display: none; }
+.status-folder { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; min-width: 0; max-width: 30%; }
+.status-folder.status-dav { max-width: 55%; }
+.diff-sort { color: var(--warn); }
+.status-offline { color: var(--warn); font-weight: 600; margin-right: 10px; white-space: nowrap; }
+@media (max-width: 700px) { .status-folder { display: none; } }
+.status-git { color: var(--muted); overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
+.status-git.dirty { color: var(--warn); }
+.status-folder + .status-git { margin-left: 0; }
+.status-right { flex-shrink: 0; }
+
+.set-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 34px; }
+.set-row span { min-width: 8em; }
+.set-row input[type=range] { flex: 1; accent-color: var(--accent); }
+.set-row output { min-width: 3.5em; text-align: right; color: var(--muted); }
+
+/* icons exactly centred in every icon button */
+.actions button, .composer .mode, .edit-helper > button, .set-head button { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+.actions button { height: 28px; min-width: 28px; padding: 0 6px; }
+button i.fa-solid { display: block; line-height: 1; }
+
+/* settings checkboxes look like the checkboxes of the entries */
+.set-pane [role=menuitemcheckbox] .tick { visibility: visible; display: inline-grid; place-content: center; flex: none; width: 16px; height: 16px; margin-right: 6px; box-sizing: border-box; background: var(--panel); border: 1.5px solid var(--muted); border-radius: 4px; }
+.set-pane [role=menuitemcheckbox]:hover .tick { border-color: var(--accent); }
+.set-pane [role=menuitemcheckbox][aria-checked=true] .tick { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.set-pane [role=menuitemcheckbox] .tick i { visibility: hidden; font-size: 10px; width: auto; margin: 0; }
+.set-pane [role=menuitemcheckbox][aria-checked=true] .tick i { visibility: visible; }
+.set-sub { margin: 14px 0 6px; font-size: 1em; font-weight: 600; flex-shrink: 0; }
+.set-pane > .set-sub:first-child { margin-top: 0; }
+body.android .win-sub { display: none; }
+#themeMenu { border: 1px solid var(--line); border-radius: 8px; padding: 4px; flex: 1 1 auto; min-height: 120px; overflow-y: auto; margin-right: 14px; }
+#themeMenu .theme-export { position: sticky; bottom: -4px; background: var(--panel); border-top: 1px solid var(--line); border-radius: 0 0 5px 5px; margin-top: 4px; width: 100%; box-sizing: border-box; }
+.set-hint { display: block; padding: 4px 10px; color: var(--muted); }
+
+/* ---- note editor: name field + notes dropdown ---- */
+.note-head { display: flex; align-items: center; gap: 8px; }
+.note-head .note-name, .note-head .note-pick { font: inherit; color: var(--text); background: color-mix(in srgb, var(--bg) 60%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; min-width: 0; }
+.note-head .note-name { width: 14em; max-width: 40vw; }
+.note-head .note-name:focus, .note-head .note-pick:focus { outline: none; border-color: var(--accent); }
+.note-err { color: var(--danger); }
+.note-count { font-size: 10px; margin-left: 2px; color: var(--accent); }
+.note-menu button { display: flex; align-items: center; gap: .4em; width: 100%; height: auto; }
+
+/* ---- WebDAV ---- */
+.dav-servers { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 12px; }
+.dav-server { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.dav-server .dav-url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dav-server button, .dav-foot button, .dav-form button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; padding: 4px 10px; display: inline-flex; align-items: center; gap: .4em; }
+.dav-server button.danger:hover { color: var(--danger); }
+.bad { color: var(--danger); }
+.dav-form { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+.dav-form h3 { margin: 4px 0; font-size: inherit; }
+.dav-form label { display: flex; flex-direction: column; gap: 2px; font-size: inherit; color: var(--muted); }
+.dav-box input, .dav-form input, .dav-box select { font: inherit; color: var(--text); background: color-mix(in srgb, var(--bg) 60%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; min-width: 0; }
+.dav-box input:focus, .dav-form input:focus { outline: none; border-color: var(--accent); }
+.dav-msg { min-height: 1.2em; color: var(--muted); font-size: inherit; margin-top: 6px; }
+.dav-msg.bad { color: var(--danger); }
+.dav-box { width: min(640px, 94vw); max-height: 86vh; display: flex; flex-direction: column; box-sizing: border-box; }
+.dav-top { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.dav-top .dav-crumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; direction: rtl; text-align: left; }
+.dav-list { flex: 1; min-height: 160px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; }
+.dav-item { display: flex; align-items: center; gap: .5em; border: 0; background: none; color: var(--text); text-align: left; padding: 7px 10px; }
+.dav-item:hover { background: var(--hover); }
+.dav-foot { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.dav-foot input { flex: 1; min-width: 8em; }
+
+/* ---- touch toolbar (under the input; Settings -> General) ---- */
+.touchbar { display: flex; align-items: center; gap: 6px; margin-top: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.touchbar[hidden] { display: none; }
+.touchbar .tb-group { display: inline-flex; gap: 4px; flex: none; }
+.touchbar .tb { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: .3em; min-width: 44px; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-weight: 600; touch-action: manipulation; }
+.touchbar .tb:hover { background: var(--hover); }
+.touchbar .tb:active { border-color: var(--accent); }
+.touchbar .tb-add { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.touchbar .tb-p { min-width: 44px; padding: 0; }
+.touchbar .tb i { display: block; line-height: 1; }
+.tb-pop { position: fixed; z-index: 60; display: flex; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+.tb-pop .tb { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-weight: 600; touch-action: manipulation; }
+.tb-pop .tb:hover { background: var(--hover); }
+.tb-pop .tb i { display: block; line-height: 1; }
+.tb-pop .tb.tk-pA { color: var(--pA); } .tb-pop .tb.tk-pB { color: var(--pB); } .tb-pop .tb.tk-pC { color: var(--pC); } .tb-pop .tb.tk-pD { color: var(--pD); }
+
+/* the GUI is not a document: no text marking; input fields and the note editor keep it */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, .note-field, .note-field * { -webkit-user-select: text; user-select: text; }
+
+/* ---- WebDAV: changed on the server (difference overlay) ---- */
+.diff-box { width: min(720px, calc(100vw - 56px)); max-height: calc(100vh - 56px); display: flex; flex-direction: column; box-sizing: border-box; }
+.diff-body { overflow: auto; flex: 1; min-height: 60px; margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; padding: 4px 0; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.diff-line { display: flex; gap: 8px; padding: 2px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-line.del { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.diff-line.add { background: color-mix(in srgb, var(--ok) 18%, transparent); }
+.diff-sign { flex: none; width: 1em; font-weight: 700; }
+.diff-line.del .diff-sign { color: var(--danger); }
+.diff-line.add .diff-sign { color: var(--ok); }
+.diff-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.diff-actions .primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+/* ---- Android app ---- */
+body:not(.android) .android-only { display: none !important; }
+body.android .desktop-only { display: none !important; }
+body.android .android-only { display: inline-flex; }
+body.android { font-size: 16px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; overscroll-behavior: none; }
+body.android input, body.android textarea, body.android select { font-size: 16px; }   /* no zoom-in when focusing */
+/* desktop-only things: keyboard hints, folder mode, git, window options, file dialogs */
+body.android kbd, body.android #openFolder, body.android #gitDd, body.android #gitInit, body.android #framelessToggle,
+body.android #onTopToggle, body.android #minimalToggle, body.android #lineNoToggle, body.android #saveAs,
+body.android #keepFile, body.android #sideToggle, body.android #winCtl, body.android .task .grip { display: none !important; }
+body.android .topbar { padding: 6px 8px; gap: 4px; }
+body.android .topbar .icon, body.android .topbar .dd-btn { min-width: 44px; min-height: 44px; }
+body.android .file-btn h1 { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
+body.android .layout { padding: 6px 8px; display: block; }
+body.android .task { padding: 10px 4px; }
+body.android .task .actions { opacity: 1; }
+body.android .task .actions button, body.android .side-item, body.android .dd-menu button, body.android .set-pane button { min-height: 44px; }
+body.android .dd-menu { max-width: calc(100vw - 16px); }
+/* filters: a drawer from the left */
+body.android .sidebar { position: fixed; top: 0; bottom: 0; left: 0; width: min(82vw, 320px); max-height: none; overflow: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 16px 14px; z-index: 25; box-shadow: 0 0 30px rgba(0,0,0,.4); }
+body.android #scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 24; }
+body.android .set-box, body.android .files-box { inset: 8px; }
+/* lists overlay */
+.files-box { display: flex; flex-direction: column; }
+.files-list { overflow: auto; flex: 1; min-height: 0; }
+.files-head { margin: 14px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.files-row { display: flex; align-items: center; gap: 4px; }
+.files-row.cur .files-open { font-weight: 600; color: var(--accent); }
+.files-open { flex: 1; text-align: left; border: 0; background: none; padding: 10px; border-radius: 6px; min-height: 44px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-act { border: 0; background: none; width: 44px; height: 44px; border-radius: 6px; color: var(--muted); }
+.files-act.danger:hover { color: var(--danger); }
+.files-new { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.files-new input { flex: 1 1 140px; min-width: 0; }
+.files-new .primary, .files-pick button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.files-pick { position: absolute; left: 16px; right: 16px; bottom: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+.files-pick button { min-height: 44px; }
+body.android .composer { margin-left: 0; }
+body.android .sidebar { margin-left: 0; }
+
+/* theme variant dropdown (Settings -> Appearance) */
+.theme-variant { position: sticky; top: -4px; z-index: 1; background: var(--panel); padding: 6px 8px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.theme-variant select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
+
+/* no horizontal scrolling of the page */
+html { overflow-x: hidden; }
+body { overflow-x: clip; }
+.status-hover { margin-left: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
+
+/* theme tab footer: variant switch (left) and Reload button (right) under the theme list */
+.theme-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px 4px 0; }
+.variant-box { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.variant-label { color: var(--text); font-size: 1em; font-family: inherit; }
+.variant-seg { display: inline-flex; border: 1.5px solid var(--accent); border-radius: 8px; overflow: hidden; }
+.set-pane .variant-seg button { border-radius: 0; padding: 7px 16px; background: var(--panel); color: var(--text); font-weight: 600; }
+.set-pane .variant-seg button + button { border-left: 1.5px solid var(--accent); }
+.set-pane .variant-seg button[aria-checked=true] { background: var(--accent); color: var(--accent-text); }
+.set-pane .variant-seg button:hover:not([aria-checked=true]) { background: var(--hover); }
+.set-pane button.theme-reload { flex: none; margin-left: auto; padding: 8px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; justify-content: center; }
+.set-pane button.theme-reload:hover { background: var(--hover); border-color: var(--accent); }
+
+.img-box { max-width: 92vw; max-height: 92vh; overflow: auto; }
+.img-view { display: block; max-width: 100%; height: auto; margin-top: 8px; }
+
+.set-pane select.variant-select { background: var(--panel); color: var(--text); border: 1.5px solid var(--accent); border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+.set-pane select.variant-select option { background: var(--panel); color: var(--text); }
+
+/* minimal mode: WebDAV file name, small and 80% transparent, bottom left corner */
+.dav-corner { position: fixed; left: 8px; bottom: 4px; z-index: 5; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--muted); opacity: .3; pointer-events: none; user-select: none; }
+
+/* minimal mode: the small file name and the input bar fade into each other */
+.dav-corner { transition: opacity .35s ease; }
+body.minimal.show-input .dav-corner, body.minimal:has(.composer:focus-within) .dav-corner, body.minimal:has(.composer:hover) .dav-corner { opacity: 0 !important; }
+
+/* the due stripe (inset shadow) of the first/last entry follows the rounded corners of the list */
+.tasks > .task:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
+.tasks > .task:last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+
+/* ---- sub-entries and the selected parent ---- */
+.task.parent-sel { background-color: var(--hover); background-image: linear-gradient(var(--accent), var(--accent)) !important; background-repeat: no-repeat !important; background-size: 100% 3px !important; background-position: 0 100% !important; }
+
+/* ---- move projects dialog ---- */
+.move-label { display: block; margin: 8px 0 2px; color: var(--muted); font-size: .9em; }
+.move-in { width: 100%; box-sizing: border-box; }
+.move-row { display: flex; gap: 8px; }
+.move-row .move-in { flex: 1; }
+.move-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; max-height: 72px; overflow: auto; }
+.move-preview { max-height: 30vh; }
+.move-err { color: var(--danger); }
+
+/* Desktop/browser: the window itself never scrolls. Top bar, input and status bar stay put; only the entry list
+   (and, separately, the sidebar) scrolls. Android keeps its own block layout. */
+html:not(:has(body.android)), html:not(:has(body.android)) body { height: 100vh; overflow: hidden; }
+body:not(.android) .layout { flex: 1 1 0; min-height: 0; overflow: hidden; grid-template-rows: minmax(0, 1fr) auto; }
+body:not(.android) #listWrap, body:not(.android) #raw { align-self: stretch; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+body:not(.android) .sidebar { position: static; align-self: stretch; max-height: none; min-height: 0; overflow-y: auto; }
+body:not(.android) .composer { position: relative; bottom: auto; }
+body:not(.android).minimal .composer { position: fixed; bottom: 0; }
+body:not(.android).minimal .sidebar { top: auto; max-height: none; }
+/* minimal mode: the input bar floats over the bottom of the window. The list keeps its fixed rounded frame with the same
+   16px margin below as above; inside it ends in free space ("invisible entry") as high as the part of the bar that overlaps
+   the list, so the last entry can be scrolled clear of the bar. */
+body:not(.android).minimal .layout { padding-bottom: 16px; }
+/* the free space only exists while the input bar is visible (mouse near the bottom, or typing): otherwise the list ends at its last entry */
+body:not(.android).minimal #list > .task:last-child { margin-bottom: 0; transition: margin-bottom .2s ease; }
+body:not(.android).minimal.show-input #list > .task:last-child, body:not(.android).minimal:has(.composer:focus-within) #list > .task:last-child, body:not(.android).minimal:has(.composer:hover) #list > .task:last-child { margin-bottom: calc(var(--composer-h, 76px) - 8px); }
+body:not(.android).minimal .tasks > .task:last-child { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+body:not(.android).minimal #raw { margin-bottom: calc(var(--composer-h, 76px) + 8px); }
+
+/* Normal mode: the framed list itself is the scroll container (frame and rounded corners stay in place) */
+body:not(.android) #listWrap { display: contents; }
+body:not(.android) #list { grid-column: 2; grid-row: 1; align-self: start; max-height: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; }   /* as high as its entries (the frame / note of a theme hugs them), scrolls when there are more than fit */
+body:not(.android) .layout.no-side #list { grid-column: 1; }
+@media (max-width: 720px) { body:not(.android) .layout #list { grid-column: 1; } }
+
+/* Scrollbars (list, text view, sidebar): thin, themed, visible while hovering the area or scrolling; Settings -> View -> Scrollbars turns them off */
+body:not(.android) .scroll-area::-webkit-scrollbar { width: 12px; height: 12px; }
+body:not(.android) .scroll-area::-webkit-scrollbar-track, body:not(.android) .scroll-area::-webkit-scrollbar-corner { background: transparent; }
+body:not(.android) .scroll-area::-webkit-scrollbar-button { display: none; }
+body:not(.android) .scroll-area::-webkit-scrollbar-thumb { background: transparent; border: 3px solid transparent; background-clip: padding-box; border-radius: 8px; }
+body:not(.android) .scroll-area:hover::-webkit-scrollbar-thumb, body:not(.android) .scroll-area.sb-active::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+body:not(.android) .scroll-area:hover::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
+body.noscrollbars .scroll-area::-webkit-scrollbar { display: none; }
+
+/* paste panel: several lines pasted into the add bar; grows upwards above the input */
+.paste-panel { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 12; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 140px); }
+.paste-title { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.paste-prev { overflow: auto; min-height: 0; max-height: 42vh; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.paste-row { padding-top: 1px; padding-bottom: 1px; }
+.paste-q { font-size: 14px; }
+.paste-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* About page */
+.about { padding: 8px 4px; display: flex; flex-direction: column; gap: 10px; }
+.about h3 { margin: 0; font-size: 22px; }
+.about p { margin: 0; }
+.about .muted { color: var(--muted); }
+.about a { color: var(--accent); }
+
+/* password dialog */
+.pw-box { width: min(440px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; }
+.pw-box h2 { margin: 0; }
+.pw-box p { margin: 0; color: var(--muted); }
+.pw-box input[type=password] { width: 100%; }
+.pw-box label { display: flex; align-items: center; gap: 8px; }
+.pw-box .pw-err { color: var(--danger); min-height: 1.2em; }
+.pw-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* Settings: the About tab sits at the far right; separators inside the theme list follow the theme */
+.set-tabs button[data-tab="about"] { margin-left: auto; }
+#themeMenu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; width: 100%; }
+
+/* minimal mode: the floating input is exactly as wide as the entries (the list column), like the input bar of the normal mode */
+body:not(.android).minimal .composer { left: 252px; right: 16px; }
+body:not(.android).minimal.nosidebar .composer, body:not(.android).minimal .layout.no-side .composer { left: 16px; }
+@media (max-width: 720px) { body:not(.android).minimal .composer { left: 16px; } }
+
+/* experimental features */
+.exp-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--warn); border: 1px solid var(--warn); vertical-align: middle; }
+.exp-note { color: var(--warn); }
+
+/* browser storage dialog */
+.bs-box { width: min(560px, calc(100vw - 32px)); }
+.bs-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow: auto; }
+.bs-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.bs-row .bs-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bs-row small { color: var(--muted); }
+.bs-row button { padding: 2px 10px; }
+
+/* settings tabs: keep the tab look in every theme (themes style every `button`), About stays at the far right */
+body .set-tabs button[role="tab"] { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; box-shadow: none; }
+body .set-tabs button[role="tab"][aria-selected="true"] { border-bottom-color: var(--accent); }
+
+/* sub-entries: line number / grip and checkbox stay in their columns; the indent starts at the priority button, marked by an
+   L-shaped connector (colours follow the theme) */
+.task[data-level] .pri-dd { position: relative; margin-left: calc((var(--lvl, 1) - 1) * 22px); padding-left: 18px; }
+.task[data-level] .pri-dd::before { content: ""; position: absolute; left: 3px; top: -12px; width: 10px; height: calc(50% + 12px); border-left: 2px solid var(--muted); border-bottom: 2px solid var(--muted); border-bottom-left-radius: 4px; opacity: .7; pointer-events: none; }
+
+/* file menu: cloud / git / local groups with icons; known files tab */
+.file-sep { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.file-pick .file-kind { width: 1.1em; text-align: center; color: var(--muted); flex: none; }
+.file-pick .file-enc { font-size: .8em; color: var(--muted); margin-left: .3em; }
+.known-files { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 10px; }
+.known-files hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; width: 100%; }
+.kf-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; }
+.kf-row.current { background: var(--hover); }
+.kf-kind { width: 1.4em; text-align: center; color: var(--muted); flex: none; }
+.kf-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.kf-name b, .kf-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kf-name small { color: var(--muted); font-size: 12px; }
+.kf-enc { color: var(--muted); white-space: nowrap; font-size: 13px; }
+.kf-enc.on { color: var(--ok); }
+.kf-row button { padding: 2px 10px; }
+
+/* in-app message / question dialogs (replace the native alert / confirm boxes) */
+.ui-dialog { z-index: 200; }
+.pw-box .ui-msg { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+
+/* recent files submenu (inside the File menu) */
+.recent-list { display: flex; flex-direction: column; margin: 0 0 4px 14px; padding-left: 8px; border-left: 2px solid var(--line); max-height: 40vh; overflow: auto; }
+.recent-list[hidden] { display: none; }
+.recent-item { display: flex; align-items: center; gap: .4em; border: 0; background: none; text-align: left; padding: 4px 8px; border-radius: 5px; white-space: nowrap; }
+.recent-item:hover { background: var(--hover); }
+.recent-item[aria-current="true"] { font-weight: 600; }
+.recent-item .file-kind { width: 1.1em; text-align: center; color: var(--muted); flex: none; }
+.recent-item small { color: var(--muted); margin-left: auto; padding-left: 12px; }
+.recent-clear { border: 0; background: none; text-align: left; padding: 4px 8px; color: var(--muted); }
+.sub-caret { margin-left: auto; }
+
+/* Minimal mode = the normal layout without top bar and status bar. The input bar sits below the list (in the layout, nothing floats
+   over the entries) and is only there while the mouse is over the window or the bar has the focus; the list box shrinks upwards by
+   exactly the height of the bar and grows back when it goes away. */
+body:not(.android).minimal .composer { position: relative; left: auto; right: auto; bottom: auto; margin-bottom: 0; opacity: 1; transform: none; pointer-events: auto; z-index: auto; }
+/* it slides in from below while the list box shrinks upwards in the same animation (max-height from 0 to the natural height of the bar) */
+body:not(.android).minimal .composer { box-sizing: border-box; max-height: var(--composer-h, 76px); transition: max-height .28s cubic-bezier(.2, .8, .2, 1), padding .28s cubic-bezier(.2, .8, .2, 1), opacity .22s ease, transform .28s cubic-bezier(.2, .8, .2, 1); }
+body:not(.android).minimal:not(.show-input) .composer:not(:focus-within) { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(14px); pointer-events: none; overflow: hidden; }
+body:not(.android).minimal .layout { padding-bottom: 0; }
+body:not(.android).minimal #list > .task:last-child { margin-bottom: 0 !important; }
+/* minimal mode: no offsets are left over from the old floating input bar (they would shift the relative bar sideways) */
+body:not(.android).minimal .layout .composer, body:not(.android).minimal .layout.no-side .composer { left: 0 !important; right: 0 !important; }
+
+/* lock icon of an encrypted file: next to the kind icon in the top bar, in front of the file name in the minimal-mode corner */
+.file-lock { font-size: .72em; margin-left: .15em; color: var(--ok); }
+.file-lock[hidden] { display: none; }
+.dav-corner .corner-lock { margin-right: .4em; }
+
+/* minimal mode: the small file name / lock in the bottom left corner is never covered by the list: room below the list while the
+   input bar is away (the bar's own padding takes over when it slides in and the corner fades out) */
+body:not(.android).minimal .layout { transition: padding-bottom .28s cubic-bezier(.2, .8, .2, 1); }
+body:not(.android).minimal.has-corner:not(.show-input) .layout:not(:has(.composer:focus-within)) { padding-bottom: 22px; }

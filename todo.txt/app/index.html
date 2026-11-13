@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>todo.txt</title>
+  <link rel="stylesheet" href="vendor/fa/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232563eb'/%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="topbar">
+    <div class="dd" id="fileDd">
+      <button class="dd-btn file-btn" aria-haspopup="true" aria-expanded="false" title="Switch file (F8)"><i id="fileKind" class="fa-solid fa-hard-drive" aria-hidden="true"></i><i id="fileLock" class="fa-solid fa-lock file-lock" title="Encrypted" aria-label="Encrypted" hidden></i><h1 id="fileName">todo.txt</h1> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+      <div class="dd-menu" id="fileList" role="menu" hidden></div>
+    </div>
+    <span id="dirty" class="dirty" hidden title="Unsaved changes">●</span>
+    <button id="undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>
+    <div class="dd">
+      <button class="dd-btn" aria-haspopup="true" aria-expanded="false" title="File" aria-label="File"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+      <div class="dd-menu" role="menu" hidden>
+        <button id="new" role="menuitem"><i class="fa-solid fa-file" aria-hidden="true"></i> New</button>
+        <button id="open" role="menuitem"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Open…</button>
+        <button id="browserStorage" role="menuitem" title="Keep lists inside this browser (localStorage)"><i class="fa-solid fa-database" aria-hidden="true"></i> Browser storage…</button>
+        <button id="knownToggle" role="menuitem" aria-expanded="false" data-keep style="display:none"><i class="fa-solid fa-bookmark" aria-hidden="true"></i> Known files <i class="fa-solid fa-caret-right sub-caret" aria-hidden="true"></i></button>
+        <div id="knownList" class="recent-list" role="menu" hidden></div>
+        <button id="recentToggle" role="menuitem" aria-expanded="false" data-keep style="display:none"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Recent files <i class="fa-solid fa-caret-right sub-caret" aria-hidden="true"></i></button>
+        <div id="recentList" class="recent-list" role="menu" hidden></div>
+        <button id="openFolder" role="menuitem"><i class="fa-solid fa-folder-tree" aria-hidden="true"></i> Open folder…</button>
+        <button id="openDav" role="menuitem" style="display:none"><i class="fa-solid fa-cloud" aria-hidden="true"></i> WebDAV…</button>
+        <button id="moveProjects" role="menuitem" style="display:none" title="Move the tasks of a project (filter) with their sub-entries into another file"><i class="fa-solid fa-right-left" aria-hidden="true"></i> Move projects…</button>
+        <button id="refresh" role="menuitem"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reload from disk <kbd>Ctrl+R</kbd></button>
+        <button id="save" role="menuitem"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save <kbd>Ctrl+S</kbd></button>
+        <button id="saveAs" role="menuitem"><i class="fa-solid fa-file-export" aria-hidden="true"></i> Save as…</button>
+        <button id="keepFile" role="menuitem" title="Create a hidden .todo.txt folder next to this list: the folder becomes a known folder (settings, notes, images, encryption) and its lists are known files"><i class="fa-solid fa-bookmark" aria-hidden="true"></i> Remember this folder</button>
+        <button id="backupZip" role="menuitem" style="display:none" title="Save a .zip of the lists, notes and images (encrypted files stay encrypted)"><i class="fa-solid fa-file-zipper" aria-hidden="true"></i> Backup as .zip…</button>
+        <button id="archive" role="menuitem"><i class="fa-solid fa-box-archive" aria-hidden="true"></i> Archive done tasks <kbd>F5</kbd></button>
+      </div>
+    </div>
+    <div class="dd" id="gitDd" hidden>
+      <button class="dd-btn" aria-haspopup="true" aria-expanded="false" title="Git" aria-label="Git"><i class="fa-solid fa-code-branch" aria-hidden="true"></i> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+      <div class="dd-menu" role="menu" hidden>
+        <button id="gitEnabled" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Git support</button>
+        <button id="gitAuto" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Git auto (pull on start, commit + push changes)</button>
+        <button id="gitPull" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> &nbsp;&nbsp;Auto pull</button>
+        <button id="gitCommit" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> &nbsp;&nbsp;Auto commit</button>
+        <button id="gitPush" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> &nbsp;&nbsp;Auto push</button>
+        <button id="gitSync" role="menuitem"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Git sync now</button>
+      </div>
+    </div>
+    <div class="dd">
+      <button class="dd-btn" aria-haspopup="true" aria-expanded="false" title="View / Sort (F2: next order)" aria-label="View and sort"><i class="fa-solid fa-arrow-down-wide-short" aria-hidden="true"></i> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+      <div class="dd-menu" role="menu" hidden>
+        <button role="menuitemradio" data-sort="priority" aria-checked="false"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Priority <kbd>F2</kbd></button>
+        <button role="menuitemradio" data-sort="due" aria-checked="false"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Due date</button>
+        <button role="menuitemradio" data-sort="created" aria-checked="false"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Created</button>
+        <button role="menuitemradio" data-sort="alpha" aria-checked="false"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> A–Z</button>
+        <button role="menuitemradio" data-sort="file" aria-checked="false"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> File order</button>
+        <hr>
+        <button id="viewToggle" role="menuitem"></button>
+      </div>
+    </div>
+    <button id="sideBtn" class="icon desktop-only" title="Show / hide sidebar (F4)" aria-label="Toggle sidebar"><i class="fa-solid fa-table-columns" aria-hidden="true"></i></button>
+    <div class="spacer"></div>
+    <button id="filterBtn" class="icon android-only" title="Filters" aria-label="Filters"><i class="fa-solid fa-filter" aria-hidden="true"></i></button>
+    <button id="optBtn" class="icon" title="Settings" aria-label="Settings"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
+    <span id="winCtl" class="win-ctl" hidden>
+      <button class="icon" id="winMin" title="Minimize" aria-label="Minimize"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
+      <button class="icon" id="winClose" title="Close" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+    </span>
+    <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
+  </header>
+
+  <div class="layout" id="layout">
+    <aside class="sidebar scroll-area" id="sidebar" aria-label="Filters"></aside>
+
+    <main>
+      <div id="listWrap" class="list-wrap scroll-area"><ul id="list" class="tasks scroll-area"></ul></div>
+      <textarea id="raw" class="raw scroll-area" spellcheck="false" hidden aria-label="Raw todo.txt"></textarea>
+
+      <form id="addForm" class="composer" autocomplete="off">
+        <div class="composer-box">
+          <button type="button" id="modeBtn" class="mode" aria-label="Switch between add and search mode"></button>
+          <div class="field">
+            <div id="hl" class="hl" aria-hidden="true"></div>
+            <input id="addInput" type="text" spellcheck="false" autocomplete="off">
+          </div>
+          <div id="ac" class="ac" hidden></div>
+        </div>
+        <div id="touchBar" class="touchbar" role="toolbar" aria-label="Task helpers" hidden></div>
+      </form>
+    </main>
+  </div>
+
+  <div id="scrim" hidden></div>
+  <div id="status" class="status"></div>
+  <div id="davCorner" class="dav-corner" hidden></div>
+
+  <div id="settings" class="help settings" hidden>
+    <div class="help-box set-box" role="dialog" aria-label="Settings">
+      <div class="set-head"><h2>Settings</h2><button type="button" id="setClose" class="icon" title="Close (Esc)" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
+      <div class="set-tabs" role="tablist">
+        <button type="button" role="tab" data-tab="general" aria-selected="true">General</button>
+        <button type="button" role="tab" data-tab="appearance" aria-selected="false">Appearance</button>
+        <button type="button" role="tab" data-tab="themes" aria-selected="false">Themes</button>
+        <button type="button" role="tab" data-tab="files" aria-selected="false" id="filesTab" style="display:none">Known files</button>
+        <button type="button" role="tab" data-tab="security" aria-selected="false" id="secTab" style="display:none">Security</button>
+        <button type="button" role="tab" data-tab="webdav" aria-selected="false" id="davTab" style="display:none">WebDAV</button>
+        <button type="button" role="tab" data-tab="about" aria-selected="false">About</button>
+      </div>
+      <div class="set-pane" data-pane="general">
+        <h3 class="set-sub">General</h3>
+        <button id="autoSaveToggle" role="menuitemcheckbox" aria-checked="false" data-keep style="display:none"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Auto save</button>
+        <button id="showDone" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show completed <kbd>F3</kbd></button>
+        <button id="backupArchiveToggle" role="menuitemcheckbox" aria-checked="true" data-keep style="display:none"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Back up (.zip) before archiving</button>
+        <button id="gitInit" class="git-item" role="menuitem" style="display:none"><i class="fa-solid fa-code-branch" aria-hidden="true"></i> Initialize git here…</button>
+        <h3 class="set-sub">Input</h3>
+        <button id="calToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show calendar while typing <kbd>F6</kbd></button>
+        <button id="touchToggle" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show input toolbar (priority, project, due, note…)</button>
+      </div>
+      <div class="set-pane" data-pane="appearance" hidden>
+        <h3 class="set-sub">View</h3>
+        <button id="sideToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Sidebar <kbd>F4</kbd></button>
+        <button id="statusToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Status bar</button>
+        <button id="scrollbarToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Scrollbars</button>
+        <button id="datesToggle" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show created/done dates in entries</button>
+        <button id="cornerToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show file name in minimal mode</button>
+        <button id="lineNoToggle" role="menuitemcheckbox" aria-checked="false" data-keep style="display:none"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Line numbers</button>
+        <h3 class="set-sub win-sub">Window</h3>
+        
+        <button id="onTopToggle" role="menuitemcheckbox" aria-checked="false" data-keep style="display:none"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Always on top <kbd>F9</kbd></button>
+        <button id="noCaptureToggle" role="menuitemcheckbox" aria-checked="false" data-keep style="display:none"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Hide from screenshots &amp; screen sharing</button>
+        <button id="minimalToggle" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Minimal mode <kbd>F11</kbd></button>
+      </div>
+      <div class="set-pane" data-pane="themes" hidden>
+        <div id="themeMenu" class="scroll-area" role="menu"></div>
+        <div class="theme-foot">
+          <div id="themeVariantBox" class="variant-box"></div>
+          <button id="themeReload" type="button" class="theme-reload" title="Re-read the chosen theme file (Ctrl+Shift+T)"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Reload theme <kbd>Ctrl+Shift+T</kbd></button>
+        </div>
+      </div>
+      <div class="set-pane" data-pane="files" hidden>
+        <h3 class="set-sub">Known files</h3>
+        <span class="set-hint">These files are in the file menu, and the terminal app follows the current file when it is a cloud (WebDAV) file or listed here. The icon shows where a file lives (cloud, git folder, local); the lock whether it is stored encrypted. Each folder keeps a hidden <b>.todotxt.cfg</b> that says what is encrypted there, so single files can stay readable for other apps.</span>
+        <h3 class="set-sub">Known folders</h3>
+        <span class="set-hint">A folder with a hidden <b>.todo.txt</b> folder is a known folder. Its settings (what is encrypted), notes and images live there, also on a WebDAV server.</span>
+        <div id="knownFolders" class="known-files"></div>
+        <h3 class="set-sub">Known files</h3>
+        <div id="knownFiles" class="known-files"></div>
+        <button id="addKnownFile"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add file…</button>
+      </div>
+      <div class="set-pane" data-pane="security" hidden>
+        <h3 class="set-sub">Encryption <span class="exp-badge" title="Not widely tested yet">experimental</span></h3>
+        <span class="set-hint exp-note"><b>Experimental.</b> This feature is new and has not been reviewed or tested widely. Keep a backup of your files (File → Backup as .zip…) before you switch it on, and do not rely on it for highly sensitive data. <b>Encrypted files can no longer be read by other todo.txt apps, editors or scripts</b> – only by this app (web, desktop, terminal), which all share the format.</span>
+        <button id="encToggle" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Encrypt the files of this folder (AES-256-GCM)</button>
+        <span class="set-hint">Lists, notes and the WebDAV offline cache are written encrypted, so a git remote or a WebDAV server only ever sees ciphertext. Pasted images are not encrypted. Keep the password safe: without it the files cannot be read.</span>
+        <h3 class="set-sub">Password</h3>
+        <span class="set-hint" id="encStatus"></span>
+        <button id="encPassword"><i class="fa-solid fa-key" aria-hidden="true"></i> Set / change password…</button>
+        <button id="encStore" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Keep the password in the system keyring</button>
+        <button id="encHello" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Ask Windows Hello (fingerprint, face or PIN) before using the stored password</button>
+        <button id="encLock"><i class="fa-solid fa-lock" aria-hidden="true"></i> Lock now (forget the password in memory)</button>
+      </div>
+      <div class="set-pane" data-pane="about" hidden>
+        <div class="about">
+          <h3>todo.txt</h3>
+          <p class="muted" id="aboutVersion"></p>
+          <p>A todo.txt app for the web, the desktop and the terminal. Your tasks stay in a plain text file.</p>
+          <p><a href="https://dtnprt.github.io/todo.txt" target="_blank" rel="noopener noreferrer">https://dtnprt.github.io/todo.txt</a></p>
+          <p><a href="https://github.com/dtnprt/todo.txt/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a> <span class="muted">(public domain / Unlicense)</span></p>
+          <p><a href="https://github.com/dtnprt/todo.txt" target="_blank" rel="noopener noreferrer">Source code on GitHub</a></p>
+        </div>
+      </div>
+      <div class="set-pane" data-pane="webdav" hidden></div>
+    </div>
+  </div>
+
+  <div id="drop" class="drop" hidden>Drop a .txt file to open it</div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

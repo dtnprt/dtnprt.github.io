@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>todo.txt – one task file, three apps</title>
+  <meta name="description" content="A todo.txt app for the browser, the desktop and the terminal. Your tasks stay in a plain text file: smart dates, notes, sub-entries, themes, git and WebDAV sync.">
+  <meta property="og:title" content="todo.txt – one task file, three apps">
+  <meta property="og:description" content="Web, desktop and terminal clients for the todo.txt format. Plain text, no account, no cloud.">
+  <meta property="og:image" content="img/hero.png">
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top">todo<b>.txt</b></a>
+      <a class="l" href="#features">Features</a>
+      <a class="l" href="#screens">Screenshots</a>
+      <a class="l" href="#clients">Web · Desktop · Terminal</a>
+      <a class="l" href="#format">Format</a>
+      <a class="l" href="#themes">Themes</a>
+      <a class="btn primary" href="app/" style="padding:6px 14px;font-size:15px">Try it</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="hero wrap">
+      <h1>Your tasks. One text file.<br>Three apps.</h1>
+      <p class="lead">A fast, keyboard-friendly client for the <a href="https://github.com/todotxt/todo.txt">todo.txt</a> format – in your browser, as a desktop app and in the terminal. No account, no cloud, no lock-in: everything lives in a plain <code>todo.txt</code> you can edit with any editor.</p>
+      <div class="cta">
+        <a class="btn primary" href="app/">Open the web app</a>
+        <a class="btn" href="https://github.com/dtnprt/todo.txt">View on GitHub</a>
+        <a class="btn" href="#clients">Install</a>
+      </div>
+      <img class="shot" src="img/hero.png" alt="The todo.txt app with a sidebar of projects, contexts and priorities and a list of tasks with due dates" width="1200" height="760">
+    </div>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>Small file, big comfort</h2>
+        <p class="sub">The format stays exactly what it is – one task per line. The apps add everything you would otherwise do by hand.</p>
+        <div class="grid">
+          <div class="card"><div class="ic">⌨️</div><h3>One input for everything</h3><p>Add tasks, or press <kbd>/</kbd> to search. Live syntax highlighting and autocomplete for <code>(A)</code> priorities, <code>+projects</code> and <code>@contexts</code>.</p></div>
+          <div class="card"><div class="ic">📅</div><h3>Smart dates</h3><p>Write <code>due:tomorrow</code>, <code>due:+3d</code>, <code>due:15.03.</code> or <code>due:next week</code> – it becomes <code>due:YYYY-MM-DD</code>. A calendar pops up while you type.</p></div>
+          <div class="card"><div class="ic">🚦</div><h3>Due colours</h3><p>Overdue, due today and due soon are colour-coded in the list, the terminal and the CLI alike.</p></div>
+          <div class="card"><div class="ic">📝</div><h3>Notes</h3><p>Type <code>note:</code> and write as much as you like. The text lives in <code>notes/NAME.txt</code> next to your list – the task line stays short.</p></div>
+          <div class="card"><div class="ic">🌳</div><h3>Sub-entries</h3><p>Lines with <code>-</code> to <code>----</code> after the date become sub-entries. Sorting keeps groups together; paste an outline and it is split correctly.</p></div>
+          <div class="card"><div class="ic">📋</div><h3>Smart paste</h3><p>Paste several lines: add each as an entry, as an entry with sub-entries, or as one entry with the rest as a note.</p></div>
+          <div class="card"><div class="ic">🗂️</div><h3>Folders</h3><p>Use a whole folder of lists and switch between them. Move projects (with their sub-entries) from one file to another.</p></div>
+          <div class="card"><div class="ic">🔄</div><h3>Git &amp; WebDAV sync</h3><p>Opt-in git sync (pull on start, commit and push after every change) or a WebDAV file – with an offline cache and three-way merge.</p></div>
+          <div class="card"><div class="ic">🎨</div><h3>50+ themes</h3><p>Nord, Dracula, Catppuccin, Solarized, Rosé Pine, Tokyo Night, a retro Cupertino 9 and X, Terminal and Accessibility families … Themes are plain CSS files – write your own.</p></div>
+          <div class="card"><div class="ic">↩️</div><h3>Undo, drag &amp; drop, archive</h3><p>Undo and redo everywhere, re-prioritise by dragging, archive finished tasks to <code>done.txt</code>.</p></div>
+          <div class="card"><div class="ic">🔁</div><h3>Always in sync with the file</h3><p>Edit the file in your editor, with Syncthing or git – the apps notice and reload it.</p></div>
+          <div class="card"><div class="ic">🔒</div><h3>Private by design</h3><p>Nothing is uploaded. Optional, <em>experimental</em> AES-256-GCM encryption of lists, notes and images (git and WebDAV only see ciphertext; other todo.txt apps can then no longer read the files), password in your OS keyring, optional Windows Hello. Hide the window from screenshots and screen sharing.</p></div>
+          <div class="card"><div class="ic">🗜️</div><h3>Zip backups</h3><p>One click (or <code>todo --backup</code>) writes a .zip of lists, notes and images – automatically before archiving done tasks. Encrypted files stay encrypted.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screens" class="alt">
+      <div class="wrap">
+        <h2>See it in action</h2>
+        <p class="sub">Screenshots of the web app (the desktop app looks the same, without browser chrome).</p>
+
+        <div class="split">
+          <div class="txt">
+            <h3>Dates without friction</h3>
+            <p>Type <code>due</code> and a calendar follows what you write: year, month, day. Or just type <code>due:tomorrow</code> – a space turns it into a real date.</p>
+            <ul>
+              <li><code>today</code>, <code>tomorrow</code>, <code>next week</code></li>
+              <li><code>+3d</code>, <code>+2w</code>, <code>+1m</code></li>
+              <li><code>15.03.</code>, <code>24.12.2026</code>, <code>2026-12-24</code></li>
+            </ul>
+          </div>
+          <img class="shot" src="img/calendar.png" alt="The date picker opens above the input while typing a due date" loading="lazy" width="1200" height="760">
+        </div>
+
+        <div class="split rev" style="margin-top:56px">
+          <div class="txt">
+            <h3>Paste a plan, get a project</h3>
+            <p>Paste several lines and decide how they are added. Outline-style lists with dashes become an entry with sub-entries – or one entry with the details as a note.</p>
+          </div>
+          <img class="shot" src="img/paste.png" alt="The paste panel previews a task with sub-entries and offers two ways to add it" loading="lazy" width="1200" height="760">
+        </div>
+
+        <div class="split" style="margin-top:56px">
+          <div class="txt">
+            <h3>Light, dark – or minimal</h3>
+            <p>The default look follows your system. <kbd>F11</kbd> switches to minimal mode: just the list. The menu bar slides in when you move the mouse to the top, the input when you reach for the bottom.</p>
+            <p>Cupertino Light below.</p>
+          </div>
+          <img class="shot" src="img/minimal.png" alt="Minimal mode: only the task list is visible" loading="lazy" width="900" height="600">
+        </div>
+        <div class="split rev" style="margin-top:56px">
+          <div class="txt">
+            <h3>Just the list</h3>
+            <p>Minimal mode without the sidebar: nothing but your entries. The input floats over the bottom of the list while you type, and the list scrolls so the last entry is never hidden behind it.</p>
+            <p>Every theme works here – this is Hauro.</p>
+          </div>
+          <img class="shot" src="img/minimal-nosidebar-hauro.png" alt="Minimal mode without a sidebar, Hauro theme" loading="lazy" width="900" height="600">
+        </div>
+        <div class="split" style="margin-top:56px">
+          <img class="shot" src="img/minimal-nosidebar.png" alt="Minimal mode without a sidebar" loading="lazy" width="900" height="600">
+          <img class="shot" src="img/minimal-nosidebar-input.png" alt="Minimal mode without a sidebar while adding an entry, with the date picker open" loading="lazy" width="900" height="600">
+        </div>
+        <img class="shot" src="img/light.png" alt="The Cupertino Light theme" loading="lazy" style="margin-top:32px" width="1200" height="760">
+      </div>
+    </section>
+
+    <section id="clients">
+      <div class="wrap">
+        <h2>Three clients, one feature set</h2>
+        <p class="sub">All clients read and write the same file and follow each other: start a task in the terminal, finish it in the browser.</p>
+        <div class="clients">
+          <div class="card">
+            <h3>🌐 Web</h3>
+            <p>Client-only single page app. Vanilla JS, no build step, no dependencies. Works best in Chrome and Edge, where it can open and save files in place – or keep your lists right in the browser (<em>Browser storage</em>, no file access needed).</p>
+            <p style="margin-top:12px"><a class="btn primary" href="app/">Open the web app</a></p>
+          </div>
+          <div class="card">
+            <h3>🖥️ Desktop</h3>
+            <p>The web app in a <a href="https://tauri.app">Tauri</a> window with native file dialogs, auto save, several remembered files, folder mode, git, WebDAV, a frameless window, always-on-top and your own themes.</p>
+            <pre><code>cargo install tauri-cli --version "^2"
+cd src-tauri
+cargo tauri build</code></pre>
+          </div>
+          <div class="card">
+            <h3>⬛ Terminal</h3>
+            <p><code>todo</code> is an interactive TUI <em>and</em> a scriptable command line, written in Rust.</p>
+            <pre><code>cargo install --path cli
+
+todo buy milk @shop due:tomorrow
+todo -l +Home @phone
+todo -x 3          # toggle done
+todo -p 3 A        # priority
+todo -u 3 call the bank   # sub-entry</code></pre>
+          </div>
+        </div>
+        <p class="sub" style="margin-top:28px">Prerequisites: the <a href="https://rustup.rs">Rust toolchain</a> (and the <a href="https://tauri.app/start/prerequisites/">Tauri prerequisites</a> for the desktop app). The web app needs nothing but a browser.</p>
+      </div>
+    </section>
+
+    <section id="format" class="alt">
+      <div class="wrap">
+        <h2>Just the todo.txt format</h2>
+        <p class="sub">Priorities, dates, projects, contexts and key:value tags – as defined by the <a href="https://github.com/todotxt/todo.txt">todo.txt</a> project. The parser is lenient and never rewrites what it does not understand.</p>
+        <div class="fmt">
+<pre><code><span class="tk-pA">(A)</span> <span class="tk-date">2026-11-12</span> Fix login bug <span class="tk-proj">+website</span> <span class="tk-ctx">@work</span> <span class="tk-due">due:2026-11-13</span>
+<span class="tk-pB">(B)</span> <span class="tk-date">2026-11-09</span> Plan the team offsite <span class="tk-proj">+team</span> note:Note-1
+<span class="tk-date">2026-11-09</span> - Book a venue <span class="tk-proj">+team</span>
+<span class="tk-date">2026-11-09</span> -- Compare three offers
+<span class="tk-pC">(C)</span> Call the dentist <span class="tk-ctx">@phone</span> due:2026-11-16
+<span class="tk-done">x 2026-11-12 2026-11-10 Renew passport +life</span></code></pre>
+          <table class="keys">
+            <tr><td><kbd>/</kbd></td><td>search (Esc returns to adding)</td></tr>
+            <tr><td><kbd>F2</kbd></td><td>next sort order</td></tr>
+            <tr><td><kbd>F3</kbd></td><td>show / hide completed</td></tr>
+            <tr><td><kbd>F4</kbd></td><td>show / hide the sidebar</td></tr>
+            <tr><td><kbd>F5</kbd></td><td>archive done tasks</td></tr>
+            <tr><td><kbd>F11</kbd></td><td>minimal mode</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>undo</td></tr>
+            <tr><td><kbd>F1</kbd></td><td>all shortcuts</td></tr>
+          </table>
+        </div>
+        <p class="sub" style="margin-top:24px">Sub-entries and <code>note:</code> are conventions of this app: a dash prefix after the dates marks a sub-entry, <code>note:NAME</code> points to <code>notes/NAME.txt</code>. Other todo.txt tools simply see ordinary words.</p>
+      </div>
+    </section>
+
+    <section id="themes">
+      <div class="wrap">
+        <h2>Make it yours</h2>
+        <p class="sub">A theme is one self-contained CSS file with a handful of colour tokens. The desktop app ships over fifty, and anything in <code>~/.todo.txt/themes/</code> shows up in the settings.</p>
+        <div class="themes">
+          <figure><img class="shot" src="img/theme-nord.png" alt="Nord theme" loading="lazy" width="1000" height="640"><figcaption>Nord</figcaption></figure>
+          <figure><img class="shot" src="img/theme-catppuccin-mocha.png" alt="Catppuccin Mocha theme" loading="lazy" width="1000" height="640"><figcaption>Catppuccin Mocha</figcaption></figure>
+          <figure><img class="shot" src="img/theme-rosepine.png" alt="Rosé Pine theme" loading="lazy" width="1000" height="640"><figcaption>Rosé Pine</figcaption></figure>
+          <figure><img class="shot" src="img/theme-hauro.png" alt="Hauro theme with a meadow background" loading="lazy" width="1000" height="640"><figcaption>Hauro</figcaption></figure>
+          <figure><img class="shot" src="img/theme-sheikah.png" alt="Sheikah theme" loading="lazy" width="1000" height="640"><figcaption>Sheikah</figcaption></figure>
+          <figure><img class="shot" src="img/theme-plumber.png" alt="Plumber theme" loading="lazy" width="1000" height="640"><figcaption>Plumber</figcaption></figure>
+          <figure><img class="shot" src="img/theme-redmond-95.png" alt="Redmond 95: grey bevelled controls on a teal desktop" loading="lazy" width="1000" height="640"><figcaption>Redmond 95</figcaption></figure>
+          <figure><img class="shot" src="img/theme-redmond-xp.png" alt="Redmond XP: blue title bar, beige buttons, blue task pane" loading="lazy" width="1000" height="640"><figcaption>Redmond XP</figcaption></figure>
+          <figure><img class="shot" src="img/theme-redmond-7.png" alt="Redmond 7: frosted glass frame and soft gradient buttons" loading="lazy" width="1000" height="640"><figcaption>Redmond 7</figcaption></figure>
+          <figure><img class="shot" src="img/theme-cupertino-dark.png" alt="Cupertino dark theme" loading="lazy" width="1000" height="640"><figcaption>Cupertino Dark</figcaption></figure>
+          <figure><img class="shot" src="img/theme-cupertino-9.png" alt="Cupertino 9: a platinum desktop of the late nineties" loading="lazy" width="1000" height="640"><figcaption>Cupertino 9</figcaption></figure>
+          <figure><img class="shot" src="img/theme-cupertino-x.png" alt="Cupertino X: glossy blue gel buttons and pinstripes" loading="lazy" width="1000" height="640"><figcaption>Cupertino X</figcaption></figure>
+          <figure><img class="shot" src="img/theme-terminal-green.png" alt="Terminal theme: green phosphor with a pixel font" loading="lazy" width="1000" height="640"><figcaption>Terminal Green</figcaption></figure>
+          <figure><img class="shot" src="img/theme-terminal-pipboy.png" alt="Terminal theme, Pip-Boy variant" loading="lazy" width="1000" height="640"><figcaption>Terminal Pip-Boy</figcaption></figure>
+          <figure><img class="shot" src="img/theme-accessibility-high-contrast.png" alt="High contrast theme" loading="lazy" width="1000" height="640"><figcaption>Accessibility: High contrast</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap">
+        <h2>Sync it your way</h2>
+        <p class="sub">todo.txt is a file, so you already have many options. The apps add two built-in ones – both strictly opt-in.</p>
+        <div class="grid">
+          <div class="card"><h3>Git</h3><p>Keep a folder of lists in a repository. Pull on start, commit and push after every change, or sync manually. Without a <code>.todo-git.cfg</code> nothing automatic ever happens.</p>
+            <pre style="margin-top:12px"><code>todo -f ~/lists --git-init
+todo --git-auto on</code></pre></div>
+          <div class="card"><h3>WebDAV</h3><p>Open a file on Nextcloud or any WebDAV server. Passwords are kept in the OS keyring, conflicts are detected with ETags, and an offline cache with a three-way merge keeps you working without a connection.</p></div>
+          <div class="card"><h3>Anything else</h3><p>Syncthing, Dropbox, a network share: the apps reload the file when it changes on disk.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap" style="text-align:center">
+        <h2>Give it a try</h2>
+        <p class="sub" style="margin-inline:auto">The web app runs entirely in your browser. Open a todo.txt, or start with an empty list.</p>
+        <div class="cta" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+          <a class="btn primary" href="app/">Open the web app</a>
+          <a class="btn" href="https://github.com/dtnprt/todo.txt">Get the source</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>todo.txt – vibe-coded with <a href="https://claude.com/claude-code">Claude Code</a>. Expect rough edges.</span>
+      <span>
+        <a href="https://github.com/dtnprt/todo.txt">GitHub</a> ·
+        <a href="https://github.com/dtnprt/todo.txt/blob/main/LICENSE">License (public domain)</a> ·
+        <a href="https://github.com/todotxt/todo.txt">todo.txt format</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>
