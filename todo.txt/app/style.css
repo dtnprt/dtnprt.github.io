@@ -660,8 +660,9 @@ body.minimal .dav-corner, body.minimal:has(.composer:focus-within) .dav-corner, 
 html:has(body.android), body.android { height: 100dvh; overflow: hidden; }
 body.android .layout { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; }
 body.android #listWrap { display: contents; }
-body.android #list, body.android #raw { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
-body.android .composer { position: relative; bottom: auto; flex: none; margin-top: 0; }
+body.android #list { flex: 0 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; }   /* as high as its entries (the theme background stays visible below), scrolls when there are more than fit */
+body.android #raw { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+body.android .composer { position: relative; bottom: auto; flex: none; margin-top: auto; }
 
 /* Android: entries follow the finger while swiping (done / edit) */
 body.android #list .task { transition: transform .15s ease; touch-action: pan-y; }
