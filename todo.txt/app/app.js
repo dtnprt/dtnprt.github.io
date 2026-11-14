@@ -31,6 +31,7 @@ function curDir() {
 const THEMES = [];   // built-in themes were moved out of web/: see themes/ (bundled with the desktop app, loaded like own themes)
 // Own themes (desktop): `~/.todo.txt/themes/NAME.css`, same format as themes/*.css in the repo. Stored as `user:NAME`.
 let userThemes = {};   // name -> css text
+let themesLoaded = false;   // until then the theme CSS cached by the previous run (index.html) stays in place
 const themeClass = (t) => 'theme-' + t.replace(/^user:/, '').replace(/[^\w-]/g, '-');   // own themes use the same body class as the built-in one of that name (their artwork is `body.theme-NAME`)
 // Theme families: the list shows only the family name, the variant (light/dark/...) is chosen in a second dropdown.
 // [variant label, theme file]; the first entry is the default. Own themes named `NAME-light` / `NAME-dark` are grouped the same way.
@@ -69,6 +70,7 @@ function themeVariants(key) {
   return [];
 }
 
+let barsTimer = null;
 function applyTheme() {
   let link = document.getElementById('themeLink');
   const user = state.theme.startsWith('user:');
@@ -76,14 +78,67 @@ function applyTheme() {
   if (user && userThemes[state.theme.slice(5)] !== undefined) {
     if (!style) { style = el('style', { id: 'themeStyle' }); document.head.append(style); }
     if (style.textContent !== userThemes[state.theme.slice(5)]) style.textContent = userThemes[state.theme.slice(5)];
-  } else style?.remove();
+    try { localStorage.setItem('todotxt.themeCss', JSON.stringify({ name: state.theme, css: userThemes[state.theme.slice(5)] })); } catch { /* storage unavailable */ }
+  } else if (!user || themesLoaded) {
+    style?.remove();
+    if (!user) try { localStorage.removeItem('todotxt.themeCss'); } catch { /* ignore */ }
+  }
   const want = state.theme && !user ? `themes/${state.theme}.css` : '';
   if (!want) { link?.remove(); }
   else if (!link) { link = el('link', { id: 'themeLink', rel: 'stylesheet', href: want }); document.head.append(link); }
   else if (link.getAttribute('href').split('?')[0] !== want) link.setAttribute('href', want);
   document.body.className = document.body.className.split(/\s+/).filter((c) => c && !c.startsWith('theme-')).concat(state.theme ? [themeClass(state.theme)] : []).join(' ');
   document.querySelectorAll('[data-theme]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.theme === themeKey(state.theme))));
+  link?.addEventListener('load', syncIcon, { once: true });
+  clearTimeout(barsTimer);
+  barsTimer = setTimeout(() => { syncIcon(); if (isAndroid) syncBars(); }, 200);
 }
+
+/** The app icon (tab icon, desktop window icon) follows the theme: accent colour as the square, accent text colour as the check mark. */
+let iconKey = '';
+function syncIcon() {
+  const cs = getComputedStyle(document.documentElement);
+  const bodyCs = getComputedStyle(document.body);
+  const tok = (k) => (bodyCs.getPropertyValue(k) || cs.getPropertyValue(k) || '').trim();
+  const bg = tok('--accent') || '#fabd2f';
+  const fg = tok('--accent-text') || '#282828';
+  if (bg + fg === iconKey) return;
+  iconKey = bg + fg;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='${bg}'/><path d='M5.2 8.35l1.75 1.75L10.8 6.25' fill='none' stroke='${fg}' stroke-width='1.5'/></svg>`;
+  const url = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  let ic = document.querySelector('link[rel=icon]');
+  if (!ic) { ic = el('link', { rel: 'icon' }); document.head.append(ic); }
+  ic.href = url;
+  if (isTauri && !isAndroid && tauri.window) {   // window / taskbar icon (Windows, X11; Wayland takes the icon of the .desktop file)
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+      c.toBlob(async (b) => { try { tauri.window.getCurrentWindow().setIcon(new Uint8Array(await b.arrayBuffer())).catch(() => {}); } catch { /* ignore */ } }, 'image/png');
+    };
+    img.src = url;
+  }
+}
+
+/** Android: the status / navigation bar areas get the colours of the top bar / status bar of the theme (transparent system bars). */
+function syncBars() {
+  const b = window.TodoAndroid;
+  if (!b || !b.setBars) return;
+  const rgba = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return { r: v[0], g: v[1], b: v[2], a: v.length > 3 ? v[3] : 1 }; };
+  const base = rgba(getComputedStyle(document.body).backgroundColor) || { r: 0, g: 0, b: 0, a: 1 };
+  const solid = (sel) => {
+    const c = rgba(getComputedStyle(document.querySelector(sel) || document.body).backgroundColor);
+    if (!c || c.a === 0) return base;
+    const a = Math.min(1, c.a);
+    return { r: c.r * a + base.r * (1 - a), g: c.g * a + base.g * (1 - a), b: c.b * a + base.b * (1 - a) };
+  };
+  const hex = (c) => '#' + [c.r, c.g, c.b].map((x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('');
+  const top = solid('.topbar');
+  const bottom = solid(state.statusBar && !state.minimal ? '.status' : '.layout');
+  const dark = (0.299 * top.r + 0.587 * top.g + 0.114 * top.b) < 140;
+  try { b.setBars(hex(top), hex(bottom), dark); } catch { /* old shell */ }
+}
+if (isAndroid) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(syncBars, 100));
 
 let statusHover = null;   // status bar span showing the dates of the hovered entry
 const state = {
@@ -103,6 +158,7 @@ const state = {
   dirty: false,
   filter: { q: '', project: [], context: [], priority: [] },
   showDone: true,
+  drawer: false,        // desktop: the filter drawer is open (sidebar switched off)
   sidebar: !isAndroid,   // Android: the filter drawer, closed at start
   calendar: true,
   minimal: false,
@@ -159,7 +215,7 @@ function restore() {
     if (isTauri && Array.isArray(s.opened)) state.opened = s.opened.filter((p) => typeof p === 'string' && p);
     state.dirty = !!s.dirty;
     state.path = isTauri && typeof s.path === 'string' ? s.path : null;
-    state.folder = isTauri && !isAndroid && typeof s.folder === 'string' ? s.folder : null;   // no folder mode on Android
+    state.folder = isTauri && typeof s.folder === 'string' && !(isAndroid && !isRemote(s.folder)) ? s.folder : null;   // Android: only WebDAV folders (no folder picker for local ones)
     state.sort = s.sort || 'priority';
     state.showDone = s.showDone !== false;
     state.sidebar = isAndroid ? false : s.sidebar !== false;
@@ -325,7 +381,7 @@ function loadText(text, name, handle = null, path = null, etag = null) {
   state.path = path;
   if (path) {
     seenFiles.add(path);
-    if (isTauri && !isAndroid) {
+    if (isTauri) {
       if (!state.opened.includes(path)) state.opened.push(path);
       pushRecent(path);
       autoKnown(path);
@@ -752,7 +808,7 @@ const knownPaths = () => {
 };
 
 async function refreshFileInfo(force = false) {
-  if (!isTauri || isAndroid) return;
+  if (!isTauri) return;
   const paths = [...new Set([...menuPaths(), ...state.files, ...state.recent])];
   const key = paths.join('\n');
   if (!force && key === fileInfoKey && Date.now() - fileInfoAt < 10000) return;
@@ -809,7 +865,7 @@ const menuPaths = () => {
 };
 
 function pushRecent(path) {
-  if (!isTauri || isAndroid || !path) return;
+  if (!isTauri || !path) return;
   state.recent = [path, ...state.recent.filter((p) => p !== path)].slice(0, MAX_RECENT);
   setCfg('recent', JSON.stringify(state.recent));
   renderRecent();
@@ -840,7 +896,7 @@ let folderInfoKey = '';
 const listDir = () => (state.path && !isRemote(state.path) ? dirOf(state.path) : null);
 
 async function refreshFolderInfo(force = false) {
-  if (!isTauri || isAndroid) return;
+  if (!isTauri) return;
   const seen = new Map();
   for (const p of [...menuPaths(), ...state.files, ...state.recent]) {
     const remote = isRemote(p);
@@ -895,7 +951,7 @@ async function setFolderEncryption(dir, entry, on) {
 
 /** A list becomes a known file: WebDAV lists as soon as they are opened, local ones once their folder has a `.todo.txt`. */
 async function autoKnown(path) {
-  if (!isTauri || isAndroid || !path || state.files.includes(path)) return;
+  if (!isTauri || !path || state.files.includes(path)) return;
   let known = isRemote(path);
   if (!known) {
     try { known = !!(await invoke('file_info', { paths: [path] }))[0]?.known; } catch { known = false; }
@@ -1690,8 +1746,8 @@ function removeFromFiles(p) {
 
 function renderFileList() {
   const btn = $('#fileDd .file-btn');
-  const canFolder = isTauri || hasDirPicker;
-  btn.disabled = !canFolder;
+  const canFolder = (isTauri && !isAndroid) || hasDirPicker;
+  btn.disabled = !(isTauri || canFolder);
   const menu = $('#fileList');
   if (btn.disabled) return;
   const tick = () => el('span', { className: 'tick' }, el('i', { className: 'fa-solid fa-check' }));
@@ -1737,7 +1793,7 @@ function renderFileList() {
     }
     refreshFileInfo();
   }
-  const open = el('button', { role: 'menuitem', onclick: openFile }, el('i', { className: 'fa-solid fa-folder-open' }), ' Open…');
+  const open = el('button', { role: 'menuitem', onclick: isAndroid ? () => openFiles(androidDeps()) : openFile }, el('i', { className: 'fa-solid fa-folder-open' }), ' Open…');
   const openDir = el('button', { role: 'menuitem', onclick: openFolder }, el('i', { className: 'fa-solid fa-folder-tree' }), ' Open folder…');
   menu.replaceChildren(...rows, ...(rows.length ? [el('hr')] : []), open, ...(canFolder ? [openDir] : []));
 }
@@ -1797,7 +1853,7 @@ async function openLastFile() {
       const wm = cfg.match(/^\s*webdav\s*=\s*(.+?)\s*$/m);
       if (wm) { try { const a = JSON.parse(wm[1]); if (Array.isArray(a)) davServers = a.filter((x) => typeof x === 'string' && x); } catch { /* ignore */ } }
       const dm = cfg.match(/^\s*folder\s*=\s*(.+?)\s*$/m);
-      if (dm && !isAndroid) state.folder = dm[1];
+      if (dm && !(isAndroid && !isRemote(dm[1]))) state.folder = dm[1];
       const rm = cfg.match(/^\s*recent\s*=\s*(.+?)\s*$/m);
       if (rm) { try { const a = JSON.parse(rm[1]); if (Array.isArray(a)) { state.recent = a.filter((x) => typeof x === 'string' && x).slice(0, 20); renderRecent(); } } catch { /* ignore */ } }
       const fm = cfg.match(/^\s*files\s*=\s*(.+?)\s*$/m);
@@ -1815,6 +1871,7 @@ async function openLastFile() {
       state.folder = null;
       state.folderFiles = [];
     }
+    if (state.folder && isRemote(state.folder) && !davEntry(state.folder)) { state.folder = null; state.folderFiles = []; }   // its server is not configured (any more)
     if (state.folder) {
       if (localFolder()) await gitStart();
       await listFolder();
@@ -2438,7 +2495,7 @@ function render() {
   $('#moveProjects').style.display = isTauri ? '' : 'none';
   $('#davTab').style.display = isTauri ? '' : 'none';
   $('#secTab').style.display = isAndroid ? 'none' : '';
-  $('#filesTab').style.display = isTauri && !isAndroid ? '' : 'none';
+  $('#filesTab').style.display = isTauri ? '' : 'none';
   renderGit();
   $('#autoSaveToggle').style.display = isTauri ? '' : 'none';
   $('#autoSaveToggle').setAttribute('aria-checked', state.autoSave);
@@ -2453,10 +2510,10 @@ function render() {
   }
   $('#archive').disabled = !state.lines.some((l) => T.parse(l).done);
   $('#browserStorage').style.display = isTauri ? 'none' : '';
-  $('#recentToggle').style.display = isTauri && !isAndroid ? '' : 'none';
-  $('#knownToggle').style.display = isTauri && !isAndroid ? '' : 'none';
-  if (!(isTauri && !isAndroid)) $('#knownList').hidden = true;
-  if (!(isTauri && !isAndroid)) $('#recentList').hidden = true;
+  $('#recentToggle').style.display = isTauri ? '' : 'none';
+  $('#knownToggle').style.display = isTauri ? '' : 'none';
+  if (!isTauri) $('#knownList').hidden = true;
+  if (!isTauri) $('#recentList').hidden = true;
   $('#backupZip').style.display = isTauri && !isAndroid && state.path && !isRemote(state.path) ? '' : 'none';   // no save dialog on Android: its backups go to the backup folder when archiving
   $('#backupArchiveToggle').style.display = isTauri ? '' : 'none';
   const vt = $('#viewToggle');
@@ -2471,7 +2528,13 @@ function render() {
   $('#sidebar').hidden = !showSide;
   $('#layout').classList.toggle('no-side', !showSide);
   document.body.classList.toggle('side-open', isAndroid && showSide);
-  $('#scrim').hidden = !(isAndroid && showSide);
+  // desktop: with the sidebar switched off the filter button opens the filters as a drawer (like on Android)
+  const drawer = !isAndroid && !state.sidebar && state.drawer && listMode;
+  if (drawer) { $('#sidebar').hidden = false; $('#layout').classList.add('no-side'); }
+  document.body.classList.toggle('drawer-open', drawer);
+  $('#scrim').hidden = !((isAndroid && showSide) || drawer);
+  $('#filterBtn').hidden = !(isAndroid || (!state.sidebar && listMode));
+  $('#filterBtn').classList.toggle('active', drawer);
   $('#sideToggle').setAttribute('aria-checked', state.sidebar);
   $('#sideToggle').disabled = !listMode;
   $('#sideBtn').disabled = !listMode;
@@ -2484,7 +2547,7 @@ function render() {
   }
 
   if (!listMode) {
-    $('#davCorner').hidden = true;
+    $('#davCorner').hidden = !state.minimal;
     const ta = $('#raw');
     if (document.activeElement !== ta) ta.value = state.lines.join('\n');
     return;
@@ -2536,10 +2599,10 @@ function render() {
   {   // minimal mode hides the status bar: show the WebDAV file small and faint in the bottom left corner instead
     const dc = $('#davCorner');
     const lock = isFileEncrypted();
-    dc.hidden = !(state.minimal && ((davShown && state.cornerName) || lock));
+    dc.hidden = !state.minimal;   // always shown in minimal mode
     document.body.classList.toggle('has-corner', !dc.hidden);
     window.dispatchEvent(new Event('composer-pad'));   // minimal mode: the list leaves room for the small file name
-    dc.replaceChildren(...(lock ? [el('i', { className: 'fa-solid fa-lock corner-lock', title: 'Encrypted' })] : []), document.createTextNode(state.cornerName ? (davShown || (lock ? state.fileName : '')) : ''));
+    dc.replaceChildren(...(lock ? [el('i', { className: 'fa-solid fa-lock corner-lock', title: 'Encrypted' })] : []), document.createTextNode(davShown || state.fileName));
     dc.title = davFull;
   }
   statusHover = el('span', { className: 'status-hover' });
@@ -2913,6 +2976,7 @@ async function loadUserThemes() {
     const curName = String(state.theme || '').replace(/^user:/, '');
     if (next[curName] !== userThemes[curName]) { const st = document.getElementById('themeStyle'); if (st) st.remove(); }   // the chosen theme file changed: re-inject
     userThemes = next;
+    themesLoaded = true;
     buildThemeMenu();
   } catch { /* no themes folder */ }
 }
@@ -2920,6 +2984,7 @@ async function loadUserThemes() {
 async function reloadTheme() {
   if (isTauri) {
     try { userThemes = Object.fromEntries((await invoke('list_user_themes')).map(([n, css]) => [n, css])); } catch { /* no themes folder */ }
+    themesLoaded = true;
     const st = document.getElementById('themeStyle');
     if (st) st.remove();   // force re-injection
   }
@@ -3057,13 +3122,79 @@ document.addEventListener('mousedown', (e) => {
     }
   });
 }
+// Android touch gestures.
+//  * minimal mode: pull the list down at its top / up at its bottom (also from the screen edge) = top bar / input bar appear,
+//    scrolling the other way hides them again; a tap on the list hides them too
+//  * entry: swipe right = done / open again, swipe left = edit
+//  * filter drawer: swipe left closes it
+if (isAndroid) {
+  const list = $('#list');
+  const bar = document.querySelector('.topbar');
+  let g = null;
+  const atTop = () => list.scrollTop <= 0;
+  const atBottom = () => list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+  const focusedInput = () => !!document.querySelector('.composer:focus-within');
+  const menuOpen = () => !!bar.querySelector('.dd-menu:not([hidden])') || bar.contains(document.activeElement);
+  addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { g = null; return; }
+    const t = e.touches[0];
+    const li = e.target instanceof Element ? e.target.closest('#list .task') : null;
+    g = { x: t.clientX, y: t.clientY, li, dir: null, top: atTop(), bottom: atBottom(), edge: t.clientY < 56 ? 'top' : t.clientY > innerHeight - 56 ? 'bottom' : null, drawer: !!(e.target instanceof Element && e.target.closest('.sidebar')) };
+  }, { passive: true });
+  addEventListener('touchmove', (e) => {
+    if (!g) return;
+    const t = e.touches[0];
+    const dx = t.clientX - g.x, dy = t.clientY - g.y;
+    if (!g.dir) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      g.dir = Math.abs(dx) > Math.abs(dy) * 1.5 ? 'h' : 'v';
+    }
+    if (g.dir === 'h') {
+      if (g.li && state.editing === null && !(g.li.classList.contains('dragging'))) {
+        g.li.style.transition = 'none';
+        g.li.style.transform = `translateX(${Math.max(-120, Math.min(120, dx))}px)`;
+      }
+      return;
+    }
+    if (!state.minimal || g.done) return;
+    const hide = (cls) => { document.body.classList.remove(cls); g.done = true; };
+    if (dy > 28 && ((g.top && !document.body.classList.contains('show-bar')) || g.edge === 'top')) { document.body.classList.add('show-bar'); g.done = true; }
+    else if (dy < -28 && ((g.bottom && !document.body.classList.contains('show-input')) || g.edge === 'bottom')) { document.body.classList.add('show-input'); g.done = true; }
+    else if (dy < -28 && document.body.classList.contains('show-bar') && !menuOpen()) hide('show-bar');
+    else if (dy > 28 && document.body.classList.contains('show-input') && !focusedInput()) hide('show-input');
+  }, { passive: true });
+  const finish = (e) => {
+    const m = g; g = null;
+    if (!m) return;
+    if (m.li) { m.li.style.transition = ''; m.li.style.transform = ''; }
+    const t = (e.changedTouches || [])[0];
+    if (!t || m.dir !== 'h') return;
+    const dx = t.clientX - m.x;
+    if (m.drawer) { if (dx < -70 && state.sidebar) { state.sidebar = false; render(); } return; }
+    if (!m.li || state.editing !== null || Math.abs(dx) < 90) return;
+    const i = Number(m.li.dataset.line);
+    const raw = state.lines[i];
+    if (raw === undefined) return;
+    const task = T.parse(raw);
+    if (dx > 0) replaceLine(i, task.done ? T.reopen(raw) : T.complete(raw));
+    else { state.editing = i; render(); }
+  };
+  addEventListener('touchend', finish, { passive: true });
+  addEventListener('touchcancel', () => { if (g && g.li) { g.li.style.transition = ''; g.li.style.transform = ''; } g = null; }, { passive: true });
+  document.addEventListener('click', (e) => {
+    if (!state.minimal || !(e.target instanceof Element)) return;
+    if (e.target.closest('.topbar, .composer, .help, .dd-menu')) return;
+    if (!menuOpen()) document.body.classList.remove('show-bar');
+    if (!focusedInput()) document.body.classList.remove('show-input');
+  });
+}
 $('#lineNoToggle').onclick = () => {
   state.lineNumbers = !state.lineNumbers;
   setCfg('linenumbers', state.lineNumbers);
   render();
 };
 $('#sideToggle').onclick = () => { state.sidebar = !state.sidebar; persist(); render(); };
-$('#sideBtn').onclick = () => { state.sidebar = !state.sidebar; persist(); render(); };
+$('#sideBtn').onclick = () => { state.sidebar = !state.sidebar; state.drawer = false; persist(); render(); };
 // Dropdown menus (File, View): one open at a time.
 const closeMenus = () => document.querySelectorAll('.dd').forEach((d) => {
   const m = d.querySelector('.dd-menu');
@@ -3241,7 +3372,7 @@ document.addEventListener('keydown', (e) => {
       const order = ['priority', 'due', 'created', 'alpha', 'file'];
       state.sort = order[(order.indexOf(state.sort) + 1) % order.length];
     } else if (e.key === 'F3') state.showDone = !state.showDone;
-    else if (e.key === 'F4') { if (!listMode) return; state.sidebar = !state.sidebar; }
+    else if (e.key === 'F4') { if (!listMode) return; state.sidebar = !state.sidebar; state.drawer = false; }
     else if (e.key === 'F5') { archiveDone(); return; }
     else if (e.key === 'F6') state.calendar = !state.calendar;
     if (e.key !== 'F1') { persist(); render(); }
@@ -3356,12 +3487,12 @@ function androidDeps() {
 if (isAndroid) {
   document.body.classList.add('android');
   initBackButton();
-  $('#fileDd').addEventListener('click', (e) => {   // the title opens the lists overlay instead of the dropdown
-    if (!e.target.closest('.file-btn')) return;
-    e.stopPropagation(); closeMenus(); openFiles(androidDeps());
-  }, true);
   $('#filterBtn').onclick = () => { state.sidebar = !state.sidebar; render(); };
   $('#scrim').onclick = () => { state.sidebar = false; render(); };
+} else {
+  $('#filterBtn').onclick = () => { state.drawer = !state.drawer; render(); };
+  $('#scrim').onclick = () => { state.drawer = false; render(); };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.drawer && !document.querySelector('.help:not([hidden]), .ac')) { state.drawer = false; render(); } });
 }
 
 openLastFile();

@@ -402,13 +402,13 @@ body.android { font-size: 16px; -webkit-tap-highlight-color: transparent; touch-
 body.android input, body.android textarea, body.android select { font-size: 16px; }   /* no zoom-in when focusing */
 /* desktop-only things: keyboard hints, folder mode, git, window options, file dialogs */
 body.android kbd, body.android #openFolder, body.android #gitDd, body.android #gitInit, body.android #framelessToggle,
-body.android #onTopToggle, body.android #minimalToggle, body.android #lineNoToggle, body.android #saveAs,
+body.android #onTopToggle, body.android #lineNoToggle, body.android #saveAs,
 body.android #keepFile, body.android #sideToggle, body.android #winCtl, body.android .task .grip { display: none !important; }
 body.android .topbar { padding: 6px 8px; gap: 4px; }
 body.android .topbar .icon, body.android .topbar .dd-btn { min-width: 44px; min-height: 44px; }
 body.android .file-btn h1 { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
 body.android .layout { padding: 6px 8px; display: block; }
-body.android .task { padding: 10px 4px; }
+body.android .task { padding: 10px 6px 10px 14px; }
 body.android .task .actions { opacity: 1; }
 body.android .task .actions button, body.android .side-item, body.android .dd-menu button, body.android .set-pane button { min-height: 44px; }
 body.android .dd-menu { max-width: calc(100vw - 16px); }
@@ -465,7 +465,6 @@ body { overflow-x: clip; }
 
 /* minimal mode: the small file name and the input bar fade into each other */
 .dav-corner { transition: opacity .35s ease; }
-body.minimal.show-input .dav-corner, body.minimal:has(.composer:focus-within) .dav-corner, body.minimal:has(.composer:hover) .dav-corner { opacity: 0 !important; }
 
 /* the due stripe (inset shadow) of the first/last entry follows the rounded corners of the list */
 .tasks > .task:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
@@ -605,14 +604,14 @@ body .set-tabs button[role="tab"][aria-selected="true"] { border-bottom-color: v
 /* Minimal mode = the normal layout without top bar and status bar. The input bar sits below the list (in the layout, nothing floats
    over the entries) and is only there while the mouse is over the window or the bar has the focus; the list box shrinks upwards by
    exactly the height of the bar and grows back when it goes away. */
-body:not(.android).minimal .composer { position: relative; left: auto; right: auto; bottom: auto; margin-bottom: 0; opacity: 1; transform: none; pointer-events: auto; z-index: auto; }
+body.minimal .composer { position: relative; left: auto; right: auto; bottom: auto; margin-bottom: 0; opacity: 1; transform: none; pointer-events: auto; z-index: auto; }
 /* it slides in from below while the list box shrinks upwards in the same animation (max-height from 0 to the natural height of the bar) */
-body:not(.android).minimal .composer { box-sizing: border-box; max-height: var(--composer-h, 76px); transition: max-height .28s cubic-bezier(.2, .8, .2, 1), padding .28s cubic-bezier(.2, .8, .2, 1), opacity .22s ease, transform .28s cubic-bezier(.2, .8, .2, 1); }
-body:not(.android).minimal:not(.keep-input):not(.show-input) .composer:not(:focus-within) { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(14px); pointer-events: none; overflow: hidden; }
-body:not(.android).minimal .layout { padding-bottom: 0; }
-body:not(.android).minimal #list > .task:last-child { margin-bottom: 0 !important; }
+body.minimal .composer { box-sizing: border-box; max-height: var(--composer-h, 76px); transition: max-height .28s cubic-bezier(.2, .8, .2, 1), padding .28s cubic-bezier(.2, .8, .2, 1), opacity .22s ease, transform .28s cubic-bezier(.2, .8, .2, 1); }
+body.minimal:not(.keep-input):not(.show-input) .composer:not(:focus-within) { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(14px); pointer-events: none; overflow: hidden; }
+body.minimal .layout { padding-bottom: 0; }
+body.minimal #list > .task:last-child { margin-bottom: 0 !important; }
 /* minimal mode: no offsets are left over from the old floating input bar (they would shift the relative bar sideways) */
-body:not(.android).minimal .layout .composer, body:not(.android).minimal .layout.no-side .composer { left: 0 !important; right: 0 !important; }
+body.minimal .layout .composer, body.minimal .layout.no-side .composer { left: 0 !important; right: 0 !important; }
 
 /* lock icon of an encrypted file: next to the kind icon in the top bar, in front of the file name in the minimal-mode corner */
 .file-lock { font-size: .72em; margin-left: .15em; color: var(--ok); }
@@ -621,8 +620,8 @@ body:not(.android).minimal .layout .composer, body:not(.android).minimal .layout
 
 /* minimal mode: the small file name / lock in the bottom left corner is never covered by the list: room below the list while the
    input bar is away (the bar's own padding takes over when it slides in and the corner fades out) */
-body:not(.android).minimal .layout { transition: padding-bottom .28s cubic-bezier(.2, .8, .2, 1); }
-body:not(.android).minimal.has-corner:not(.keep-input):not(.show-input) .layout:not(:has(.composer:focus-within)) { padding-bottom: 22px; }
+body.minimal .layout { transition: padding-bottom .28s cubic-bezier(.2, .8, .2, 1); }
+body.minimal.has-corner:not(.keep-input):not(.show-input) .layout:not(:has(.composer:focus-within)) { padding-bottom: 22px; }
 /* the input bar stays: the corner label sits in its bottom padding and does not fade */
 body.minimal.keep-input .dav-corner { opacity: .3 !important; }
 
@@ -637,3 +636,37 @@ body.minimal.keep-input .dav-corner { opacity: .3 !important; }
    sits under the box instead of on top of it */
 body.minimal.has-corner { --composer-pad-b: 28px; }
 body.minimal.has-corner .dav-corner { opacity: .35 !important; }   /* the label stays visible (it has its own room below the input bar now) */
+/* minimal mode: the input bar lines up with the entries (starts right of the sidebar like in the normal mode; `margin: 0` of the old floating bar had moved it to the left edge) */
+body:not(.android).minimal .layout .composer { margin-left: 16px; }
+body:not(.android).minimal .layout.no-side .composer { margin-left: 0; }
+@media (max-width: 720px) { body:not(.android).minimal .layout .composer { margin-left: 0; } }
+/* sidebar section clear button: just the x, no box (themes style every button, so be explicit) */
+button.clear-x, button.clear-x:hover, button.clear-x:focus { border: 0 !important; background: none !important; box-shadow: none !important; width: auto; height: auto; padding: 2px 4px; color: var(--accent); }
+button.clear-x:hover { color: var(--text); }
+
+/* minimal mode: the small status line never fades, whatever the mouse / input bar does */
+body.minimal .dav-corner, body.minimal:has(.composer:focus-within) .dav-corner, body.minimal:has(.composer:hover) .dav-corner, body.minimal.show-input .dav-corner { opacity: .35 !important; }
+
+/* narrow screens (phones in portrait): settings tabs wrap instead of scrolling sideways */
+@media (max-width: 720px) {
+  .set-tabs { flex-wrap: wrap; overflow-x: visible; gap: 0 2px; }
+  .set-tabs button { padding: 6px 8px; }
+  .set-tabs button[data-tab="about"] { margin-left: 0; }
+}
+
+/* Android: like the desktop (and the minimal mode), the window does not scroll: top bar, input + touch toolbar and status bar take
+   their own space and only the entry list scrolls in what is left. The input no longer floats over the entries; with the keyboard
+   open (viewport resizes with it) the list simply gets shorter. */
+html:has(body.android), body.android { height: 100dvh; overflow: hidden; }
+body.android .layout { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; }
+body.android #listWrap { display: contents; }
+body.android #list, body.android #raw { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+body.android .composer { position: relative; bottom: auto; flex: none; margin-top: 0; }
+
+/* Android: entries follow the finger while swiping (done / edit) */
+body.android #list .task { transition: transform .15s ease; touch-action: pan-y; }
+
+/* desktop: the filter button (sidebar off) opens the filters as a drawer from the left */
+body.drawer-open .sidebar { position: fixed !important; top: 0; bottom: 0; left: 0; width: min(82vw, 320px); max-height: none !important; overflow: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 16px 14px; margin-left: 0 !important; z-index: 25; box-shadow: 0 0 30px rgba(0,0,0,.4); }
+body.drawer-open #scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 24; }
+#filterBtn[hidden] { display: none !important; }

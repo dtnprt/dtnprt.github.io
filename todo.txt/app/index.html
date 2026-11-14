@@ -6,9 +6,21 @@
   <title>todo.txt</title>
   <link rel="stylesheet" href="vendor/fa/css/all.min.css">
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232563eb'/%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <script>
+  // The theme chosen last time is applied before the first paint (otherwise the default look flashes while the theme files are read).
+  try {
+    var tc = JSON.parse(localStorage.getItem('todotxt.themeCss') || 'null');
+    var st = JSON.parse(localStorage.getItem('todotxt.v1') || 'null');
+    if (tc && tc.css && st && st.theme && (st.theme === tc.name || 'user:' + st.theme === tc.name)) {
+      var el = document.createElement('style'); el.id = 'themeStyle'; el.textContent = tc.css; document.head.appendChild(el);
+      window.__themeBodyClass = 'theme-' + tc.name.replace(/^user:/, '').replace(/[^\w-]/g, '-');
+    }
+  } catch (e) { /* no cached theme */ }
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23fabd2f'/%3E%3Cpath d='M5.2 8.35l1.75 1.75L10.8 6.25' fill='none' stroke='%23282828' stroke-width='1.5'/%3E%3C/svg%3E">
 </head>
 <body>
+  <script>if (window.__themeBodyClass) document.body.className = window.__themeBodyClass;</script>
   <header class="topbar">
     <div class="dd" id="fileDd">
       <button class="dd-btn file-btn" aria-haspopup="true" aria-expanded="false" title="Switch file (F8)"><i id="fileKind" class="fa-solid fa-hard-drive" aria-hidden="true"></i><i id="fileLock" class="fa-solid fa-lock file-lock" title="Encrypted" aria-label="Encrypted" hidden></i><h1 id="fileName">todo.txt</h1> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
@@ -62,7 +74,7 @@
     </div>
     <button id="sideBtn" class="icon desktop-only" title="Show / hide sidebar (F4)" aria-label="Toggle sidebar"><i class="fa-solid fa-table-columns" aria-hidden="true"></i></button>
     <div class="spacer"></div>
-    <button id="filterBtn" class="icon android-only" title="Filters" aria-label="Filters"><i class="fa-solid fa-filter" aria-hidden="true"></i></button>
+    <button id="filterBtn" class="icon" title="Filters" aria-label="Filters"><i class="fa-solid fa-filter" aria-hidden="true"></i></button>
     <button id="optBtn" class="icon" title="Settings" aria-label="Settings"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
     <span id="winCtl" class="win-ctl" hidden>
       <button class="icon" id="winMin" title="Minimize" aria-label="Minimize"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
@@ -114,11 +126,11 @@
         <button id="showDone" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show completed tasks <kbd>F3</kbd></button>
         <button id="backupArchiveToggle" role="menuitemcheckbox" aria-checked="true" data-keep style="display:none"><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Back up (.zip) before archiving</button>
         <button id="gitInit" class="git-item" role="menuitem" style="display:none"><i class="fa-solid fa-code-branch" aria-hidden="true"></i> Initialize git here…</button>
-        <h3 class="set-sub">Input</h3>
-        <button id="calToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show calendar while typing <kbd>F6</kbd></button>
-        <button id="touchToggle" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show input toolbar (priority, project, due, note…)</button>
       </div>
       <div class="set-pane" data-pane="appearance" hidden>
+        <h3 class="set-sub">Input</h3>
+        <button id="calToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show calendar while typing <kbd>F6</kbd></button>
+        <button id="touchToggle" role="menuitemcheckbox" aria-checked="false" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Show touch toolbar (priority, project, due, note…)</button>
         <h3 class="set-sub">View</h3>
         <button id="sideToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Sidebar <kbd>F4</kbd></button>
         <button id="statusToggle" role="menuitemcheckbox" aria-checked="true" data-keep><span class="tick"><i class="fa-solid fa-check" aria-hidden="true"></i></span> Status bar</button>
