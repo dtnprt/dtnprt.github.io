@@ -74,8 +74,15 @@ export class AmperoDevice extends EventTarget {
       this.output.send(HANDSHAKE);
       await sleep(200);
     }
-    const v = await this.request(CMD.FIRMWARE_VERSION, new Uint8Array(0), { timeout: 1500, retries: 2 });
+    let v;
+    try {
+      v = await this.request(CMD.FIRMWARE_VERSION, new Uint8Array(0), { timeout: 1500, retries: 2 });
+    } catch {
+      throw new Error(this.echoes ? 'this port only echoes what is sent (loopback, e.g. "Midi Through") – not an Ampero II'
+        : 'no answer from an Ampero II on this port');
+    }
     this.firmware = cString(v, 0, v.length);
+    if (!/^V\d+\.\d+/.test(this.firmware)) throw new Error(`unexpected answer "${this.firmware}" – not an Ampero II`);
     this._log(`connected, firmware ${this.firmware}`);
     return this.firmware;
   }
@@ -162,7 +169,13 @@ export class AmperoDevice extends EventTarget {
     return false;
   }
 
-  _onTransfer({ cmd, payload, ambiguous }) {
+  _onTransfer({ cmd, kind, payload, ambiguous }) {
+    // The pedal answers and reports with kind 0x12 only. A transfer with kind 0x11 is a request – our own one
+    // coming back from a loopback port such as "Midi Through" – and must never count as an answer.
+    if (kind === KIND_GET) {
+      this.echoes = (this.echoes || 0) + 1;
+      return;
+    }
     const p = this.pending;
     if (p && p.cmd === cmd) {
       clearTimeout(p.timer);

@@ -154,7 +154,9 @@ function fillPorts() {
     sel.innerHTML = '';
     if (!ports.length) sel.add(new Option('(no MIDI ports)', ''));
     for (const p of ports) sel.add(new Option(p.name, p.id));
-    sel.value = ports.some((p) => p.id === keep) ? keep : pick?.id ?? ports[0]?.id ?? '';
+    if (ports.length && !pick) sel.add(new Option('(no Ampero found – choose a port)', ''), 0);
+    // keep the user's choice; otherwise preselect the Ampero, never just the first port (e.g. "Midi Through")
+    sel.value = ports.some((p) => p.id === keep) ? keep : pick?.id ?? '';
   };
   fill($('inPort'), inputs, input);
   fill($('outPort'), outputs, output);
