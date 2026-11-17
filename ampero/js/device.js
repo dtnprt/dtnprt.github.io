@@ -232,6 +232,14 @@ export class AmperoDevice extends EventTarget {
     await r;
   }
 
+  /** Send a set command that the pedal does not answer (edit commands, CMD.PARAM …), in the request queue. */
+  async send(cmd, payload) {
+    const run = () => this._send(cmd, payload, KIND_SET);
+    const r = this.queue.then(run, run);
+    this.queue = r.catch(() => {});
+    await r;
+  }
+
   async selectPreset(index) {
     const run = () => this._send(CMD.CURRENT_PRESET, u32le(index), KIND_SET);
     const r = this.queue.then(run, run);

@@ -39,6 +39,14 @@ export const CMD = {
   // then the editor reads the slot back with PRESET_DUMP.
   PRESET_WRITE: 0x01000001,
   WRITE_ACK: 0x06000000,
+  // Edit commands (Hotone app functions; confirmed with captures/wine-edit-2026-11-17.txt, kind 0x12, no answer):
+  PARAM: 0x01040003, // u16 slot, u16 param (Widget.ID), f32 value - current scene only
+  SET_ALG: 0x01040002, // u8 slot, u8 category, u32 alg code, u8 on - resets the slot in all scenes
+  REORDER: 0x01040001, // u8 seq[12]
+  SLOT_ON: 0x01090004, // u8 scene, u8 on[12]
+  SCENE_NAME: 0x01090007, // u32 scene, char name[8]
+  SAVE: 0x05000000, // u32 preset, char name[17]
+  SLOT_PUSH: 0x01040004, // pushed after SET_ALG: u32 slot, u32 category, u32 on, u32 alg, f32 params[25]
 };
 
 export const WRITE_CONFIRMED = true;
@@ -415,6 +423,45 @@ export function compareStored(written, stored) {
       [3, 4, 5].every((j) => written[off[2] + j] === 0xff && stored[off[2] + j] === 0x00);
   } catch { /* broken TLV: not the known case */ }
   return { identical: false, upgraded, diff: diffs.length };
+}
+
+// ------------------------------------------------------------------ effect parameters (tag 5)
+
+export const SLOTS = 12;
+export const SLOT_PARAMS = 25;
+
+/** Byte offset of parameter `id` of `slot` in `scene` (tag 5: f32 [3 scenes][12 slots][25]). */
+export function paramOffset(raw, scene, slot, id) {
+  return tagOffset(raw, 5) + 4 * ((scene * SLOTS + slot) * SLOT_PARAMS + id);
+}
+
+export function presetParam(raw, scene, slot, id) {
+  return new DataView(raw.buffer, raw.byteOffset).getFloat32(paramOffset(raw, scene, slot, id), true);
+}
+
+/** Copy of the preset with one parameter changed (what the pedal does on PARAM). */
+export function setPresetParam(raw, scene, slot, id, value) {
+  const out = raw.slice();
+  new DataView(out.buffer).setFloat32(paramOffset(raw, scene, slot, id), value, true);
+  return out;
+}
+
+/** Payload of CMD.PARAM. */
+export function paramPayload(slot, id, value) {
+  const p = new Uint8Array(8);
+  const v = new DataView(p.buffer);
+  v.setUint16(0, slot, true);
+  v.setUint16(2, id, true);
+  v.setFloat32(4, value, true);
+  return p;
+}
+
+/** Payload of CMD.SAVE: u32 preset, char name[17]. */
+export function savePayload(index, name) {
+  const p = new Uint8Array(4 + NAME_LEN);
+  p.set(u32le(index), 0);
+  putString(p, 4, NAME_LEN, name);
+  return p;
 }
 
 /** Answer of PRESET_LIST: u16 order[300], char name[300][17], … */

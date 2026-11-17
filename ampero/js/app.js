@@ -2,6 +2,7 @@ import { AmperoDevice, listPorts, requestMidi } from './device.js';
 import {
   CMD, MAX_NAME, MODULES, PRESET_COUNT, STYLES, WRITE_CONFIRMED, compareStored, hex32, presetInfo, presetLabel,
   presetChain, presetRouting, rd32, setPresetName, setPresetStyle, tlvSplit,
+  paramPayload, presetParam, savePayload, setPresetParam,
 } from './protocol.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
@@ -10,7 +11,7 @@ import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
 import { diffProbes, probe } from './probe.js';
 import { commandGroup } from './sniffer.js';
-import { algInfo, loadAlgDb } from './algdb.js';
+import { algInfo, clampValue, formatValue, loadAlgDb } from './algdb.js';
 
 const $ = (id) => document.getElementById(id);
 let sniffer = null;
@@ -39,6 +40,9 @@ const state = {
   otherHost: false, // another program (Hotone software) talks to the pedal: stay quiet until "Resume"
   sniffing: false, // live sniffer running: the app only listens (sends nothing, no pause on other programs)
   probes: [], // last two probe results (older, newer)
+  selSlot: -1, // effect slot (0..11) shown in the parameter editor
+  dirty: -1, // preset index with parameter changes sent to the pedal but not saved
+  dragging: false, // a knob is being dragged: do not rebuild the parameter editor
 };
 
 // ------------------------------------------------------------------ log / status
@@ -335,6 +339,15 @@ const NAMES_POLL_MS = 10000;
 function setCurrent(index, scene) {
   if (index === state.current && scene === state.scene) return;
   const changed = index !== state.current;
+  if (changed) {
+    // the pedal drops unsaved changes when another preset is loaded: our edited copy is out of date too
+    if (state.dirty >= 0 && state.dirty === state.current) {
+      state.presets.delete(state.dirty);
+      log(`${presetLabel(state.dirty)}: unsaved changes discarded (other preset selected)`);
+    }
+    state.dirty = -1;
+    state.selSlot = -1;
+  }
   state.current = index;
   state.scene = scene;
   renderCurrent();
@@ -630,6 +643,11 @@ function renderEditor() {
     const icon = el('span', 'fx-icon');
     icon.innerHTML = moduleIcon(mod) || mod.slice(0, 3);
     const alg = algInfo(c.code);
+    if (c.slot === state.selSlot) b.classList.add('sel');
+    b.onclick = () => {
+      state.selSlot = c.slot;
+      renderEditor();
+    };
     b.append(el('span', 'fx-label', mod), icon, el('span', 'fx-state'));
     if (alg) b.append(el('span', 'fx-name', alg.name));
     b.title = `${alg ? `${alg.name} (${mod})` : mod} – slot ${c.slot + 1}, algorithm 0x${c.code.toString(16).padStart(8, '0')}, ` +
@@ -652,6 +670,167 @@ function renderEditor() {
   if (!serial) rowA.append(el('span', 'chain-link')); // serial: row 1 ends in the node, no output
   rowB.append(el('span', 'chain-link'));
   requestAnimationFrame(drawRouting);
+  renderParams(raw, chain);
+}
+
+// ------------------------------------------------------------------ parameter editor
+//
+// Parameters are per scene (tag 5: f32 [scene][slot][25], index = Widget.ID). A change is sent as CMD.PARAM
+// (u16 slot, u16 id, f32 value) and applies to the scene that is active on the pedal; the pedal does not
+// answer. The app keeps its copy of the preset in step, marks it as modified, and Save stores it (CMD.SAVE).
+
+const PARAM_SEND_MS = 70; // the Hotone editor sends ~12 changes per second while a knob turns
+
+function editScene() {
+  return Math.max(0, state.scene);
+}
+
+function renderParams(raw, chain) {
+  if (state.dragging) return;
+  const box = $('edParams');
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
+  const c = chain.find((x) => x.slot === state.selSlot && x.code !== 0xffffffff);
+  if (!raw || !c) {
+    box.replaceChildren(el('div', 'params-empty', raw ? 'Click an effect in the chain to edit its parameters.'
+      : 'Read a preset from the pedal to edit it.'));
+    return;
+  }
+  const alg = algInfo(c.code);
+  const scene = editScene();
+  const head = el('div', 'params-head');
+  head.append(el('span', 'p-title', alg ? alg.name : hex32(c.code)),
+    el('span', 'muted small', `${alg?.module ?? MODULES[c.code >>> 24] ?? '?'} · slot ${c.slot + 1} · scene ${scene + 1}`));
+  if (state.dirty === state.current) head.append(el('span', 'dirty-tag', '● modified – not saved'));
+  const save = el('button', 'p-save primary', 'Save');
+  save.disabled = state.dirty !== state.current || !canTalk();
+  save.title = 'store the preset in its slot on the pedal';
+  save.onclick = savePreset;
+  head.append(save);
+  const grid = el('div', 'params-grid');
+  if (!alg) {
+    grid.append(el('div', 'muted', 'Unknown algorithm – effect database not loaded?'));
+  } else {
+    const live = canTalk();
+    for (const p of alg.params) grid.append(paramControl(raw, c.slot, p, scene, live));
+  }
+  box.replaceChildren(head, grid);
+}
+
+function paramControl(raw, slot, p, scene, live) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
+  const wrap = el('div', `pk${live ? '' : ' disabled'}`);
+  wrap.title = live ? '' : 'connect the pedal (and stop the sniffer / resume) to edit';
+  let value = presetParam(raw, scene, slot, p.id);
+  const label = el('span', 'name', p.name);
+  const set = (v, update) => {
+    v = clampValue(p, v);
+    if (v === value) return;
+    value = v;
+    update();
+    changeParam(slot, p.id, v);
+  };
+  if (p.type === 3) { // switch
+    const b = el('button', 'sw');
+    const update = () => {
+      b.textContent = formatValue(p, value);
+      b.classList.toggle('on', value > p.min);
+    };
+    b.onclick = () => set(value > p.min ? p.min : p.max, update);
+    update();
+    wrap.append(b, label);
+  } else if (p.type === 2 || p.options) { // selector
+    const s = el('select');
+    for (let v = p.min; v <= p.max; v += p.step) s.append(new Option(formatValue(p, v), v));
+    s.value = String(value);
+    s.onchange = () => set(+s.value, () => {});
+    wrap.append(s, label);
+  } else { // knob (type 0) / EQ slider (type 4)
+    const dial = el('div', 'dial');
+    dial.tabIndex = 0;
+    const val = el('span', 'val');
+    const update = () => {
+      const f = p.max > p.min ? (value - p.min) / (p.max - p.min) : 0;
+      dial.style.setProperty('--a', `${-135 + 270 * f}deg`);
+      val.textContent = formatValue(p, value);
+    };
+    const range = p.max - p.min;
+    dial.onpointerdown = (e) => {
+      if (!canTalk()) return;
+      dial.setPointerCapture(e.pointerId);
+      state.dragging = true;
+      const y0 = e.clientY, v0 = value;
+      dial.onpointermove = (m) => set(v0 + ((y0 - m.clientY) / (m.shiftKey ? 1000 : 200)) * range, update);
+      dial.onpointerup = dial.onpointercancel = () => {
+        dial.onpointermove = dial.onpointerup = dial.onpointercancel = null;
+        state.dragging = false;
+      };
+    };
+    const nudge = (dir, big) => set(value + dir * (big ? Math.max(p.step, range / 20) : p.step), update);
+    dial.onwheel = (e) => {
+      if (!canTalk()) return;
+      e.preventDefault();
+      nudge(e.deltaY < 0 ? 1 : -1, e.shiftKey);
+    };
+    dial.onkeydown = (e) => {
+      const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+      if (d) {
+        e.preventDefault();
+        nudge(d, e.shiftKey);
+      }
+    };
+    dial.ondblclick = () => set(p.def, update);
+    dial.title = `${p.name}: drag up/down (Shift = fine), wheel, arrow keys; double-click = default (${formatValue(p, p.def)})`;
+    update();
+    wrap.append(dial, val, label);
+  }
+  return wrap;
+}
+
+/** One parameter changed: update our copy of the preset, send to the pedal (throttled, last value wins). */
+const pendingParams = new Map(); // "slot/id" -> {slot, id, value, timer, sent}
+
+function changeParam(slot, id, value) {
+  const i = state.current;
+  const raw = state.presets.get(i);
+  if (!raw || !canTalk()) return;
+  state.presets.set(i, setPresetParam(raw, editScene(), slot, id, value));
+  if (state.dirty !== i) {
+    state.dirty = i;
+    markDirty(); // only the head - rebuilding the panel would take the focus / drag from the control
+  }
+  const key = `${slot}/${id}`;
+  const p = pendingParams.get(key) ?? { slot, id, timer: 0, sent: NaN };
+  p.value = value;
+  pendingParams.set(key, p);
+  if (p.timer) return; // sent when the timer fires
+  const flush = () => {
+    p.timer = 0;
+    if (p.value === p.sent || !state.dev) return;
+    p.sent = p.value;
+    state.dev.send(CMD.PARAM, paramPayload(p.slot, p.id, p.value)).catch((e) => log(`parameter: ${e.message}`));
+    p.timer = setTimeout(flush, PARAM_SEND_MS);
+  };
+  flush();
+}
+
+function markDirty() {
+  const head = document.querySelector('#edParams .params-head');
+  if (!head) return;
+  const save = head.querySelector('.p-save');
+  if (!head.querySelector('.dirty-tag')) {
+    head.insertBefore(Object.assign(document.createElement('span'), { className: 'dirty-tag', textContent: '● modified – not saved' }), save);
+  }
+  save.disabled = !canTalk();
+}
+
+async function savePreset() {
+  const i = state.current, raw = state.presets.get(i);
+  if (!raw || !canTalk()) return;
+  const name = presetInfo(raw).name;
+  await state.dev.send(CMD.SAVE, savePayload(i, name));
+  state.dirty = -1;
+  log(`${presetLabel(i)} "${name}" saved`);
+  await readIntoView(i); // what the pedal stored (it is saved now, so reading it loses nothing)
 }
 
 /**
@@ -1272,6 +1451,8 @@ async function init() {
     else log('Effect database (data/algorithms.json) not loaded – showing modules only.');
   });
   try {
+    // "?sim": simulated pedal for testing without hardware (test/sim.js)
+    if (new URLSearchParams(location.search).has('sim')) await (await import('../test/sim.js')).install();
     state.access = await requestMidi();
     fillPorts();
     sniffer.fillInputs();

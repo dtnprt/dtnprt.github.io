@@ -55,8 +55,8 @@
 
     <!-- ===================================================== Edit (mockup) -->
     <section class="content page" id="page-edit" hidden>
-      <div class="mockup-note">Mockup – editing effects is not implemented yet. The chain shows the modules of the
-        current preset when the app knows it (after a backup, a read, or when you switch presets on the pedal).</div>
+      <div class="mockup-note">Work in progress – click an effect to edit its parameters (current scene, sent to the
+        pedal live; <b>Save</b> stores the preset). Changing the algorithm, order and on/off is not implemented yet.</div>
       <div class="card editor-head">
         <div class="preset-title">
           <span id="edLabel" class="cur-lbl">–</span>
@@ -90,12 +90,7 @@
             <li>EQ</li><li>MOD</li><li>DLY</li><li>RVB</li><li>FX LOOP</li><li>VOL</li><li>CLONE</li><li>NAM</li>
           </ul>
         </div>
-        <div class="mock-knobs">
-          <div class="knob"><div class="dial"></div><span>Param 1</span></div>
-          <div class="knob"><div class="dial"></div><span>Param 2</span></div>
-          <div class="knob"><div class="dial"></div><span>Param 3</span></div>
-          <div class="knob"><div class="dial"></div><span>Param 4</span></div>
-        </div>
+        <div class="params" id="edParams"></div>
       </div>
     </section>
 

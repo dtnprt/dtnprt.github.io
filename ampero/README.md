@@ -20,7 +20,11 @@ exklusiv), *Connect*.
   „No style“, „Not read yet“) und Kontextmenü (Rechtsklick oder ☰): *Import Patch* (`.prst`/`.raw` in den Slot
   schreiben), *Export Patch* (`.prst`/`.raw`), *Rename…*, *Style ▸*. Schreiben = `0x01000001` + Zurücklesen;
   Lesen/Schreiben lädt den Slot am Gerät, danach wird das vorher aktive Preset wieder gewählt.
-  Der Editorbereich ist ein **Mockup** (zeigt die Module des aktuellen Presets mit Algorithmusnamen, wenn es bekannt ist).
+  Editor: Klick auf einen Effekt zeigt seine Parameter (aktuelle Szene) als Knöpfe / Auswahl / Schalter; Änderungen
+  gehen live ans Gerät (`0x01040003`, gedrosselt), **Save** speichert das Preset (`0x05000000`). Algorithmus,
+  Reihenfolge und an/aus lassen sich noch nicht ändern.
+* **`?sim`** an der URL (z. B. `http://localhost:8000/ampero/?sim`) ersetzt Web MIDI durch ein simuliertes Gerät
+  (`test/sim.js`, Presets aus einem echten Mitschnitt) – zum Ausprobieren ohne Pedal.
 * **Backup & Restore** – siehe unten.
 * **Global Settings** – **Mockup**.
 * **Sniffer** – Mitschnitte ansehen: live (nur zuhören; verbunden = eigener Verkehr beider Richtungen, sonst nur
