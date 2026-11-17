@@ -725,7 +725,7 @@ export const FS_FUNCTIONS = new Map([
   [20, 'Mode Change'], [21, 'Ctrl Temp Change'],
   ...[1, 2, 3, 4, 5].map((n) => [21 + n, `Patch ${n}`]), ...[1, 2, 3, 4, 5].map((n) => [26 + n, `Scene ${n}`]),
   ...[2, 3, 4, 5, 6, 7].map((n) => [30 + n, `Ctrl ${n}`]),
-  [38, 'Patch +'], [39, 'Patch -'], [40, 'UI Open'], [41, 'EXP 1/2'], [42, 'Looper Rec/Play'], [43, 'Looper Stop'],
+  [38, 'Patch +'], [39, 'Patch -'], [40, 'Bank Select'], [41, 'EXP 1/2'], // 40: "UI Open" in the app's table [42, 'Looper Rec/Play'], [43, 'Looper Stop'],
   [44, 'Looper 1/2 SPD'], [45, 'Looper Rev'], [46, 'Loop FX'], [47, 'Looper Undo/Redo'], [48, 'Drum Play/Stop'],
   [49, 'Looper Exit'], [50, 'Drum'], [51, 'Patch'], [52, 'Patch/FX Slot 1'], [53, 'Patch/Scene 2'], [54, 'Patch/Bypass'],
 ]);
@@ -771,7 +771,7 @@ export const fsSlotsPayload = (fs, on) => Uint8Array.of(fs, ...on.map((x) => (x 
  * (kFSTapList: looper, drum, bank/patch ±, tap, scenes 1–3, A1–B6), plus Off.
  */
 export const STOMP_FS_FUNCTIONS = new Set([0xff, 12, 32, 33, 13, 41, 15, 16, 38, 39, 18, 17, 42, 43, 44, 45, 46, 47, 49,
-  48, 50, 20, 27, 28, 29, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  48, 50, 20, 27, 28, 29, 40, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]); // 40 Bank Select: seen on the Stomp
 
 /**
  * Preset footswitch choices of the Hotone editor for the Stomp (Patch Settings → Footswitch Settings, screenshot
