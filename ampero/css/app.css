@@ -237,6 +237,11 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .block-ctl .sw.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
 .fx:not(.empty) { cursor: pointer; }
 .dirty-tag { color: var(--accent); font-size: 12px; }
+.about-link { margin-right: 12px; white-space: nowrap; text-decoration: none; }
+.about-link:hover { color: var(--accent); }
+.about-dialog { width: min(680px, 92vw); }
+.about-text { overflow-y: auto; }
+.about-text p { margin: 0 0 10px; color: #ccc; line-height: 1.45; }
 /* global settings */
 .gs-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; min-width: 0; }
 .gs-row > span:first-child { width: 128px; flex: none; }

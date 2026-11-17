@@ -127,3 +127,20 @@ Backup-Roundtrip.
 | `js/nam2namb.js`, `js/irwav.js` | NAM → NAMB (MIT, © 2026 TONE3000), WAV → IR-Samples (Resampling auf 44,1 kHz) |
 | `js/algdb.js`, `data/algorithms.json` | Effekt-Datenbank: 607 Algorithmen mit Parametern (Name, Bereich, Schritt, Standardwert, Optionen/Einheit) – erzeugt mit `python tools/gen_web_algdb.py "windows/windows software/data/flutter_assets/assets/data" android/extracted/base/assets/flutter_assets/assets/data -o <web>/data/algorithms.json` (Anzeigetabellen aus `tools/data/valtostr.json`) |
 | `js/app.js`, `index.html`, `css/app.css` | Oberfläche |
+
+## Rechtliches / Disclaimer
+
+Dieses Projekt ist **inoffiziell** und unabhängig. Es steht in keiner Verbindung zu Hotone Audio, wird von Hotone weder
+autorisiert noch unterstützt und ist kein Hotone-Produkt. **Hotone** und **Ampero** sind Marken von Hotone Audio;
+andere Namen (z. B. *Neural Amp Modeler*, *TONE3000*) sind Marken ihrer jeweiligen Inhaber und werden nur zur
+Beschreibung der Kompatibilität genannt.
+
+Das Protokoll wurde eigenständig aus dem Datenverkehr zwischen Gerät und Original-Software ermittelt, ausschließlich
+zur Interoperabilität. Die Effekt- und Parameterliste (`data/algorithms.json`) ist aus Daten der Original-Software
+abgeleitet, damit der Editor dieselben Namen zeigt.
+
+Nutzung auf eigene Gefahr, ohne Gewährleistung: Schreibende Funktionen ändern oder löschen Presets, Einstellungen,
+IRs und Modelle – vorher ein Backup machen. Als „untested“ markierte Funktionen sind am Gerät nicht bestätigt.
+
+Drittcode: `js/nam2namb.js` basiert auf [nam-binary-loader](https://github.com/tone-3000/nam-binary-loader),
+MIT License, Copyright (c) 2026 TONE3000.

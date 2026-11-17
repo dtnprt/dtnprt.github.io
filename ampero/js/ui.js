@@ -78,6 +78,13 @@ export function promptText({ title, text, value = '', maxLength = 64, ok = 'OK',
   return p;
 }
 
+/** Disclaimer / legal notes. */
+export function showAbout() {
+  const p = modal($('aboutDialog'), $('aboutClose'), null);
+  $('aboutClose').onclick = () => modal.close(null);
+  return p;
+}
+
 // ------------------------------------------------------------------ context menu
 
 let openMenu = null;

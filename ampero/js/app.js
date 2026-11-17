@@ -12,7 +12,7 @@ import { wavToIr } from './irwav.js';
 import { EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramPayload as globalPayload, paramValue, parseEq, u32 as u32b } from './globals.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
-import { closeMenu, confirmSlots, contextMenu, promptText } from './ui.js';
+import { closeMenu, confirmSlots, contextMenu, promptText, showAbout } from './ui.js';
 import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
 import { diffProbes, probe } from './probe.js';
@@ -2014,6 +2014,10 @@ async function init() {
   fillRange();
   for (const b of document.querySelectorAll('.tab')) b.onclick = () => showTab(b.dataset.tab);
   $('irReadBtn').onclick = readFileLists;
+  $('aboutLink').onclick = (e) => {
+    e.preventDefault();
+    showAbout();
+  };
   $('globalReadBtn').onclick = readGlobals;
   $('namReadBtn').onclick = readFileLists;
   initPresetListEvents();

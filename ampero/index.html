@@ -261,10 +261,38 @@
       <button id="logToggle" class="small-btn" title="show / hide the log">Log ▴</button>
       <span id="logLast" class="muted small"></span>
       <span class="spacer"></span>
+      <a href="#" id="aboutLink" class="muted small about-link" title="disclaimer and legal notes">Unofficial – not affiliated with Hotone · Disclaimer</a>
       <button id="traceBtn" class="small-btn" disabled title="raw MIDI frames of this connection – send this file when something goes wrong">Save trace</button>
     </div>
     <pre id="log"></pre>
   </footer>
+
+  <!-- disclaimer -->
+  <div id="aboutDialog" class="overlay" hidden>
+    <div class="dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <h3 id="aboutTitle">Disclaimer</h3>
+      <div class="about-text">
+        <p><b>This is an unofficial, independent hobby project.</b> It is not affiliated with, authorized, endorsed,
+          sponsored or supported by Hotone Audio, and it is not a Hotone product. The author has no business or other
+          relationship with Hotone.</p>
+        <p><b>Hotone</b> and <b>Ampero</b> are trademarks of Hotone Audio. All other names, e.g. <i>Neural Amp
+          Modeler</i> and <i>TONE3000</i>, are trademarks of their respective owners. They are used here only to
+          describe which device and file formats this editor works with.</p>
+        <p>The communication with the pedal was worked out independently by observing the data exchanged between the
+          pedal and the official software, solely to make the pedal usable from other platforms (interoperability).
+          The list of effect names and parameters is derived from data shipped with the official software and is used
+          only so that the editor shows the same names.</p>
+        <p><b>Use at your own risk.</b> This software is provided "as is", without warranty of any kind. Writing to the
+          pedal changes presets, settings, IRs and models and can delete them; functions marked "untested" have not
+          been confirmed with a real pedal. <b>Make a backup first.</b> The author is not liable for any damage, data
+          loss or malfunction of your equipment. Using it may not be covered by Hotone's warranty or support.</p>
+        <p>For official software, firmware updates and support, use Hotone's website and the official Ampero editor.</p>
+        <p class="muted small">Third-party code: <code>js/nam2namb.js</code> is based on nam-binary-loader, MIT License,
+          Copyright (c) 2026 TONE3000.</p>
+      </div>
+      <div class="dlg-buttons"><button id="aboutClose" class="primary">Close</button></div>
+    </div>
+  </div>
 
   <!-- confirmation with a table of slots -->
   <div id="dialog" class="overlay" hidden>
