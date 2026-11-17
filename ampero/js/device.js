@@ -3,6 +3,7 @@
 import {
   CMD, DamagedFrameError, HANDSHAKE, KIND_GET, KIND_SET, PRESET_COUNT, Reassembler, encodeTransfer, hex32,
   parsePresetList, presetInfo, rd32, u32le, cString, concat, WRITE_CONFIRMED,
+  FACTORY_IRS, irPayload, namPayload, parseIrNames, parseNamList,
 } from './protocol.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -238,6 +239,41 @@ export class AmperoDevice extends EventTarget {
     const r = this.queue.then(run, run);
     this.queue = r.catch(() => {});
     await r;
+  }
+
+  /** Upload (IR / NAM): frames ~40 ms apart like the editor, wait for WRITE_ACK [cmd, 1, index]. */
+  async _upload(cmd, payload, index) {
+    await this.waitQuiet(50);
+    const before = this.frameDelayMs;
+    this.frameDelayMs = 40;
+    let ack;
+    try {
+      ack = await this.request(cmd, payload, { kind: KIND_SET, answer: CMD.WRITE_ACK, timeout: 8000 });
+    } finally {
+      this.frameDelayMs = before;
+    }
+    if (ack.length < 12 || rd32(ack, 0) !== cmd || rd32(ack, 8) !== index) {
+      throw new Error(`unexpected acknowledgement ${Array.from(ack, (x) => x.toString(16).padStart(2, '0')).join(' ')}`);
+    }
+    if (rd32(ack, 4) !== 1) throw new Error(`pedal reported status ${rd32(ack, 4)}`);
+  }
+
+  /** Upload an impulse response into user IR slot 0..49 (Int32Array(2048), 24-bit, 44.1 kHz). */
+  uploadIr(slot, name, samples) {
+    return this._upload(CMD.IR_UPLOAD, irPayload(slot, name, samples), FACTORY_IRS + slot);
+  }
+
+  /** Upload a .namb model into NAM slot 0..29. */
+  uploadNam(slot, name, namb) {
+    return this._upload(CMD.NAM_UPLOAD, namPayload(slot, name, namb), slot);
+  }
+
+  async irNames() {
+    return parseIrNames(await this.request(CMD.USER_IR_NAMES, new Uint8Array(0), { timeout: 3000, retries: 1 }));
+  }
+
+  async namNames() {
+    return parseNamList(await this.request(CMD.NAM_LIST, new Uint8Array(0), { timeout: 3000, retries: 1 }));
   }
 
   async selectPreset(index) {

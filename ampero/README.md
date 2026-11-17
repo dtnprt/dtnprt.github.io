@@ -26,6 +26,14 @@ exklusiv), *Connect*.
 * **`?sim`** an der URL (z. B. `http://localhost:8000/ampero/?sim`) ersetzt Web MIDI durch ein simuliertes Gerät
   (`test/sim.js`, Presets aus einem echten Mitschnitt) – zum Ausprobieren ohne Pedal.
 * **Backup & Restore** – siehe unten.
+* **IR & NAM** – Listen der 50 User-IRs und 30 NAM-Plätze vom Gerät, *Upload…* pro Platz:
+  * IR: `.wav` (beliebige Rate, 16/24/32 Bit oder Float, erster Kanal) → 44,1 kHz, erste 2048 Samples, als
+    `0x04000000` (IR-Nummer 30 + Platz, Byte-Summe als Prüfsumme) – wie die Hotone-Software.
+  * NAM: `.nam` wird wie in der Hotone-Software nach TONE3000s NAMB-Format konvertiert (`js/nam2namb.js`, Port von
+    [nam-binary-loader](https://github.com/tone-3000/nam-binary-loader), MIT); von NAM-A2-Modellen nur das kleinste
+    Teilmodell. Auch fertige `.namb`-Dateien. Gesendet als `0x08000000`; das Gerät quittiert mit `0x06000000`.
+  Die Payloads sind byte-identisch zu einem Mitschnitt der Hotone-Software (nur das IR-Resampling unterscheidet
+  sich minimal: Korrelation 0,99998).
 * **Global Settings** – **Mockup**.
 * **Sniffer** – Mitschnitte ansehen: live (nur zuhören; verbunden = eigener Verkehr beider Richtungen, sonst nur
   was das Gerät sendet), App-Traces (`.txt`) und Wireshark/USBPcap-`.pcapng` (beide Richtungen, auch
@@ -116,5 +124,6 @@ Backup-Roundtrip.
 | `js/protocol.js` | SysEx-Rahmen, Reassembler, Befehlscodes, TLV-/Namensliste-Parser |
 | `js/device.js` | Web-MIDI-Verbindung: Handshake wie der Editor, Anfrage/Antwort mit Timeout und Wiederholung |
 | `js/zip.js`, `js/backup.js` | Sicherungsdatei schreiben/lesen |
+| `js/nam2namb.js`, `js/irwav.js` | NAM → NAMB (MIT, © 2026 TONE3000), WAV → IR-Samples (Resampling auf 44,1 kHz) |
 | `js/algdb.js`, `data/algorithms.json` | Effekt-Datenbank: 607 Algorithmen mit Parametern (Name, Bereich, Schritt, Standardwert, Optionen/Einheit) – erzeugt mit `python tools/gen_web_algdb.py "windows/windows software/data/flutter_assets/assets/data" android/extracted/base/assets/flutter_assets/assets/data -o <web>/data/algorithms.json` (Anzeigetabellen aus `tools/data/valtostr.json`) |
 | `js/app.js`, `index.html`, `css/app.css` | Oberfläche |

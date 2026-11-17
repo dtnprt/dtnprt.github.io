@@ -12,6 +12,7 @@
     <nav class="tabs">
       <button class="tab" data-tab="edit">Edit</button>
       <button class="tab" data-tab="backup">Backup &amp; Restore</button>
+      <button class="tab" data-tab="files">IR &amp; NAM</button>
       <button class="tab" data-tab="global">Global Settings</button>
       <button class="tab tab-tool" data-tab="sniffer" title="MIDI traffic analyzer">Sniffer</button>
     </nav>
@@ -143,6 +144,31 @@
           </table>
         </div>
       </div>
+    </section>
+
+    <!-- ===================================================== IR & NAM uploads -->
+    <section class="content page" id="page-files" hidden>
+      <div class="card">
+        <h2>User IRs</h2>
+        <p class="muted">Upload a cabinet impulse response (<code>.wav</code>, any sample rate, 16/24/32 bit or float; the
+          first channel is used). Like the Hotone software, the app resamples it to 44.1 kHz and sends the first
+          2048 samples (46 ms). The upload replaces the IR in that slot; presets that use the slot then use the new IR.</p>
+        <div class="row"><button id="irReadBtn">Read list</button><span id="irInfo" class="muted"></span></div>
+        <div class="table-wrap files-wrap">
+          <table id="irTable"><thead><tr><th>Slot</th><th>Name on the pedal</th><th></th><th>Status</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>NAM models</h2>
+        <p class="muted">Upload a Neural Amp Modeler capture (<code>.nam</code>, or an already converted <code>.namb</code>).
+          The app converts it like the Hotone software (TONE3000's NAMB format); of a NAM A2 model only the smallest
+          submodel is sent, as the pedal's DSP needs it. The upload replaces the model in that slot.</p>
+        <div class="row"><button id="namReadBtn">Read list</button><span id="namInfo" class="muted"></span></div>
+        <div class="table-wrap files-wrap">
+          <table id="namTable"><thead><tr><th>Slot</th><th>Name on the pedal</th><th></th><th>Status</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <input id="uploadFile" type="file" hidden>
     </section>
 
     <!-- ===================================================== Global Settings (mockup) -->

@@ -47,6 +47,10 @@ export const CMD = {
   SCENE_NAME: 0x01090007, // u32 scene, char name[8]
   SAVE: 0x05000000, // u32 preset, char name[17]
   SLOT_PUSH: 0x01040004, // pushed after SET_ALG: u32 slot, u32 category, u32 on, u32 alg, f32 params[25]
+  // Uploads (captures/wine-upload-nam-ir-2026-11-17.txt), both acknowledged with WRITE_ACK [cmd, 1, index]:
+  IR_UPLOAD: 0x04000000, // u32 30 + slot, char name[32], i32 samples[2048], u16 byte sum
+  NAM_UPLOAD: 0x08000000, // u32 byte sum, u32 slot, char name[16], u32 0, u32 1, NAMB file
+  NAM_LIST: 0x08000003, // char name[30][17] + 30 bytes
 };
 
 export const WRITE_CONFIRMED = true;
@@ -462,6 +466,57 @@ export function savePayload(index, name) {
   p.set(u32le(index), 0);
   putString(p, 4, NAME_LEN, name);
   return p;
+}
+
+// ------------------------------------------------------------------ user IRs / NAM models
+
+export const USER_IRS = 50; // user IR slots ("User IR 1" … "User IR 50", algorithm 0x0A100000 + slot)
+export const FACTORY_IRS = 30; // IR numbers 0..29 on the wire; user IR slot s is number 30 + s
+export const NAM_SLOTS = 30; // "NAM Slot 1" … "NAM Slot 30", algorithm 0x10000000 + slot
+export const UPLOAD_NAME = 16; // the editor cuts names to 16 characters
+
+const byteSum = (b, from = 0, to = b.length) => {
+  let s = 0;
+  for (let i = from; i < to; i++) s += b[i];
+  return s & 0xffff;
+};
+
+function asciiName(name) {
+  return Array.from(name.slice(0, UPLOAD_NAME), (c) => (c.charCodeAt(0) >= 0x20 && c.charCodeAt(0) < 0x7f ? c : '_')).join('');
+}
+
+/** Payload of CMD.IR_UPLOAD for user IR `slot` (0..49); samples = Int32Array(2048), 24-bit values at 44.1 kHz. */
+export function irPayload(slot, name, samples) {
+  const p = new Uint8Array(4 + 32 + 4 * 2048 + 2);
+  const v = new DataView(p.buffer);
+  v.setUint32(0, FACTORY_IRS + slot, true);
+  putString(p, 4, 32, asciiName(name));
+  for (let i = 0; i < 2048; i++) v.setInt32(36 + 4 * i, samples[i] ?? 0, true);
+  v.setUint16(p.length - 2, byteSum(p, 0, p.length - 2), true);
+  return p;
+}
+
+/** Payload of CMD.NAM_UPLOAD for NAM slot `slot` (0..29); namb = .namb file bytes. */
+export function namPayload(slot, name, namb) {
+  const p = new Uint8Array(32 + namb.length);
+  const v = new DataView(p.buffer);
+  v.setUint32(4, slot, true);
+  putString(p, 8, 16, asciiName(name));
+  v.setUint32(28, 1, true);
+  p.set(namb, 32);
+  v.setUint32(0, byteSum(p, 4), true);
+  return p;
+}
+
+/** Answer of USER_IR_NAMES: char name[50][32]. */
+export function parseIrNames(p) {
+  return Array.from({ length: Math.min(USER_IRS, Math.floor(p.length / 32)) }, (_, i) => cString(p, 32 * i, 32));
+}
+
+/** Answer of NAM_LIST: char name[30][17] (0xFF… = empty slot) + 30 bytes. */
+export function parseNamList(p) {
+  return Array.from({ length: Math.min(NAM_SLOTS, Math.floor(p.length / 17)) }, (_, i) =>
+    (p[17 * i] === 0xff ? '' : cString(p, 17 * i, 17)));
 }
 
 /** Answer of PRESET_LIST: u16 order[300], char name[300][17], … */

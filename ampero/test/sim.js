@@ -5,8 +5,8 @@
 // window.simLog ({t, cmd, kind, payload}).
 
 import {
-  CMD, KIND_SET, PRESET_COUNT, Reassembler, concat, encodeTransfer, hex32, paramPayload, presetInfo, rd32, setPresetParam,
-  u32le,
+  CMD, FACTORY_IRS, KIND_SET, NAM_SLOTS, PRESET_COUNT, Reassembler, USER_IRS, concat, encodeTransfer, hex32, paramPayload,
+  presetInfo, rd32, setPresetParam, u32le,
 } from '../js/protocol.js';
 
 const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (h) => parseInt(h, 16));
@@ -27,6 +27,14 @@ export async function install() {
     }
   };
   const preset = (i) => presets.get(i) ?? fallback;
+  const irNames = Array.from({ length: USER_IRS }, (_, i) => `User IR ${i + 1}`);
+  const namNames = Array.from({ length: NAM_SLOTS }, (_, i) => (i === 0 ? 'Fortin Cali DI 1' : ''));
+  const str = (s, n) => {
+    const b = new Uint8Array(n);
+    b.set(new TextEncoder().encode(s).subarray(0, n));
+    return b;
+  };
+  const sum = (b, from, to) => b.subarray(from, to).reduce((s, x) => s + x, 0) & 0xffff;
   const handle = ({ cmd, kind, payload }) => {
     log.push({ t: performance.now(), cmd, kind, payload });
     console.debug(`[sim] ${kind === KIND_SET ? 'set' : 'get'} ${hex32(cmd)} ${payload.length} B`);
@@ -64,6 +72,25 @@ export async function install() {
         presets.set(current, setPresetParam(preset(current), scene, slot, id, value));
         console.info(`[sim] param slot ${slot} id ${id} = ${value} (scene ${scene + 1})`);
         return emit(CMD.PRESET_CHANGED, u32le(1));
+      }
+      case CMD.USER_IR_NAMES:
+        return emit(cmd, concat(...irNames.map((n) => str(n, 32))));
+      case CMD.NAM_LIST:
+        return emit(cmd, concat(...namNames.map((n) => (n ? str(n, 17) : new Uint8Array(17).fill(0xff))), new Uint8Array(30)));
+      case CMD.IR_UPLOAD: {
+        const v = new DataView(payload.buffer, payload.byteOffset);
+        const ok = payload.length === 8230 && sum(payload, 0, 8228) === v.getUint16(8228, true);
+        const n = rd32(payload, 0);
+        if (ok) irNames[n - FACTORY_IRS] = new TextDecoder().decode(payload.subarray(4, 36)).replace(/\0.*$/s, '');
+        console.info(`[sim] IR upload into ${n}: checksum ${ok ? 'ok' : 'WRONG'}`);
+        return setTimeout(() => emit(CMD.WRITE_ACK, concat(u32le(cmd), u32le(ok ? 1 : 0), u32le(n))), 300);
+      }
+      case CMD.NAM_UPLOAD: {
+        const ok = sum(payload, 4, payload.length) === rd32(payload, 0) && rd32(payload, 32) === 0x4e414d42;
+        const slot = rd32(payload, 4);
+        if (ok) namNames[slot] = new TextDecoder().decode(payload.subarray(8, 24)).replace(/\0.*$/s, '');
+        console.info(`[sim] NAM upload into slot ${slot}: ${payload.length - 32} B NAMB, checksum ${ok ? 'ok' : 'WRONG'}`);
+        return setTimeout(() => emit(CMD.WRITE_ACK, concat(u32le(cmd), u32le(ok ? 1 : 0), u32le(slot))), 300);
       }
       case CMD.SAVE:
         console.info(`[sim] save into ${rd32(payload, 0)}`);

@@ -1,0 +1,246 @@
+{
+"note": "synthetic NAM A2 model; namb = expected output of tools/nam2namb.py (ampero repo), which is byte-identical to the Hotone editor",
+"model": {
+"version": "0.7.0",
+"metadata": {
+"loudness": -18.0,
+"input_level_dbu": 12.5
+},
+"architecture": "SlimmableContainer",
+"sample_rate": 48000,
+"config": {
+"submodels": [
+{
+"max_value": 0.5,
+"model": {
+"version": "0.7.0",
+"metadata": {
+"loudness": -18.5
+},
+"architecture": "WaveNet",
+"config": {
+"layers": [
+{
+"input_size": 1,
+"condition_size": 1,
+"head": {
+"out_channels": 1,
+"kernel_size": 4,
+"bias": true
+},
+"channels": 2,
+"kernel_sizes": [
+3,
+3,
+3
+],
+"dilations": [
+1,
+2,
+4
+],
+"activation": [
+{
+"type": "LeakyReLU",
+"negative_slope": 0.02
+},
+{
+"type": "LeakyReLU",
+"negative_slope": 0.02
+},
+{
+"type": "LeakyReLU",
+"negative_slope": 0.02
+}
+],
+"bottleneck": 2,
+"head1x1": {
+"active": false,
+"out_channels": 1,
+"groups": 1
+},
+"layer1x1": {
+"active": true,
+"groups": 1
+},
+"groups_input": 1,
+"groups_input_mixin": 1,
+"conv_pre_film": {
+"active": true,
+"shift": false,
+"groups": 1
+},
+"gating_mode": [
+"gated",
+"gated",
+"gated"
+],
+"secondary_activation": [
+"Sigmoid",
+"Sigmoid",
+"Sigmoid"
+]
+}
+],
+"head": null,
+"head_scale": 0.01
+},
+"weights": [
+-0.3523,
+-0.6983,
+0.3019,
+-0.8551,
+0.0718,
+-0.2686,
+-0.884,
+0.0149,
+-0.925,
+-0.1327,
+-0.8603,
+-0.8186,
+-0.151,
+0.6537,
+-0.7524,
+-0.5535,
+0.2549,
+0.8954,
+0.1542,
+-0.2066,
+0.9525,
+-0.9068,
+0.7169,
+-0.4208,
+-0.7115,
+-0.7644,
+-0.383,
+0.6323,
+-0.6385,
+0.1632
+]
+}
+},
+{
+"max_value": 1,
+"model": {
+"version": "0.7.0",
+"metadata": {
+"loudness": -18.5
+},
+"architecture": "WaveNet",
+"config": {
+"layers": [
+{
+"input_size": 1,
+"condition_size": 1,
+"head": {
+"out_channels": 1,
+"kernel_size": 4,
+"bias": true
+},
+"channels": 4,
+"kernel_sizes": [
+3,
+3,
+3
+],
+"dilations": [
+1,
+2,
+4
+],
+"activation": [
+{
+"type": "LeakyReLU",
+"negative_slope": 0.02
+},
+{
+"type": "LeakyReLU",
+"negative_slope": 0.02
+},
+{
+"type": "LeakyReLU",
+"negative_slope": 0.02
+}
+],
+"bottleneck": 4,
+"head1x1": {
+"active": false,
+"out_channels": 1,
+"groups": 1
+},
+"layer1x1": {
+"active": true,
+"groups": 1
+},
+"groups_input": 1,
+"groups_input_mixin": 1,
+"conv_pre_film": {
+"active": true,
+"shift": false,
+"groups": 1
+},
+"gating_mode": [
+"none",
+"none",
+"none"
+],
+"secondary_activation": [
+null,
+null,
+null
+]
+}
+],
+"head": null,
+"head_scale": 0.01
+},
+"weights": [
+0.2778,
+-0.2552,
+0.0955,
+-0.8744,
+-0.8808,
+-0.5881,
+0.3608,
+-0.1448,
+-0.3717,
+0.1711,
+-0.0936,
+-0.4005,
+0.5888,
+0.398,
+-0.5118,
+0.1488,
+0.0504,
+0.7503,
+0.4589,
+-0.4241,
+0.9603,
+-0.7639,
+-0.1638,
+0.5143,
+-0.696,
+-0.0221,
+-0.9216,
+0.3364,
+0.5291,
+0.1461,
+0.751,
+-0.3725,
+0.3906,
+0.1887,
+0.1598,
+-0.0876,
+0.6799,
+0.8894,
+-0.0518,
+0.3283
+]
+}
+}
+]
+}
+},
+"namb": "424d414e010000003c010000c40000001e00000071000000404688790000000000070001000000000070e74000000000008032c00000000000000000000000000000000000000000000000000000000003006d000100010001000100010002000200040001030100010001010000000100010000010001000000010000000100000001000000010000000100000001000000010001000000020000000400000003000300030004010ad7a33c04010ad7a33c04010ad7a33c010101060006000600000000aa60b4becac332bfa3929a3ed5e75abfe10b933df08589bed34d62bf211f743ccdcc6cbf82e207be9f3c5cbfc58f51bfbe9f1abee258273f499d40bf2db20dbf4182823eef38653f9be61d3ef38e53be0ad7733f0b2468bfc286373f1973d7bedd2436bfb8af43bf9318c4be6ade213fbc7423bfe71d273e",
+"namb_slim1": "424d414e0100000064010000c40000002800000071000000e60434060000000000070001000000000070e74000000000008032c00000000000000000000000000000000000000000000000000000000003006d000100010001000100010004000400040001030100010001010000000100010000010001000000010000000100000001000000010000000100000001000000010001000000020000000400000003000300030004010ad7a33c04010ad7a33c04010ad7a33c000000000000000000000000cd3b8e3e93a982be8195c33daed85fbf1c7c61bfb98d16bfc7bab83e744614be764fbebed7342f3e5bb1bfbd560ecdbe99bb163fa8c6cb3e530503bf075f183e3b704e3da913403ff1f4ea3ea323d9be39d6753ff38e43bf30bb27be2aa9033f0e2d32bf0f0bb5bcfaed6bbf9f3cac3e1973073f3d9b153e8941403f52b8bebeb9fcc73e933a413e9ca2233ea167b3bded0d2e3fb8af633f3d2c54bdf016a83e"
+}

@@ -3,7 +3,10 @@ import {
   CMD, MAX_NAME, MODULES, PRESET_COUNT, STYLES, WRITE_CONFIRMED, compareStored, hex32, presetInfo, presetLabel,
   presetChain, presetRouting, rd32, setPresetName, setPresetStyle, tlvSplit,
   paramPayload, presetParam, savePayload, setPresetParam,
+  NAM_SLOTS, UPLOAD_NAME, USER_IRS,
 } from './protocol.js';
+import { isNamb, namToNamb } from './nam2namb.js';
+import { wavToIr } from './irwav.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
 import { closeMenu, confirmSlots, contextMenu, promptText } from './ui.js';
@@ -43,6 +46,9 @@ const state = {
   selSlot: -1, // effect slot (0..11) shown in the parameter editor
   dirty: -1, // preset index with parameter changes sent to the pedal but not saved
   dragging: false, // a knob is being dragged: do not rebuild the parameter editor
+  irNames: null, // string[50] user IR names from the pedal
+  namNames: null, // string[30] NAM slot names from the pedal ('' = empty)
+  uploadStatus: new Map(), // 'ir:3' / 'nam:1' -> {cls, text}
 };
 
 // ------------------------------------------------------------------ log / status
@@ -89,6 +95,9 @@ function updateButtons() {
   $('dumpBtn').disabled = !free;
   $('cancelBtn').disabled = !state.busy || !state.abort;
   $('traceBtn').disabled = !state.lastDev;
+  $('irReadBtn').disabled = !free;
+  $('namReadBtn').disabled = !free;
+  for (const b of document.querySelectorAll('#page-files .up-btn')) b.disabled = !free;
   $('refreshAllBtn').disabled = !free;
   $('refreshCurBtn').disabled = !free;
   $('restoreBtn').disabled = !free || !WRITE_CONFIRMED || !selectedRestore().length;
@@ -111,6 +120,10 @@ function showTab(tab) {
   if (tab === 'edit') {
     requestAnimationFrame(drawRouting);
     requestAnimationFrame(scrollToCurrent);
+  }
+  if (tab === 'files') {
+    renderFiles();
+    if (canTalk() && (!state.irNames || !state.namNames)) readFileLists();
   }
 }
 
@@ -145,6 +158,8 @@ async function connect() {
   state.seen.clear();
   state.otherHost = false;
   state.presets.clear();
+  state.irNames = state.namNames = null;
+  state.uploadStatus.clear();
   state.model = modelName(input);
   dev.addEventListener('log', (e) => log(e.detail));
   dev.addEventListener('notify', (e) => onNotify(e.detail));
@@ -823,6 +838,138 @@ function markDirty() {
   save.disabled = !canTalk();
 }
 
+// ------------------------------------------------------------------ IR & NAM uploads
+
+async function readFileLists() {
+  if (!canTalk()) return;
+  state.busy = true;
+  updateButtons();
+  try {
+    state.irNames = await state.dev.irNames();
+    state.namNames = await state.dev.namNames();
+  } catch (e) {
+    log(`reading IR / NAM lists: ${e.message}`);
+  } finally {
+    state.busy = false;
+    updateButtons();
+  }
+  renderFiles();
+}
+
+function renderFiles() {
+  const fill = (table, kind, count, names, label) => {
+    const tb = $(table).tBodies[0];
+    tb.replaceChildren();
+    for (let s = 0; s < count; s++) {
+      const tr = tb.insertRow();
+      const name = names?.[s];
+      const st = state.uploadStatus.get(`${kind}:${s}`);
+      tr.insertCell().textContent = label(s);
+      const nm = tr.insertCell();
+      nm.className = `nm${!name ? ' empty' : ''}`;
+      nm.textContent = names ? name || '(empty)' : '–';
+      const b = document.createElement('button');
+      b.className = 'up-btn small-btn';
+      b.textContent = 'Upload…';
+      b.disabled = !canTalk();
+      b.onclick = () => (kind === 'ir' ? uploadIr(s) : uploadNam(s));
+      tr.insertCell().append(b);
+      const c = tr.insertCell();
+      c.className = `st ${st?.cls ?? ''}`;
+      c.textContent = st?.text ?? '';
+    }
+  };
+  fill('irTable', 'ir', USER_IRS, state.irNames, (s) => `User IR ${s + 1}`);
+  fill('namTable', 'nam', NAM_SLOTS, state.namNames, (s) => `NAM ${s + 1}`);
+  $('irInfo').textContent = state.irNames ? '' : state.dev ? 'not read yet' : 'connect the pedal to read the list';
+  $('namInfo').textContent = state.namNames ? '' : state.dev ? 'not read yet' : 'connect the pedal to read the list';
+}
+
+function pickFile(accept) {
+  return new Promise((resolve) => {
+    const input = $('uploadFile');
+    input.value = '';
+    input.accept = accept;
+    input.onchange = () => resolve(input.files[0] ?? null);
+    input.click();
+  });
+}
+
+const baseName = (f) => f.name.replace(/\.[^.]*$/, '').replace(/[^\x20-\x7e]/g, '_').slice(0, UPLOAD_NAME);
+const validName = (t) => (!t.trim() ? 'enter a name' : /^[\x20-\x7e]*$/.test(t) ? '' : 'only plain ASCII characters');
+
+async function uploadIr(slot) {
+  const file = await pickFile('.wav,audio/wav');
+  if (!file) return;
+  const key = `ir:${slot}`;
+  let ir;
+  try {
+    ir = wavToIr(new Uint8Array(await file.arrayBuffer()));
+  } catch (e) {
+    state.uploadStatus.set(key, { cls: 'err', text: `${file.name}: ${e.message}` });
+    renderFiles();
+    return;
+  }
+  const i = ir.info;
+  const desc = `${file.name}: ${i.rate} Hz, ${i.float ? 'float' : `${i.bits} bit`}, ${i.channels === 1 ? 'mono' : `${i.channels} channels (first used)`}, ` +
+    `${Math.round(i.ms)} ms${i.truncated ? ' (cut to 46 ms)' : ''}${i.clipped ? `, ${i.clipped} samples clipped` : ''}.`;
+  const old = state.irNames?.[slot];
+  const name = await promptText({ title: `Upload IR into User IR ${slot + 1}`,
+    text: `${desc} This replaces ${old ? `"${old}"` : 'the IR'} in User IR ${slot + 1}. Name (max. ${UPLOAD_NAME} characters):`,
+    value: baseName(file), maxLength: UPLOAD_NAME, ok: 'Upload', validate: validName });
+  if (name == null) return;
+  await runUpload(key, `User IR ${slot + 1}`, () => state.dev.uploadIr(slot, name, ir.samples));
+}
+
+async function uploadNam(slot) {
+  const file = await pickFile('.nam,.namb');
+  if (!file) return;
+  const key = `nam:${slot}`;
+  let namb, desc;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (isNamb(bytes)) {
+      namb = bytes;
+      desc = `${file.name}: NAMB file, ${bytes.length} bytes.`;
+    } else {
+      const r = namToNamb(JSON.parse(new TextDecoder().decode(bytes)));
+      namb = r.namb;
+      desc = `${file.name}: ${r.architecture}, ${r.weights} weights, ${namb.length} bytes` +
+        `${r.submodel ? ` (NAM A2: submodel ${r.submodel.index + 1} of ${r.submodel.count}, the smallest)` : ''}.`;
+    }
+  } catch (e) {
+    state.uploadStatus.set(key, { cls: 'err', text: `${file.name}: ${e.message}` });
+    renderFiles();
+    return;
+  }
+  const old = state.namNames?.[slot];
+  const name = await promptText({ title: `Upload NAM model into NAM ${slot + 1}`,
+    text: `${desc} This replaces ${old ? `"${old}"` : 'the model'} in NAM ${slot + 1}. Name (max. ${UPLOAD_NAME} characters):`,
+    value: baseName(file), maxLength: UPLOAD_NAME, ok: 'Upload', validate: validName });
+  if (name == null) return;
+  await runUpload(key, `NAM ${slot + 1}`, () => state.dev.uploadNam(slot, name, namb));
+}
+
+async function runUpload(key, label, send) {
+  if (!canTalk()) return;
+  state.busy = true;
+  updateButtons();
+  state.uploadStatus.set(key, { cls: 'busy', text: 'uploading…' });
+  renderFiles();
+  try {
+    await send();
+    state.uploadStatus.set(key, { cls: 'ok', text: 'uploaded' });
+    log(`${label}: uploaded`);
+  } catch (e) {
+    state.uploadStatus.set(key, { cls: 'err', text: e.message });
+    log(`${label}: upload failed – ${e.message}`);
+  } finally {
+    state.busy = false;
+    updateButtons();
+  }
+  await readFileLists();
+}
+
 async function savePreset() {
   const i = state.current, raw = state.presets.get(i);
   if (!raw || !canTalk()) return;
@@ -1393,9 +1540,11 @@ async function openProbe(file) {
 async function init() {
   fillRange();
   for (const b of document.querySelectorAll('.tab')) b.onclick = () => showTab(b.dataset.tab);
+  $('irReadBtn').onclick = readFileLists;
+  $('namReadBtn').onclick = readFileLists;
   initPresetListEvents();
   sniffer = initSniffer({ getAccess: () => state.access, getDevice: () => state.dev, log, download, onLive: setSniffing });
-  showTab(['edit', 'backup', 'global', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
+  showTab(['edit', 'backup', 'files', 'global', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
   $('connectBtn').onclick = connect;
   $('dumpBtn').onclick = dump;
   $('cancelBtn').onclick = () => state.abort?.abort();
