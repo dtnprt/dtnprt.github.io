@@ -346,7 +346,7 @@ export const KNOWN = {
   [CMD.CURRENT_PRESET]: { name: 'current preset (get / select)', fields: (p) => (p.length >= 4 ? [slotf(p, 'preset', 0)] : []) },
   [CMD.PRESET_DUMP]: { name: 'preset dump', summary: presetSummary, fields: (p) => (p.length > 8 ? presetFields(p) : p.length >= 4 ? [slotf(p, 'slot', 0)] : []) },
   [CMD.PRESET_WRITE]: { name: 'write preset into slot', summary: presetSummary, fields: presetFields },
-  [CMD.WRITE_ACK]: { name: 'acknowledgement', fields: (p) => [u32f(p, 'command', 0, (v) => `0x${hex32(v)}${KNOWN[v] ? ` (${KNOWN[v].name})` : ''}`), u32f(p, 'status', 4), slotf(p, 'slot', 8), ...rest(p, 12)] },
+  [CMD.WRITE_ACK]: { name: 'acknowledgement', fields: (p) => [u32f(p, 'command', 0, (v) => `0x${hex32(v)}${KNOWN[v] ? ` (${KNOWN[v].name})` : ''}`), u32f(p, 'status', 4), rd32(p, 0) === CMD.PRESET_WRITE ? slotf(p, 'slot', 8) : u32f(p, 'index (IR / NAM / …)', 8), ...rest(p, 12)] },
   [CMD.PRESET_LIST]: { name: 'preset list', fields: (p) => {
     if (p.length < 600 + 17 * PRESET_COUNT) return rest(p, 0);
     const names = Array.from({ length: PRESET_COUNT }, (_, i) => strf(p, presetLabel(i), 600 + 17 * i, 17));
@@ -385,7 +385,8 @@ export const KNOWN = {
   0x05000000: { name: 'save current preset into slot [savePreset]', fields: (p) => [slotf(p, 'slot', 0), strf(p, 'name', 4, 17), ...rest(p, 21)] },
   0x010a0003: { name: 'slot time / DSP load [getSlotTimeData]', fields: struct([['slot', 'u32'], ['time (answer)', 'f32']]) },
   0x0300000a: { name: 'algorithm times [requestAlgTimes]' },
-  0x08000003: { name: 'NAM list [getNamList]' },
+  0x08000003: { name: 'NAM list [getNamList]', fields: (p) => [F('char name[30][17]', 0, Math.min(510, p.length), '',
+    Array.from({ length: Math.min(30, Math.floor(p.length / 17)) }, (_, i) => strf(p, `NAM Slot ${i + 1}`, 17 * i, 17))), ...rest(p, 510)] },
   0x07000003: { name: 'tone catch (clone) list [getToneCatchList]' },
   0x00070000: { name: 'control settings (get)' },
 
@@ -450,7 +451,13 @@ export const KNOWN = {
   0x010b0002: { name: 'patch MIDI [setPatchMidiParam] (app)', fields: struct([['id', 'u32'], ['data', 'bytes']]) },
   // chain templates, IRs, system, clone / NAM
   0x02000002: { name: 'save user chain template [setUserTmplate] (app)', fields: struct([['template', 'u32'], ['name', 'str', 12]]) },
-  0x04000000: { name: 'import user IR [beginImportIR] (app)', fields: struct([['IR', 'u32'], ['name', 'str', 32], ['data', 'bytes', 8192], ['checksum', 'u16']]) },
+  // uploads (captures/wine-upload-nam-ir-2026-11-17.txt): checksum = sum of the other bytes & 0xFFFF
+  0x04000000: { name: 'import user IR [beginImportIR]', fields: (p) => {
+    const f = struct([['IR (30 + user IR slot)', 'u32'], ['name', 'str', 32], ['samples i32[2048] (44.1 kHz, 24 bit)', 'bytes', 8192], ['checksum', 'u16']])(p);
+    if (p.length >= 4) f[0].value += ` = User IR ${rd32(p, 0) - 29}`;
+    if (p.length >= 8230) f[3].value += (p.subarray(0, 8228).reduce((s, b) => s + b, 0) & 0xffff) === u16(p, 8228) ? ' (ok)' : ' (wrong)';
+    return f;
+  } },
   0x04000001: { name: 'delete user IR [deleteUserIr] (app)', fields: struct([['IR', 'u32']]) },
   0x04000002: { name: 'rename user IR [renameUserIr] (app)', fields: struct([['IR', 'u32'], ['name', 'str', 32]]) },
   0x05000001: { name: 'delete preset [deletePreset] (app)', fields: struct([['preset', 'preset']]) },
@@ -461,7 +468,13 @@ export const KNOWN = {
   0x07000000: { name: 'tone catch (clone) import / export (app)', fields: struct([['id / refresh', 'u32'], ['data', 'bytes']]) },
   0x07000001: { name: 'delete tone catch (clone) (app)', fields: struct([['id', 'u32']]) },
   0x07000002: { name: 'rename tone catch (clone) (app)', fields: struct([['id', 'u32'], ['name', 'str', 16]]) },
-  0x08000000: { name: 'import NAM model [importNam] (app)', fields: struct([['refresh', 'u32'], ['data', 'bytes']]) },
+  0x08000000: { name: 'import NAM model [importNam]', fields: (p) => {
+    const f = struct([['checksum', 'u32'], ['NAM slot', 'u32'], ['name', 'str', 16], ['?', 'u32'], ['? (1)', 'u32'], ['NAMB model', 'bytes']])(p);
+    if (p.length >= 4) f[0].value += (p.subarray(4).reduce((s, b) => s + b, 0) & 0xffff) === rd32(p, 0) ? ' (ok)' : ' (wrong)';
+    if (p.length >= 8) f[1].value += ` = NAM Slot ${rd32(p, 4) + 1}`;
+    if (p.length >= 52) f[5].value = `${p.length - 32} B, ${rd32(p, 48)} weights · ` + f[5].value;
+    return f;
+  } },
   0x08000001: { name: 'delete NAM model [deleteNam] (app)', fields: struct([['id', 'u32']]) },
   0x08000002: { name: 'rename NAM model [renameNam] (app)', fields: struct([['id', 'u32'], ['name', 'str', 16]]) },
 };
