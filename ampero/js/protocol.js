@@ -51,6 +51,15 @@ export const CMD = {
   IR_UPLOAD: 0x04000000, // u32 30 + slot, char name[32], i32 samples[2048], u16 byte sum
   NAM_UPLOAD: 0x08000000, // u32 byte sum, u32 slot, char name[16], u32 0, u32 1, NAMB file
   NAM_LIST: 0x08000003, // char name[30][17] + 30 bytes
+  // From the Hotone app, not confirmed by a capture yet (tools/FORMAT.md 6.4, status A):
+  SCENE_VOLUME: 0x01090001, // u16 scene, u16 volume (confirmed)
+  SCENE_TEMPO: 0x01090002, // u16 scene, u16 bpm (confirmed)
+  PRESET_DELETE: 0x05000001, // u32 preset
+  PRESET_MOVE: 0x05000004, // u32 to, u32 from
+  IR_DELETE: 0x04000001, // u32 IR number (30 + slot)
+  IR_RENAME: 0x04000002, // u32 IR number, char name[32]
+  NAM_DELETE: 0x08000001, // u32 slot
+  NAM_RENAME: 0x08000002, // u32 slot, char name[16]
 };
 
 export const WRITE_CONFIRMED = true;
@@ -524,6 +533,57 @@ export function setPresetAlg(raw, slot, category, code, params = []) {
     for (let id = 0; id < SLOT_PARAMS; id++) v.setFloat32(paramOffset(raw, s, slot, id), params[id] ?? 0, true);
   }
   return out;
+}
+
+// ------------------------------------------------------------------ scenes (tag 5)
+
+const SCENE_VOL = 3636, SCENE_BPM = 3642; // u16 [3] each
+export const SCENE_NAME_LEN = 8; // char name[8]; the pedal keeps everything up to the first 0
+
+export function presetScene(raw, scene) {
+  const o = tagOffset(raw, 5), d = new DataView(raw.buffer, raw.byteOffset);
+  const len = rd32(raw, o - 4);
+  return { volume: d.getUint16(o + SCENE_VOL + 2 * scene, true), tempo: d.getUint16(o + SCENE_BPM + 2 * scene, true),
+    name: cString(raw, o + len - 24 + SCENE_NAME_LEN * scene, SCENE_NAME_LEN) };
+}
+
+/** Copy of the preset with scene volume / tempo / name changed ({volume, tempo, name}, each optional). */
+export function setPresetScene(raw, scene, { volume, tempo, name } = {}) {
+  const out = raw.slice();
+  const o = tagOffset(raw, 5), d = new DataView(out.buffer);
+  const len = rd32(raw, o - 4);
+  if (volume != null) d.setUint16(o + SCENE_VOL + 2 * scene, volume, true);
+  if (tempo != null) d.setUint16(o + SCENE_BPM + 2 * scene, tempo, true);
+  if (name != null) { // like the pedal: only up to and including the terminating 0
+    const at = o + len - 24 + SCENE_NAME_LEN * scene;
+    const b = new TextEncoder().encode(name.slice(0, SCENE_NAME_LEN - 1));
+    out.set(b, at);
+    out[at + b.length] = 0;
+  }
+  return out;
+}
+
+export function sceneValuePayload(scene, value) {
+  const p = new Uint8Array(4);
+  new DataView(p.buffer).setUint16(0, scene, true);
+  new DataView(p.buffer).setUint16(2, value, true);
+  return p;
+}
+
+export function sceneNamePayload(scene, name) {
+  const p = new Uint8Array(4 + SCENE_NAME_LEN);
+  p.set(u32le(scene), 0);
+  putString(p, 4, SCENE_NAME_LEN, name.slice(0, SCENE_NAME_LEN - 1));
+  return p;
+}
+
+/** u32 + u32 / u32 + string payloads of the file / preset management commands. */
+export const u32Payload = (...v) => concat(...v.map(u32le));
+export function idNamePayload(id, name, len) {
+  const p = new Uint8Array(4 + len);
+  p.set(u32le(id), 0);
+  putString(p, 4, len, asciiName(name));
+  return p;
 }
 
 /** Payload of CMD.SAVE: u32 preset, char name[17]. */

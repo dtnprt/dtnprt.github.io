@@ -5,6 +5,7 @@ import {
   paramPayload, presetParam, savePayload, setPresetParam,
   NAM_SLOTS, UPLOAD_NAME, USER_IRS,
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
+  FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -621,7 +622,18 @@ function renderEditor() {
   for (let s = 0; s < 3; s++) {
     scenes[s].textContent = info?.scenes[s] || `Scene ${s + 1}`;
     scenes[s].classList.toggle('on', s === scene);
+    scenes[s].title = raw ? 'click: select · double-click: rename' : '';
   }
+  let sv = null;
+  try {
+    sv = raw ? presetScene(raw, scene) : null;
+  } catch { /* ignore */ }
+  const live = !!sv && canTalk();
+  $('edTempo').disabled = $('edVolume').disabled = !live;
+  markDirty();
+  if (document.activeElement !== $('edTempo')) $('edTempo').value = sv ? sv.tempo : '';
+  if (document.activeElement !== $('edVolume')) $('edVolume').value = sv ? sv.volume : 0;
+  $('edVolumeVal').textContent = sv ? $('edVolume').value : '';
   let chain = [];
   try {
     chain = raw ? presetChain(raw) : [];
@@ -769,12 +781,6 @@ function renderParams(raw, chain) {
   head.append(el('span', 'p-title', empty ? 'Empty position' : alg ? alg.name : hex32(c.code)),
     el('span', 'muted small', `${empty ? `position ${c.pos + 1}` : `${alg?.module ?? MODULES[c.code >>> 24] ?? '?'} · slot ${c.slot + 1} · scene ${scene + 1}`}`));
   head.append(blockControls(raw, c, empty));
-  if (state.dirty === state.current) head.append(el('span', 'dirty-tag', '● modified – not saved'));
-  const save = el('button', 'p-save primary', 'Save');
-  save.disabled = state.dirty !== state.current || !canTalk();
-  save.title = 'store the preset in its slot on the pedal';
-  save.onclick = savePreset;
-  head.append(save);
   const grid = el('div', 'params-grid');
   if (empty) {
     grid.append(el('div', 'muted', 'Choose a module and an algorithm to insert a block here.'));
@@ -986,6 +992,31 @@ function onSlotPush(payload) {
   if (!state.dragging) renderEditor();
 }
 
+// ------------------------------------------------------------------ scenes: tempo, volume, name
+
+async function setSceneValue(what, value) {
+  const scene = editScene();
+  const v = what === 'tempo' ? Math.max(40, Math.min(300, Math.round(value) || 120)) : Math.max(0, Math.min(100, Math.round(value)));
+  if (!editPreset((raw) => setPresetScene(raw, scene, { [what]: v }))) return;
+  markDirty();
+  await state.dev.send(what === 'tempo' ? CMD.SCENE_TEMPO : CMD.SCENE_VOLUME, sceneValuePayload(scene, v));
+  log(`scene ${scene + 1}: ${what} ${v}`);
+}
+
+async function renameScene(s) {
+  const raw = state.presets.get(state.current);
+  if (!raw || !canTalk()) return;
+  const old = presetScene(raw, s).name || `Scene ${s + 1}`;
+  const name = await promptText({ title: `Rename scene ${s + 1}`, text: `At most ${SCENE_NAME_LEN - 1} characters.`, value: old,
+    maxLength: SCENE_NAME_LEN - 1, ok: 'Rename', validate: (t) => (!t.trim() ? 'enter a name'
+      : /^[\x20-\x7e]*$/.test(t) ? '' : 'only plain ASCII characters') });
+  if (name == null || name === old) return;
+  if (!editPreset((r) => setPresetScene(r, s, { name }))) return;
+  renderEditor();
+  await state.dev.send(CMD.SCENE_NAME, sceneNamePayload(s, name));
+  log(`scene ${s + 1} renamed to "${name}"`);
+}
+
 /** One parameter changed: update our copy of the preset, send to the pedal (throttled, last value wins). */
 const pendingParams = new Map(); // "slot/id" -> {slot, id, value, timer, sent}
 
@@ -1013,14 +1044,12 @@ function changeParam(slot, id, value) {
   flush();
 }
 
+/** Show / hide "modified – not saved" and Save in the preset head (without rebuilding anything else). */
 function markDirty() {
-  const head = document.querySelector('#edParams .params-head');
-  if (!head) return;
-  const save = head.querySelector('.p-save');
-  if (!head.querySelector('.dirty-tag')) {
-    head.insertBefore(Object.assign(document.createElement('span'), { className: 'dirty-tag', textContent: '● modified – not saved' }), save);
-  }
-  save.disabled = !canTalk();
+  const dirty = state.dirty >= 0 && state.dirty === state.current;
+  $('edDirty').hidden = !dirty;
+  $('edSave').hidden = !dirty;
+  $('edSave').disabled = !canTalk();
 }
 
 // ------------------------------------------------------------------ IR & NAM uploads
@@ -1058,7 +1087,19 @@ function renderFiles() {
       b.textContent = 'Upload…';
       b.disabled = !canTalk();
       b.onclick = () => (kind === 'ir' ? uploadIr(s) : uploadNam(s));
-      tr.insertCell().append(b);
+      const rn = document.createElement('button');
+      rn.className = 'up-btn small-btn';
+      rn.textContent = 'Rename…';
+      rn.title = 'untested: command from the Hotone app';
+      rn.disabled = !canTalk() || !name;
+      rn.onclick = () => renameFile(kind, s);
+      const del = document.createElement('button');
+      del.className = 'up-btn small-btn';
+      del.textContent = 'Delete';
+      del.title = 'untested: command from the Hotone app';
+      del.disabled = !canTalk() || !name;
+      del.onclick = () => deleteFile(kind, s);
+      tr.insertCell().append(b, rn, del);
       const c = tr.insertCell();
       c.className = `st ${st?.cls ?? ''}`;
       c.textContent = st?.text ?? '';
@@ -1140,16 +1181,37 @@ async function uploadNam(slot) {
   await runUpload(key, `NAM ${slot + 1}`, () => state.dev.uploadNam(slot, name, namb));
 }
 
-async function runUpload(key, label, send) {
+async function renameFile(kind, s) {
+  const old = (kind === 'ir' ? state.irNames : state.namNames)?.[s] ?? '';
+  const label = kind === 'ir' ? `User IR ${s + 1}` : `NAM ${s + 1}`;
+  const name = await promptText({ title: `Rename ${label}`, text: `At most ${UPLOAD_NAME} characters. ${UNTESTED}`, value: old,
+    maxLength: UPLOAD_NAME, ok: 'Rename', validate: validName });
+  if (name == null || name === old) return;
+  await runUpload(`${kind}:${s}`, label, () => (kind === 'ir'
+    ? state.dev.send(CMD.IR_RENAME, idNamePayload(FACTORY_IRS + s, name, 32))
+    : state.dev.send(CMD.NAM_RENAME, idNamePayload(s, name, 16))).then(() => state.dev.waitQuiet(300, 3000)), 'renamed');
+}
+
+async function deleteFile(kind, s) {
+  const names = kind === 'ir' ? state.irNames : state.namNames;
+  const label = kind === 'ir' ? `User IR ${s + 1}` : `NAM ${s + 1}`;
+  const ok = await confirmSlots({ title: `Delete ${label}?`, text: `Presets that use it lose the ${kind === 'ir' ? 'IR' : 'model'}. ${UNTESTED}`,
+    rows: [{ slot: label, now: names?.[s] ?? '', next: '(deleted)' }], ok: 'Delete' });
+  if (!ok) return;
+  await runUpload(`${kind}:${s}`, label, () => state.dev.send(kind === 'ir' ? CMD.IR_DELETE : CMD.NAM_DELETE,
+    u32Payload(kind === 'ir' ? FACTORY_IRS + s : s)).then(() => state.dev.waitQuiet(300, 3000)), 'deleted');
+}
+
+async function runUpload(key, label, send, done = 'uploaded') {
   if (!canTalk()) return;
   state.busy = true;
   updateButtons();
-  state.uploadStatus.set(key, { cls: 'busy', text: 'uploading…' });
+  state.uploadStatus.set(key, { cls: 'busy', text: done === 'uploaded' ? 'uploading…' : '…' });
   renderFiles();
   try {
     await send();
-    state.uploadStatus.set(key, { cls: 'ok', text: 'uploaded' });
-    log(`${label}: uploaded`);
+    state.uploadStatus.set(key, { cls: 'ok', text: done });
+    log(`${label}: ${done}`);
   } catch (e) {
     state.uploadStatus.set(key, { cls: 'err', text: e.message });
     log(`${label}: upload failed – ${e.message}`);
@@ -1243,6 +1305,8 @@ function openPresetMenu(i, x, y, li) {
       { label: '.raw (TLV)', action: () => exportSlot(i, 'raw') },
     ] },
     { label: 'Rename…', action: () => renameSlot(i), disabled: !online || state.busy, title: why },
+    { label: 'Move to… (untested)', action: () => movePreset(i), disabled: !online || state.busy, title: why },
+    { label: 'Delete… (untested)', action: () => deletePreset(i), disabled: !online || state.busy, title: why },
     { label: 'Style', disabled: !online || state.busy, title: why, items: [
       ...STYLES.map((s) => ({ label: s, checked: style === s, action: () => setStyleSlot(i, s) })),
       '-',
@@ -1354,6 +1418,44 @@ async function exportSlot(i, fmt) {
   const data = fmt === 'prst' ? encodePrst(raw) : raw;
   download(new Blob([data], { type: 'application/octet-stream' }), file);
   log(`exported ${presetLabel(i)} "${name}" as ${file}`);
+}
+
+const UNTESTED = 'This command is taken from the Hotone app and has not been confirmed with the pedal yet.';
+
+/** 0x05000004: move a preset to another slot (like dragging it in the Hotone app's patch list). */
+async function movePreset(i) {
+  const t = await promptText({ title: `Move ${presetLabel(i)} "${state.deviceNames?.[i] ?? ''}"`,
+    text: `Target slot, e.g. A12-3. ${UNTESTED}`, value: presetLabel(i), maxLength: 5, ok: 'Move',
+    validate: (v) => (labelIndex(v) < 0 ? 'enter a slot like A12-3' : labelIndex(v) === i ? 'choose another slot' : '') });
+  if (t == null) return;
+  const to = labelIndex(t);
+  await withPedal('move preset', async () => {
+    await state.dev.send(CMD.PRESET_MOVE, u32Payload(to, i));
+    await state.dev.waitQuiet(300, 3000);
+    state.presets.delete(i);
+    state.presets.delete(to);
+    await refreshNames();
+    log(`moved ${presetLabel(i)} → ${presetLabel(to)} (check the list)`);
+  });
+}
+
+function labelIndex(t) {
+  const m = /^\s*A?(\d{1,2})-([123])\s*$/i.exec(t);
+  return m && +m[1] < 100 ? 3 * +m[1] + (+m[2] - 1) : -1;
+}
+
+/** 0x05000001: delete a preset (the slot becomes an empty preset). */
+async function deletePreset(i) {
+  const ok = await confirmSlots({ title: `Delete ${presetLabel(i)}?`, text: `The preset is deleted on the pedal. ${UNTESTED}`,
+    rows: [{ slot: presetLabel(i), now: state.deviceNames?.[i] ?? '', next: '(deleted)' }], ok: 'Delete' });
+  if (!ok) return;
+  await withPedal('delete preset', async () => {
+    await state.dev.send(CMD.PRESET_DELETE, u32Payload(i));
+    await state.dev.waitQuiet(300, 3000);
+    state.presets.delete(i);
+    await refreshNames();
+    log(`deleted ${presetLabel(i)} – now "${state.deviceNames?.[i] ?? ''}"`);
+  });
 }
 
 async function renameSlot(i) {
@@ -1782,7 +1884,14 @@ async function init() {
   }
   [...$('edScenes').children].forEach((b, s) => {
     b.onclick = () => chooseScene(s);
+    b.ondblclick = () => renameScene(s);
   });
+  $('edSave').onclick = savePreset;
+  $('edTempo').onchange = () => setSceneValue('tempo', +$('edTempo').value);
+  $('edVolume').oninput = () => {
+    $('edVolumeVal').textContent = $('edVolume').value;
+  };
+  $('edVolume').onchange = () => setSceneValue('volume', +$('edVolume').value);
   renderEditor();
   updateButtons();
   loadAlgDb().then((ok) => {

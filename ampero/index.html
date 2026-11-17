@@ -64,10 +64,13 @@
           <span id="edLabel" class="cur-lbl">–</span>
           <span id="edName">No preset</span>
           <span id="edStyle" class="style-tag" hidden></span>
+          <span id="edDirty" class="dirty-tag" hidden>● modified – not saved</span>
+          <button id="edSave" class="primary small-btn" hidden title="store the preset in its slot on the pedal">Save</button>
         </div>
-        <div class="mock-meters">
-          <span class="muted small">BPM</span><span class="meter"><span style="width: 40%"></span></span><span>120</span>
-          <span class="muted small">Volume</span><span class="meter"><span style="width: 100%"></span></span><span>100</span>
+        <div class="scene-vals" title="tempo and volume of the current scene (sent to the pedal live)">
+          <label class="muted small">BPM <input id="edTempo" type="number" min="40" max="300" step="1" disabled></label>
+          <label class="muted small">Volume <input id="edVolume" type="range" min="0" max="100" step="1" disabled>
+            <span id="edVolumeVal" class="vol-val"></span></label>
         </div>
       </div>
       <div class="card editor-chain">

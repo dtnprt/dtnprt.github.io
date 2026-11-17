@@ -6,7 +6,7 @@
 
 import {
   CMD, FACTORY_IRS, KIND_SET, NAM_SLOTS, PRESET_COUNT, Reassembler, USER_IRS, concat, encodeTransfer, hex32, paramPayload,
-  presetInfo, rd32, setPresetAlg, setPresetOn, setPresetParam, setPresetSeq, u32le,
+  presetInfo, rd32, setPresetAlg, setPresetName, setPresetOn, setPresetParam, setPresetScene, setPresetSeq, u32le,
 } from '../js/protocol.js';
 import { algInfo, loadAlgDb } from '../js/algdb.js';
 
@@ -98,6 +98,41 @@ export async function install() {
         params.forEach((x, i) => pv.setFloat32(16 + 4 * i, x, true));
         return setTimeout(() => emit(CMD.SLOT_PUSH, push), 150);
       }
+      case CMD.SCENE_VOLUME:
+      case CMD.SCENE_TEMPO: {
+        const v = new DataView(payload.buffer, payload.byteOffset);
+        const [sc, val] = [v.getUint16(0, true), v.getUint16(2, true)];
+        presets.set(current, setPresetScene(preset(current), sc, cmd === CMD.SCENE_TEMPO ? { tempo: val } : { volume: val }));
+        console.info(`[sim] scene ${sc + 1} ${cmd === CMD.SCENE_TEMPO ? 'tempo' : 'volume'} ${val}`);
+        return emit(CMD.PRESET_CHANGED, u32le(1));
+      }
+      case CMD.SCENE_NAME: {
+        const name = new TextDecoder().decode(payload.subarray(4, 12)).replace(/\0.*$/s, '');
+        presets.set(current, setPresetScene(preset(current), rd32(payload, 0), { name }));
+        return emit(CMD.PRESET_CHANGED, u32le(1));
+      }
+      case CMD.PRESET_DELETE:
+        presets.set(rd32(payload, 0), setPresetName(fallback, 'Empty'));
+        return undefined;
+      case CMD.PRESET_MOVE: {
+        const [to, from] = [rd32(payload, 0), rd32(payload, 4)];
+        const a = preset(from), b = preset(to);
+        presets.set(to, a);
+        presets.set(from, b);
+        return undefined;
+      }
+      case CMD.IR_RENAME:
+        irNames[rd32(payload, 0) - FACTORY_IRS] = new TextDecoder().decode(payload.subarray(4, 36)).replace(/\0.*$/s, '');
+        return undefined;
+      case CMD.IR_DELETE:
+        irNames[rd32(payload, 0) - FACTORY_IRS] = `User IR ${rd32(payload, 0) - FACTORY_IRS + 1}`;
+        return undefined;
+      case CMD.NAM_RENAME:
+        namNames[rd32(payload, 0)] = new TextDecoder().decode(payload.subarray(4, 20)).replace(/\0.*$/s, '');
+        return undefined;
+      case CMD.NAM_DELETE:
+        namNames[rd32(payload, 0)] = '';
+        return undefined;
       case CMD.USER_IR_NAMES:
         return emit(cmd, concat(...irNames.map((n) => str(n, 32))));
       case CMD.NAM_LIST:
