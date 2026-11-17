@@ -919,11 +919,10 @@ function renderLegend(raw, chain) {
 }
 
 /** Lists of sub-categories and algorithms of the browsed module; a click sets the algorithm of the block. */
-function moduleBrowser(c, empty) {
+function moduleBrowser(c, empty, cat, wanted) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
-  const { cat } = state.browse;
   const groups = groupsOfCategory(cat);
-  const group = groups.includes(state.browse.group) ? state.browse.group : groups[0];
+  const group = groups.includes(wanted) ? wanted : groups[0];
   const wrap = el('div', 'browser');
   const gl = el('ul', 'b-list groups');
   for (const g of groups) {
@@ -941,18 +940,15 @@ function moduleBrowser(c, empty) {
     if (blockName(a.code, a) !== a.name) li.append(el('span', 'sub', a.name));
     li.title = live ? 'click to use this algorithm (resets the block\'s parameters)' : 'connect the pedal to change the block';
     li.onclick = () => {
-      if (!live) return;
-      state.browse = null;
+      if (!live || (!empty && a.code === c.code)) return;
+      state.browse = { cat, group };
       setBlockAlg(c.slot, cat, a.code, empty);
     };
     al.append(li);
   }
-  const close = el('button', 'small-btn', empty ? 'Cancel' : 'Back to parameters');
-  close.onclick = () => {
-    state.browse = null;
-    renderEditor();
-  };
-  wrap.append(gl, al, close);
+  wrap.append(gl, al);
+  // keep the current algorithm in view
+  requestAnimationFrame(() => al.querySelector('li.on')?.scrollIntoView({ block: 'nearest' }));
   return wrap;
 }
 
@@ -1084,20 +1080,24 @@ function renderParams(raw, chain) {
   head.append(el('span', 'p-title', empty ? 'Empty position' : alg ? alg.name : hex32(c.code)),
     el('span', 'muted small', `${empty ? `position ${c.pos + 1}` : `${alg?.module ?? MODULES[c.code >>> 24] ?? '?'} · slot ${c.slot + 1} · scene ${scene + 1}`}`));
   head.append(blockControls(raw, c, empty));
-  if (state.browse) {
-    box.replaceChildren(head, moduleBrowser(c, empty));
-    return;
-  }
+  // the selected block's module stays open: sub-categories | algorithms | parameters (module change via the legend)
+  const cat = state.browse?.cat ?? alg?.category ?? -1;
+  const group = state.browse?.group ?? (alg && alg.category === cat ? alg.group : null);
+  const body = el('div', 'params-body');
+  if (cat >= 0) body.append(moduleBrowser(c, empty, cat, group));
   const grid = el('div', 'params-grid');
   if (empty) {
-    grid.append(el('div', 'muted', 'Choose a module on the left to insert a block here.'));
+    grid.append(el('div', 'muted', cat >= 0 ? 'Choose an algorithm to insert a block here.' : 'Choose a module on the left to insert a block here.'));
   } else if (!alg) {
     grid.append(el('div', 'muted', 'Unknown algorithm – effect database not loaded?'));
+  } else if (alg.category !== cat) {
+    grid.append(el('div', 'muted', `Choose a ${categoryNames()?.[cat] ?? ''} algorithm to replace ${alg.name}.`));
   } else {
     const live = canTalk();
     for (const p of alg.params) grid.append(paramControl(raw, c.slot, p, scene, live));
   }
-  box.replaceChildren(head, grid);
+  body.append(grid);
+  box.replaceChildren(head, body);
 }
 
 function paramControl(raw, slot, p, scene, live) {

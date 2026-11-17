@@ -223,12 +223,15 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .modules li { cursor: pointer; border-radius: 3px; padding-left: 3px; }
 .modules li:hover { color: #fff; background: #2a2a2a; }
 .modules li.active { color: var(--accent); background: #2a2416; }
-.browser { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
-.b-list { list-style: none; margin: 0; padding: 4px; min-width: 150px; max-height: 330px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
+.params-body { display: flex; gap: 22px; align-items: flex-start; }
+.params-body .params-grid { flex: 1; min-width: 0; }
+.browser { display: flex; gap: 10px; align-items: flex-start; flex: none; }
+.b-list { list-style: none; margin: 0; padding: 4px; min-width: 120px; max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
 .b-list li { padding: 4px 9px; cursor: pointer; border-radius: 3px; white-space: nowrap; }
 .b-list li:hover { background: #2a2a2a; }
 .b-list li.on { background: var(--accent-dim); color: #fff; }
-.b-list.algs { min-width: 240px; }
+.b-list.algs { min-width: 190px; max-width: 260px; }
+.b-list li { overflow: hidden; text-overflow: ellipsis; }
 .b-list .sub { color: var(--muted); font-size: 11px; margin-left: 6px; }
 .mock-modules li { padding: 3px 0; }
 .mock-knobs { flex: 1; display: flex; gap: 30px; align-items: center; justify-content: center; }
