@@ -7,7 +7,7 @@ import {
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
   FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
-  checkBlock, presetBlock, setPresetBlock,
+  checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -283,6 +283,19 @@ function onPushedDump(payload) {
 function onNotify({ cmd, payload }) {
   if (cmd === CMD.SLOT_PUSH) {
     onSlotPush(payload);
+    return;
+  }
+  // the pedal changed the routing of the current preset by itself (e.g. after a block was inserted)
+  if (cmd === CMD.ROUTING_PUSH || cmd === CMD.SPLIT_PARAM || cmd === CMD.MIX_PARAM) {
+    const raw = state.presets.get(state.current);
+    if (raw) {
+      try {
+        const next = cmd === CMD.ROUTING_PUSH ? applyRoutingPush(raw, payload) : applyNodeParam(raw, cmd, payload);
+        state.presets.set(state.current, next);
+        if (cmd === CMD.ROUTING_PUSH) log(`pedal changed the routing: ${presetRouting(next).name}`);
+        if (!state.dragging) renderEditor();
+      } catch { /* ignore */ }
+    }
     return;
   }
   if (cmd === CMD.PRESET_DUMP) {
@@ -713,11 +726,12 @@ function renderEditor() {
       }
       return e;
     }
-    const mod = MODULES[c.code >>> 24] ?? '?';
-    const b = el('div', `fx m-${mod.replace(' ', '-')}${c.on[scene] ? '' : ' off'}`);
-    const icon = el('span', 'fx-icon');
-    icon.innerHTML = moduleIcon(mod) || mod.slice(0, 3);
     const alg = algInfo(c.code);
+    // module from the effect database: the highest byte of the code is ambiguous (0x06 = FX LOOP/SND/RTN, VOL, …)
+    const mod = alg?.module ?? MODULES[c.code >>> 24] ?? '?';
+    const b = el('div', `fx m-${mod.replace(/ /g, '-')}${c.on[scene] ? '' : ' off'}`);
+    const icon = el('span', 'fx-icon');
+    icon.innerHTML = moduleIcon(mod) || moduleIcon(/^FX /.test(mod) ? 'FX LOOP' : '') || mod.slice(0, 3);
     if (c.slot === state.selSlot) b.classList.add('sel');
     b.onclick = () => {
       state.selSlot = c.slot;

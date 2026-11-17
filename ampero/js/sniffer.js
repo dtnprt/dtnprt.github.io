@@ -426,6 +426,8 @@ export const KNOWN = {
   } },
   0x01040003: { name: 'effect parameter [algKnobChangeValue]', fields: struct([['slot', 'u16'], ['param (Widget.ID)', 'u16'], ['value', 'f32']]) },
   // preset: routing (Temp section)
+  0x0105000b: { name: 'routing changed (pushed by the pedal)', fields: struct([['inputSource[0]', 'i16'], ['inputSource[1]', 'i16'],
+    ['outputSource[0]', 'i16'], ['outputSource[1]', 'i16'], ['split node', 'u8'], ['mixer node', 'u8'], ['?', 'bytes']]) },
   0x01050001: { name: 'routing: input source [setInputSource] (app)', fields: struct([['chain', 'u16'], ['source', 'u16']]) },
   0x01050002: { name: 'routing: output source [setOutputSource] (app)', fields: struct([['chain', 'u16'], ['source', 'u16']]) },
   0x01050003: { name: 'routing: input parameter [setInputSourceParam] (app)', fields: struct([['chain', 'u16'], ['param', 'u16'], ['value', 'f32']]) },

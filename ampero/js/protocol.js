@@ -51,6 +51,11 @@ export const CMD = {
   IR_UPLOAD: 0x04000000, // u32 30 + slot, char name[32], i32 samples[2048], u16 byte sum
   NAM_UPLOAD: 0x08000000, // u32 byte sum, u32 slot, char name[16], u32 0, u32 1, NAMB file
   NAM_LIST: 0x08000003, // char name[30][17] + 30 bytes
+  // Pushed by the pedal when it changes the routing itself (e.g. after a block was inserted – trace
+  // data/ampero_trace_2026-11-17-22-20-34.txt): i16 inputSource[2], i16 outputSource[2], u8 split, u8 mixer, 2 bytes
+  ROUTING_PUSH: 0x0105000b,
+  SPLIT_PARAM: 0x01050009, // u32 index, f32 value (split node parameter; also pushed by the pedal)
+  MIX_PARAM: 0x0105000a, // u32 index, f32 value (mixer node parameter)
   // From the Hotone app, not confirmed by a capture yet (tools/FORMAT.md 6.4, status A):
   SCENE_VOLUME: 0x01090001, // u16 scene, u16 volume (confirmed)
   SCENE_TEMPO: 0x01090002, // u16 scene, u16 bpm (confirmed)
@@ -371,6 +376,28 @@ export function presetRouting(raw) {
   const name = template ? template.name : serial ? 'Serial'
     : [split !== null ? `split ${at(split)}` : 'two inputs', merge !== null ? `merge ${at(merge)}` : 'two outputs'].join(', ');
   return { split, merge, serial, template, name, bytes };
+}
+
+/** Copy of the preset with a routing push (CMD.ROUTING_PUSH) applied to tag 6. */
+export function applyRoutingPush(raw, p) {
+  if (p.length < 10) return raw;
+  const out = raw.slice();
+  const o = tagOffset(raw, 6);
+  out.set(p.subarray(0, 8), o); // inputSource[2], outputSource[2]
+  out[o + 456] = p[8]; // splitNodeAddr
+  out[o + 457] = p[9]; // mixerNodeAddr
+  return out;
+}
+
+/** Copy of the preset with a split (CMD.SPLIT_PARAM) or mixer (CMD.MIX_PARAM) node parameter. */
+export function applyNodeParam(raw, cmd, p) {
+  if (p.length < 8) return raw;
+  const i = rd32(p, 0);
+  if (i >= 10) return raw;
+  const out = raw.slice();
+  const o = tagOffset(raw, 6) + (cmd === CMD.SPLIT_PARAM ? 460 : 500) + 4 * i;
+  out.set(p.subarray(4, 8), o);
+  return out;
 }
 
 /** Kept for the sniffer: the template a preset matches, or {id: -1, name} with its routing. */
