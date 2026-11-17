@@ -7,6 +7,7 @@
 import {
   CMD, FACTORY_IRS, KIND_SET, NAM_SLOTS, PRESET_COUNT, Reassembler, USER_IRS, concat, encodeTransfer, hex32, paramPayload,
   presetInfo, rd32, setPresetAlg, setPresetName, setPresetOn, setPresetParam, setPresetScene, setPresetSeq, u32le,
+  CHAIN_MODES, TEMPLATE, applyTemplate,
 } from '../js/protocol.js';
 import { algInfo, loadAlgDb } from '../js/algdb.js';
 
@@ -37,6 +38,7 @@ export async function install() {
     b.set(new TextEncoder().encode(s).subarray(0, n));
     return b;
   };
+  const userTemplates = ['My Chain', '', '', ''];
   const sum = (b, from, to) => b.subarray(from, to).reduce((s, x) => s + x, 0) & 0xffff;
   const handle = ({ cmd, kind, payload }) => {
     log.push({ t: performance.now(), cmd, kind, payload });
@@ -144,6 +146,16 @@ export async function install() {
         let r = preset(current);
         const o = (() => { let k = 0; for (;;) { const len = rd32(r, k + 4); if (rd32(r, k) === 8) return k + 8; k += 8 + len; } })();
         r = r.slice(); r.set(payload.subarray(1, 13), o + 3 + 12 * payload[0]); presets.set(current, r);
+        return emit(CMD.PRESET_CHANGED, u32le(1));
+      }
+      case TEMPLATE.LIST:
+        return emit(cmd, concat(...userTemplates.map((n) => (n ? str(n, 12) : new Uint8Array(12).fill(0xff)))));
+      case TEMPLATE.SAVE:
+        userTemplates[rd32(payload, 0) - TEMPLATE.USER_BASE] = new TextDecoder().decode(payload.subarray(4, 16)).replace(/\0.*$/s, '');
+        return undefined;
+      case TEMPLATE.SELECT: {
+        const m = CHAIN_MODES[rd32(payload, 0)];
+        if (m) presets.set(current, applyTemplate(preset(current), m));
         return emit(CMD.PRESET_CHANGED, u32le(1));
       }
       case CMD.USER_IR_NAMES:

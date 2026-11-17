@@ -8,6 +8,7 @@ import {
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
   FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush,
+  TEMPLATE, applyTemplate, templateSavePayload, CHAIN_MODES,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -708,8 +709,13 @@ function renderEditor() {
   const cm = $('chainMode');
   cm.innerHTML = '';
   if (rt) {
-    cm.textContent = `Chain: ${rt.name}`;
+    cm.textContent = `Chain: ${rt.name} `;
     cm.title = `routing bytes (tag 6 @2,4,6,456,457): ${rt.bytes.map((x) => x.toString(16).padStart(2, '0')).join(' ')}`;
+    const tb = el('button', 'small-btn', 'Template ▾');
+    tb.title = 'choose a chain template (factory or user) or save the current routing as user template';
+    tb.disabled = !canTalk();
+    tb.onclick = (e) => templateMenu(e);
+    cm.append(tb);
   } else if (i >= 0) {
     cm.append('Content of this preset not loaded yet. ');
     if (state.dev) {
@@ -836,6 +842,47 @@ function renderEditor() {
   renderLegend(raw, chain);
   renderFs(raw, chain);
   fillRanges();
+}
+
+// ------------------------------------------------------------------ chain templates
+
+async function templateMenu(e) {
+  const r = e.currentTarget.getBoundingClientRect();
+  let users = [];
+  try {
+    users = await state.dev.templateNames();
+  } catch (err) {
+    log(`user templates: ${err.message}`);
+  }
+  contextMenu(r.left, r.bottom + 2, [
+    { label: 'Factory template', items: CHAIN_MODES.map((m) => ({ label: m.name, action: () => selectTemplate(m.id, m) })) },
+    { label: 'User template', disabled: !users.length, items: users.map((n, k) => ({
+      label: n || `(empty ${k + 1})`, disabled: !n, action: () => selectTemplate(TEMPLATE.USER_BASE + k, null, n) })) },
+    '-',
+    { label: 'Save current routing as user template… (untested)', disabled: !users.length, action: () => saveTemplate(users) },
+  ]);
+}
+
+/** Select a chain template. For factory templates the app sets the known routing bytes; the pedal reports what it
+ *  did (routing push), which overrides that. */
+async function selectTemplate(id, mode, name) {
+  if (!editPreset((raw) => (mode ? applyTemplate(raw, mode) : raw))) return;
+  renderEditor();
+  await state.dev.send(TEMPLATE.SELECT, u32Payload(id));
+  log(`chain template: ${mode ? mode.name : `user "${name}"`}`);
+}
+
+async function saveTemplate(users) {
+  const free = users.findIndex((n) => !n);
+  const slot = await promptText({ title: 'Save routing as user template', text: `Number of the user template (1–${users.length}) ` +
+    `and name, e.g. "${(free < 0 ? 0 : free) + 1} My Chain". ${UNTESTED}`, value: `${(free < 0 ? 0 : free) + 1} `, maxLength: 16,
+  ok: 'Save', validate: (t) => (/^\s*\d+\s+\S/.test(t) && +t.trim().split(/\s+/)[0] >= 1 && +t.trim().split(/\s+/)[0] <= users.length
+    ? '' : `number 1–${users.length}, then a name`) });
+  if (slot == null) return;
+  const [num, ...rest] = slot.trim().split(/\s+/);
+  const n = +num - 1, name = rest.join(' ').slice(0, 11);
+  await state.dev.send(TEMPLATE.SAVE, templateSavePayload(n, name));
+  log(`user template ${n + 1} "${name}" saved (check the list)`);
 }
 
 // ------------------------------------------------------------------ module legend + browser (like the Hotone editor)

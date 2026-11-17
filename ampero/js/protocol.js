@@ -378,6 +378,32 @@ export function presetRouting(raw) {
   return { split, merge, serial, template, name, bytes };
 }
 
+// Chain templates: 0x02000003 u32 id selects one (0..4 = CHAIN_MODES, 5 + n = user template n, confirmed for 0..4),
+// 0x02000004 lists the user templates (char name[12] each), 0x02000002 u32 5 + n, char name[12] saves the current
+// routing as user template n (from the Hotone app, not confirmed).
+export const TEMPLATE = { SELECT: 0x02000003, SAVE: 0x02000002, LIST: 0x02000004, USER_BASE: 5 };
+
+export function parseTemplateList(p) {
+  return Array.from({ length: Math.floor(p.length / 12) }, (_, i) => (p[12 * i] === 0xff ? '' : cString(p, 12 * i, 12)));
+}
+
+export function templateSavePayload(n, name) {
+  const p = new Uint8Array(16);
+  p.set(u32le(TEMPLATE.USER_BASE + n), 0);
+  putString(p, 4, 12, name.slice(0, 11));
+  return p;
+}
+
+/** Copy of the preset with the routing bytes of a factory template (what the pedal stores for it). */
+export function applyTemplate(raw, mode) {
+  const out = raw.slice();
+  const o = tagOffset(raw, 6);
+  MODE_BYTES.forEach((k, j) => {
+    out[o + k] = mode.sig[j];
+  });
+  return out;
+}
+
 /** Copy of the preset with a routing push (CMD.ROUTING_PUSH) applied to tag 6. */
 export function applyRoutingPush(raw, p) {
   if (p.length < 10) return raw;

@@ -3,7 +3,7 @@
 import {
   CMD, DamagedFrameError, HANDSHAKE, KIND_GET, KIND_SET, PRESET_COUNT, Reassembler, encodeTransfer, hex32,
   parsePresetList, presetInfo, rd32, u32le, cString, concat, WRITE_CONFIRMED,
-  FACTORY_IRS, irPayload, namPayload, parseIrNames, parseNamList,
+  FACTORY_IRS, irPayload, namPayload, parseIrNames, parseNamList, TEMPLATE, parseTemplateList,
 } from './protocol.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -266,6 +266,10 @@ export class AmperoDevice extends EventTarget {
   /** Upload a .namb model into NAM slot 0..29. */
   uploadNam(slot, name, namb) {
     return this._upload(CMD.NAM_UPLOAD, namPayload(slot, name, namb), slot);
+  }
+
+  async templateNames() {
+    return parseTemplateList(await this.request(TEMPLATE.LIST, new Uint8Array(0), { timeout: 3000, retries: 1 }));
   }
 
   async irNames() {
