@@ -773,6 +773,14 @@ export const fsSlotsPayload = (fs, on) => Uint8Array.of(fs, ...on.map((x) => (x 
 export const STOMP_FS_FUNCTIONS = new Set([0xff, 12, 32, 33, 13, 41, 15, 16, 38, 39, 18, 17, 42, 43, 44, 45, 46, 47, 49,
   48, 50, 20, 27, 28, 29, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 
+/**
+ * Preset footswitch choices of the Hotone editor for the Stomp (Patch Settings → Footswitch Settings, screenshot
+ * data/fs1.png): "Effect slots" – the footswitch switches the blocks assigned to it; on the pedal that is the
+ * function "Ctrl n" of this very footswitch (FS1 = Ctrl 1, FS2 = Ctrl 2, FS3 = Ctrl 3) – or one fixed function.
+ */
+export const STOMP_FS_CTRL = [12, 32, 33];
+export const STOMP_FS_FIXED = [27, 28, 29, 13, 41, 19, 18, 17, 0xff]; // Scene 1–3, Tap Tempo, EXP 1/2, Bypass, Tuner, Looper, OFF
+
 /** Functions offered for the external CTRL footswitches (HTBaseDefine.kFSTapList, in the app's order). */
 export const CTRL_FS_FUNCTIONS = [42, 43, 47, 44, 45, 17, 49, 18, 50, 48, 15, 16, 13, 38, 39, 27, 28, 29, 30, 31, 41,
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];

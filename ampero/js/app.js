@@ -6,7 +6,7 @@ import {
   NAM_SLOTS, UPLOAD_NAME, USER_IRS,
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
-  FS_FUNCTIONS, STOMP_FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
+  FS_FUNCTIONS, STOMP_FS_FUNCTIONS, STOMP_FS_CTRL, STOMP_FS_FIXED, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush, presetSceneCount,
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
 } from './protocol.js';
@@ -1070,12 +1070,22 @@ function renderFs(raw, chain) {
   box.hidden = !fs;
   if (!fs) return;
   const live = canTalk();
-  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), el('div', 'fs-title', '"Ctrl" functions switch the blocks selected below'));
+  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), el('div', 'fs-title', '"Effect slots": the footswitch switches the blocks selected below'));
   for (let f = 0; f < 3; f++) {
     const b = el('div', 'fs-box');
     const head = el('div', 'fs-head');
     const sel = el('select');
-    fillFsSelect(sel, fsChoices(raw), fs.click[f]);
+    if (isStage()) {
+      fillFsSelect(sel, fsChoices(raw), fs.click[f]);
+    } else {
+      // like the Hotone editor for the Stomp: "Effect slots" (= Ctrl n of this footswitch) or a fixed function
+      sel.append(new Option('Effect slots (blocks below)', String(STOMP_FS_CTRL[f])));
+      for (const c of STOMP_FS_FIXED) sel.append(new Option(fsFunctionName(c).replace(/^Off$/, 'OFF'), String(c)));
+      if (![...sel.options].some((o) => +o.value === fs.click[f])) {
+        sel.append(new Option(`${fsFunctionName(fs.click[f])} (not offered for the Stomp)`, String(fs.click[f])));
+      }
+      sel.value = String(fs.click[f]);
+    }
     sel.disabled = !live;
     sel.onchange = () => setFsFunction(f, +sel.value);
     head.append(el('b', '', `FS${f + 1}`), sel);
@@ -1100,7 +1110,7 @@ function renderFs(raw, chain) {
 }
 
 async function setFsFunction(f, code) {
-  if (!isStage() && !STOMP_FS_FUNCTIONS.has(code)) {
+  if (!isStage() && code !== STOMP_FS_CTRL[f] && !STOMP_FS_FIXED.includes(code)) {
     log(`FS${f + 1}: "${fsFunctionName(code)}" is not available on the Stomp (it stops its firmware) – not sent`);
     renderEditor();
     return;
