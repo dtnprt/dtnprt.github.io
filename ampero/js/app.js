@@ -697,8 +697,9 @@ function renderEditor() {
     } catch { /* ignore */ }
     scenes[s].textContent = name;
     scenes[s].classList.toggle('on', s === scene);
-    scenes[s].title = s >= XS ? 'experimental: not part of the Stomp\'s preset format – values are not readable and probably not saved'
+    scenes[s].title = s >= XS ? 'the pedal is in this scene (switched by a footswitch) – it cannot be edited on the Stomp'
       : raw ? 'click: select · double-click: rename' : '';
+    scenes[s].disabled = s >= XS;
   }
   let sv = null;
   try {
@@ -1102,12 +1103,12 @@ function editScene() {
   return Math.max(0, state.scene);
 }
 
-// ------------------------------------------------------------------ experimental scenes 4 and 5
+// ------------------------------------------------------------------ scenes 4 and 5 (footswitch only)
 //
-// The Stomp's preset format has 3 scenes (tag 5). Its firmware nevertheless switches to scene 4 / 5 (footswitch
-// function "Scene 4/5"), and the live commands act on the active scene. With the experimental option the editor
-// offers scenes 4 and 5: their values cannot be read from the pedal, so the editor remembers what it sent (per
-// preset, for this session) and shows scene 1's values until then. Whether the pedal stores them is unknown.
+// The Stomp has 3 scenes. A footswitch set to "Scene 4/5" still switches it there, but any edit in scene 4/5
+// (parameter, on/off, …) stops the firmware with "Scene < SCENE_NUM" (PresetInterface.c:4196, V2.5.0 – confirmed
+// the hard way). So while the pedal is in scene 4/5, all scene-specific edits are blocked; the display falls back to
+// scene 1. (An experimental "edit scenes 4 and 5" option existed briefly and was removed for this reason.)
 
 const XS = 3; // first extra scene (0-based)
 const xsStore = new Map(); // preset index -> {params: Map "s/slot/id" -> value, on: Map "s/slot" -> bool, meta: []}
@@ -1117,12 +1118,12 @@ function xsOf(i) {
   return xsStore.get(i);
 }
 
-const sceneCount = () => (state.experimental ? 5 : 3);
+const sceneCount = () => 3;
 
 /** Scene-specific edits are possible (not when the pedal is in scene 4/5 while the option is off). */
 function sceneEditable() {
-  if (editScene() < XS || state.experimental) return true;
-  log(`the pedal is in scene ${editScene() + 1} – enable "experimental scenes 4 and 5" (Global Settings) to edit it`);
+  if (editScene() < XS) return true;
+  log(`the pedal is in scene ${editScene() + 1}: the Stomp cannot edit scenes 4/5 (its firmware stops with an error) – select scene 1–3`);
   return false;
 }
 
@@ -1330,6 +1331,7 @@ function algLabel(a) {
 /** Apply an edit to our copy of the current preset and mark it modified. */
 function editPreset(fn) {
   const i = state.current, raw = state.presets.get(i);
+  if (!sceneEditable()) return false; // no edits at all while the pedal is in scene 4/5
   if (!raw || !canTalk()) {
     if (!canTalk()) log('editing needs the pedal (connected, not paused, sniffer off)');
     return false;
@@ -1637,31 +1639,9 @@ function renderGlobals() {
     box.append(card);
   }
   box.append(renderEq(live));
-  box.append(webEditorCard());
   fillRanges();
 }
 
-/** Options of the web editor itself (stored in this browser). */
-function webEditorCard() {
-  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
-  const card = el('div', 'card');
-  card.append(el('h2', '', 'Web editor'));
-  const row = el('label', 'gs-row');
-  const cb = el('input');
-  cb.type = 'checkbox';
-  cb.checked = !!state.experimental;
-  cb.onchange = () => {
-    state.experimental = cb.checked;
-    try { localStorage.setItem('ampero.scenes45', cb.checked ? '1' : '0'); } catch { /* ignore */ }
-    log(`experimental scenes 4 and 5 ${cb.checked ? 'on' : 'off'}`);
-    renderEditor();
-  };
-  row.append(cb, el('span', '', 'Experimental: scenes 4 and 5'));
-  card.append(row, el('p', 'muted small', 'The Stomp\'s presets have 3 scenes, but the pedal also switches to scene 4 / 5 '
-    + '(footswitch function "Scene 4/5"). With this option the editor offers these scenes too. Their values cannot be read '
-    + 'from the pedal (the editor shows scene 1 until you change something) and are probably not saved with the preset.'));
-  return card;
-}
 
 function renderEq(live) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
@@ -2044,7 +2024,7 @@ async function runUpload(key, label, send, done = 'uploaded') {
 
 async function savePreset() {
   const i = state.current, raw = state.presets.get(i);
-  if (!raw || !canTalk()) return;
+  if (!raw || !canTalk() || !sceneEditable()) return;
   const name = presetInfo(raw).name;
   await state.dev.send(CMD.SAVE, savePayload(i, name));
   state.dirty = -1;
@@ -2099,9 +2079,10 @@ function drawRouting() {
 
 /** Scene buttons of the editor: preview the scene, and switch it on the pedal when connected. */
 async function chooseScene(s) {
+  if (s >= XS) return; // never select scene 4/5 from here (see sceneEditable)
   if (canTalk()) {
     await state.dev.selectScene(s);
-    log(`scene ${s + 1}${s >= XS ? ' (experimental: values are not readable and probably not saved with the preset)' : ''}`);
+    log(`scene ${s + 1}`);
   }
   state.scene = s;
   renderCurrent();
@@ -2712,7 +2693,7 @@ async function init() {
     b.ondblclick = () => renameScene(s);
   });
   try {
-    state.experimental = localStorage.getItem('ampero.scenes45') === '1';
+    localStorage.removeItem('ampero.scenes45'); // the experimental scenes 4/5 option was removed (crashes the Stomp)
   } catch { /* ignore */ }
   $('edSave').onclick = savePreset;
   $('edStyleSel').onchange = () => setStyleSlot(state.current, $('edStyleSel').value);
