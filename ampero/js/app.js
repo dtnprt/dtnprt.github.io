@@ -9,6 +9,7 @@ import {
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
+import { EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramPayload as globalPayload, paramValue, parseEq, u32 as u32b } from './globals.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
 import { closeMenu, confirmSlots, contextMenu, promptText } from './ui.js';
@@ -52,6 +53,8 @@ const state = {
   irNames: null, // string[50] user IR names from the pedal
   namNames: null, // string[30] NAM slot names from the pedal ('' = empty)
   uploadStatus: new Map(), // 'ir:3' / 'nam:1' -> {cls, text}
+  globals: null, // Map get-command -> answer bytes
+  eq: null, // {on, values}
 };
 
 // ------------------------------------------------------------------ log / status
@@ -99,6 +102,8 @@ function updateButtons() {
   $('cancelBtn').disabled = !state.busy || !state.abort;
   $('traceBtn').disabled = !state.lastDev;
   $('irReadBtn').disabled = !free;
+  $('globalReadBtn').disabled = !free;
+  for (const x of document.querySelectorAll('#globalCards select, #globalCards input, #globalCards button')) x.disabled = !free || !state.globals;
   $('namReadBtn').disabled = !free;
   for (const b of document.querySelectorAll('#page-files .up-btn')) b.disabled = !free;
   $('refreshAllBtn').disabled = !free;
@@ -123,6 +128,10 @@ function showTab(tab) {
   if (tab === 'edit') {
     requestAnimationFrame(drawRouting);
     requestAnimationFrame(scrollToCurrent);
+  }
+  if (tab === 'global') {
+    renderGlobals();
+    if (canTalk() && !state.globals) readGlobals();
   }
   if (tab === 'files') {
     renderFiles();
@@ -162,6 +171,7 @@ async function connect() {
   state.otherHost = false;
   state.presets.clear();
   state.irNames = state.namNames = null;
+  state.globals = state.eq = null;
   state.uploadStatus.clear();
   state.model = modelName(input);
   dev.addEventListener('log', (e) => log(e.detail));
@@ -1052,6 +1062,177 @@ function markDirty() {
   $('edSave').disabled = !canTalk();
 }
 
+// ------------------------------------------------------------------ global settings
+
+async function readGlobals() {
+  if (!canTalk()) return;
+  state.busy = true;
+  updateButtons();
+  try {
+    const m = new Map();
+    for (const g of [0x00010000, 0x00020000, 0x00060000, 0x00070000, 0x00080000]) {
+      m.set(g, await state.dev.request(g, new Uint8Array(0), { timeout: 2000, retries: 1 }));
+    }
+    state.globals = m;
+    state.eq = parseEq(await state.dev.request(EQ.GET, new Uint8Array(0), { timeout: 2000, retries: 1 }));
+    $('globalInfo').textContent = '';
+  } catch (e) {
+    log(`reading global settings: ${e.message}`);
+  } finally {
+    state.busy = false;
+    updateButtons();
+  }
+  renderGlobals();
+}
+
+async function setGlobal(p, value) {
+  if (!canTalk()) return;
+  const ans = state.globals?.get(groupOf(p.addr));
+  const i = (p.addr & 0xffff) - 1;
+  if (ans && i < ans.length) ans[i] = value & 0xff;
+  await state.dev.send(p.addr, globalPayload(value));
+  log(`${p.name}: ${describeGlobal(p, value)}`);
+}
+
+function describeGlobal(p, v) {
+  if (p.switch) return v ? 'on' : 'off';
+  if (p.level) return v <= p.level[0] ? 'Mute' : `${v} dB`;
+  if (p.channel) return v >= 16 ? 'Omni' : `${v + 1}`;
+  if (p.colors) return `color ${v + 1}`;
+  return p.options?.[v] ?? `value ${v}`;
+}
+
+function renderGlobals() {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const box = $('globalCards');
+  box.replaceChildren();
+  $('globalInfo').textContent = state.globals ? '' : state.dev ? 'not read yet' : 'connect the pedal to read the settings';
+  const live = canTalk() && !!state.globals;
+  for (const g of GLOBAL_GROUPS) {
+    const card = el('div', 'card');
+    card.append(el('h2', '', g.title));
+    for (const p of g.params) {
+      const v = paramValue(p, state.globals?.get(groupOf(p.addr)));
+      const row = el('div', 'gs-row');
+      const label = el('span', '', p.name);
+      if (p.guess) {
+        const q = el('span', 'gs-guess', ' ?');
+        q.title = 'option names not confirmed yet – the raw value is shown in brackets';
+        label.append(q);
+      }
+      row.append(label);
+      if (p.switch) {
+        const b = el('button', `sw${v ? ' on' : ''}`, v ? 'On' : 'Off');
+        b.onclick = async () => {
+          await setGlobal(p, v ? 0 : 1);
+          renderGlobals();
+        };
+        b.disabled = !live;
+        row.append(b);
+      } else if (p.level) {
+        const r = el('input');
+        Object.assign(r, { type: 'range', min: p.level[0], max: p.level[1], step: 1, value: v ?? 0, disabled: !live });
+        const val = el('span', 'gs-val', v == null ? '' : describeGlobal(p, v));
+        r.oninput = () => {
+          val.textContent = describeGlobal(p, +r.value);
+        };
+        r.onchange = () => setGlobal(p, +r.value);
+        row.append(r, val);
+      } else if (p.colors) {
+        const c = el('span', 'gs-colors');
+        p.colors.forEach((color, k) => {
+          const b = el('button', k === v ? 'on' : '');
+          b.style.background = color;
+          b.title = `color ${k + 1}`;
+          b.disabled = !live;
+          b.onclick = async () => {
+            await setGlobal(p, k);
+            renderGlobals();
+          };
+          c.append(b);
+        });
+        row.append(c);
+      } else {
+        const s = el('select');
+        const opts = p.channel ? [...Array.from({ length: 16 }, (_, k) => `Channel ${k + 1}`), 'Omni']
+          : p.options ?? Array.from({ length: (p.max ?? 0) + 1 }, (_, k) => `value ${k}`);
+        opts.forEach((o, k) => s.append(new Option(p.guess && p.options ? `${o} [${k}]` : o, String(k))));
+        if (v != null && v >= opts.length) s.append(new Option(`value ${v}`, String(v)));
+        s.value = v == null ? '' : String(v);
+        s.disabled = !live;
+        s.onchange = () => setGlobal(p, +s.value);
+        row.append(s);
+      }
+      card.append(row);
+    }
+    if (g.note) card.append(el('p', 'muted small', g.note));
+    box.append(card);
+  }
+  box.append(renderEq(live));
+}
+
+function renderEq(live) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const card = el('div', 'card gs-eq');
+  card.append(el('h2', '', 'Global EQ'));
+  const eq = state.eq;
+  const head = el('div', 'gs-row');
+  const sw = el('button', `sw${eq?.on ? ' on' : ''}`, eq?.on ? 'On' : 'Off');
+  sw.disabled = !live;
+  sw.onclick = async () => {
+    eq.on = !eq.on;
+    await state.dev.send(EQ.SWITCH, u32b(eq.on ? 1 : 0));
+    log(`Global EQ ${eq.on ? 'on' : 'off'}`);
+    renderGlobals();
+  };
+  const vol = el('input');
+  Object.assign(vol, { type: 'range', min: 0, max: 100, step: 1, value: eq?.values[EQ_VOLUME] ?? 50, disabled: !live });
+  const volVal = el('span', 'gs-val', eq ? `${Math.round(eq.values[EQ_VOLUME])}` : '');
+  vol.oninput = () => {
+    volVal.textContent = vol.value;
+  };
+  vol.onchange = () => setEq(EQ_VOLUME, +vol.value);
+  const reset = el('button', '', 'Reset');
+  reset.title = 'reset the global EQ to its defaults';
+  reset.disabled = !live;
+  reset.onclick = async () => {
+    await state.dev.send(EQ.RESET, u32b(0));
+    state.eq = parseEq(await state.dev.request(EQ.GET, new Uint8Array(0), { timeout: 2000, retries: 1 }));
+    log('Global EQ reset');
+    renderGlobals();
+  };
+  head.append(el('span', '', 'EQ'), sw, el('span', 'muted small', 'Volume'), vol, volVal, reset);
+  card.append(head);
+  const t = el('table', 'eq-table');
+  t.innerHTML = '<thead><tr><th>Band</th><th>On</th><th>Freq (Hz)</th><th>Q</th><th>Gain (dB)</th></tr></thead>';
+  const tb = t.createTBody();
+  for (const b of EQ_BANDS) {
+    const tr = tb.insertRow();
+    tr.insertCell().textContent = b.name;
+    const on = el('input');
+    Object.assign(on, { type: 'checkbox', checked: (eq?.values[b.on] ?? 0) >= 0.5, disabled: !live });
+    on.onchange = () => setEq(b.on, on.checked ? 1 : 0);
+    tr.insertCell().append(on);
+    for (const [k, min, max, step] of [['freq', 20, 20000, 1], ['q', 0.1, 10, 0.01], ['gain', -15, 15, 0.1]]) {
+      const c = tr.insertCell();
+      if (b[k] == null) continue;
+      const n = el('input');
+      Object.assign(n, { type: 'number', min, max, step, value: eq ? +eq.values[b[k]].toFixed(k === 'freq' ? 0 : 2) : '', disabled: !live });
+      n.onchange = () => setEq(b[k], Math.min(max, Math.max(min, +n.value)));
+      c.append(n);
+    }
+  }
+  card.append(t, el('p', 'muted small', 'Values as in the Hotone software (frequency, Q, gain per band). Ranges of Q and gain are not confirmed.'));
+  return card;
+}
+
+async function setEq(index, value) {
+  if (!canTalk() || !state.eq) return;
+  state.eq.values[index] = value;
+  await state.dev.send(EQ.VALUE, eqValuePayload(index, value));
+  log(`Global EQ [${index}] = ${value}`);
+}
+
 // ------------------------------------------------------------------ IR & NAM uploads
 
 async function readFileLists() {
@@ -1833,6 +2014,7 @@ async function init() {
   fillRange();
   for (const b of document.querySelectorAll('.tab')) b.onclick = () => showTab(b.dataset.tab);
   $('irReadBtn').onclick = readFileLists;
+  $('globalReadBtn').onclick = readGlobals;
   $('namReadBtn').onclick = readFileLists;
   initPresetListEvents();
   sniffer = initSniffer({ getAccess: () => state.access, getDevice: () => state.dev, log, download, onLive: setSniffing });

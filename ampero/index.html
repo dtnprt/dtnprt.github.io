@@ -178,50 +178,10 @@
 
     <!-- ===================================================== Global Settings (mockup) -->
     <section class="content page" id="page-global" hidden>
-      <div class="mockup-note">Mockup – global settings are not read from or written to the pedal yet.</div>
-      <div class="settings-grid">
-        <div class="card">
-          <h2>Input / Output</h2>
-          <label class="setting">Input mode (L) <select disabled><option>Instrument</option></select></label>
-          <label class="setting">Input mode (R) <select disabled><option>Mic</option></select></label>
-          <label class="setting">Output to <select disabled><option>Bal. &amp; HP</option></select></label>
-          <label class="setting">Ground lift <input type="checkbox" disabled></label>
-          <label class="setting">USB audio <select disabled><option>Input CH 1/2</option></select></label>
-        </div>
-        <div class="card">
-          <h2>Tuner</h2>
-          <label class="setting">Reference pitch <input type="number" value="440" disabled> Hz</label>
-          <label class="setting">Mode <select disabled><option>Mute</option></select></label>
-          <label class="setting">High precision <input type="checkbox" disabled></label>
-          <label class="setting">Link VOL <input type="checkbox" disabled></label>
-        </div>
-        <div class="card">
-          <h2>Global EQ</h2>
-          <label class="setting">Low cut <input type="range" disabled></label>
-          <label class="setting">Low shelf <input type="range" disabled></label>
-          <label class="setting">High shelf <input type="range" disabled></label>
-          <label class="setting">High cut <input type="range" disabled></label>
-        </div>
-        <div class="card">
-          <h2>Controls</h2>
-          <label class="setting">FS mode <select disabled><option>Patch mode</option><option>Stomp mode</option></select></label>
-          <label class="setting">EXP 1 calibrate <button disabled>Calibrate</button></label>
-          <label class="setting">EXP 2 calibrate <button disabled>Calibrate</button></label>
-          <label class="setting">Bypass mode <select disabled><option>DSP bypass</option></select></label>
-        </div>
-        <div class="card">
-          <h2>MIDI</h2>
-          <label class="setting">MIDI channel <select disabled><option>1</option></select></label>
-          <label class="setting">Clock out <select disabled><option>USB</option></select></label>
-          <label class="setting">MIDI thru <input type="checkbox" disabled></label>
-        </div>
-        <div class="card">
-          <h2>Display</h2>
-          <label class="setting">Brightness <input type="range" disabled></label>
-          <label class="setting">LED strip color <select disabled><option>Orange</option></select></label>
-          <label class="setting">Global tempo <input type="number" value="120" disabled> BPM</label>
-        </div>
-      </div>
+      <div class="mockup-note">Global settings of the pedal – changes are sent at once (the pedal stores them itself, no Save).
+        Settings marked <b>?</b> have option names that are not confirmed yet; the raw value is shown in brackets.</div>
+      <div class="row"><button id="globalReadBtn">Read from pedal</button><span id="globalInfo" class="muted"></span></div>
+      <div class="settings-grid" id="globalCards"></div>
     </section>
     <!-- ===================================================== Sniffer -->
     <section class="content page sniffer" id="page-sniffer" hidden>

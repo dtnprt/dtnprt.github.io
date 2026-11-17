@@ -29,6 +29,7 @@ export async function install() {
     }
   };
   const preset = (i) => presets.get(i) ?? fallback;
+  const globals = new Map(Object.entries(data.globals ?? {}).map(([k, h]) => [+k, unhex(h)]));
   const irNames = Array.from({ length: USER_IRS }, (_, i) => `User IR ${i + 1}`);
   const namNames = Array.from({ length: NAM_SLOTS }, (_, i) => (i === 0 ? 'Fortin Cali DI 1' : ''));
   const str = (s, n) => {
@@ -156,6 +157,17 @@ export async function install() {
         console.info(`[sim] save into ${rd32(payload, 0)}`);
         return emit(CMD.PRESET_CHANGED, u32le(0));
       default:
+        if (globals.has(cmd) && !(kind === KIND_SET)) return emit(cmd, globals.get(cmd));
+        if (kind === KIND_SET && (cmd >>> 24) === 0 && (cmd & 0xffff)) { // global parameter
+          const g = globals.get(cmd & 0xffff0000);
+          if (cmd >>> 16 === 3) { // global EQ
+            if ((cmd & 0xffff) === 2 && g) new DataView(g.buffer).setFloat32(4 + 4 * rd32(payload, 0), new DataView(payload.buffer, payload.byteOffset).getFloat32(4, true), true);
+            if ((cmd & 0xffff) === 1 && g) new DataView(g.buffer).setFloat32(0, rd32(payload, 0), true);
+          } else if (g && (cmd & 0xffff) <= g.length) {
+            g[(cmd & 0xffff) - 1] = payload[0];
+          }
+          console.info(`[sim] global ${hex32(cmd)} = ${Array.from(payload).join(',')}`);
+        }
         return undefined; // CONNECT and everything else: no answer
     }
   };
