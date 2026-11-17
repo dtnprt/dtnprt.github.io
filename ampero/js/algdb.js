@@ -36,6 +36,7 @@ export function setAlgDb(data) {
 export const algDbLoaded = () => !!db;
 
 export const categoryName = (i) => db?.categories[i] ?? null;
+export const categoryNames = () => db?.categories ?? null;
 
 export function algInfo(code) {
   const a = db?.algs[String(code >>> 0)];

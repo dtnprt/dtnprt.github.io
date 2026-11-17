@@ -6,13 +6,15 @@
 
 import {
   CMD, FACTORY_IRS, KIND_SET, NAM_SLOTS, PRESET_COUNT, Reassembler, USER_IRS, concat, encodeTransfer, hex32, paramPayload,
-  presetInfo, rd32, setPresetParam, u32le,
+  presetInfo, rd32, setPresetAlg, setPresetOn, setPresetParam, setPresetSeq, u32le,
 } from '../js/protocol.js';
+import { algInfo, loadAlgDb } from '../js/algdb.js';
 
 const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (h) => parseInt(h, 16));
 
 export async function install() {
   const data = await (await fetch(new URL('sim-presets.json', import.meta.url))).json();
+  await loadAlgDb();
   const presets = new Map(Object.entries(data.presets).map(([k, h]) => [+k, unhex(h)]));
   const fallback = presets.values().next().value;
   let current = data.current ?? 0;
@@ -72,6 +74,29 @@ export async function install() {
         presets.set(current, setPresetParam(preset(current), scene, slot, id, value));
         console.info(`[sim] param slot ${slot} id ${id} = ${value} (scene ${scene + 1})`);
         return emit(CMD.PRESET_CHANGED, u32le(1));
+      }
+      case CMD.SLOT_ON:
+        for (let s = 0; s < 12; s++) presets.set(current, setPresetOn(preset(current), payload[0], s, payload[1 + s]));
+        console.info(`[sim] scene ${payload[0] + 1} on ${Array.from(payload.subarray(1, 13)).join('')}`);
+        return emit(CMD.PRESET_CHANGED, u32le(1));
+      case CMD.REORDER:
+        presets.set(current, setPresetSeq(preset(current), payload.subarray(0, 12)));
+        console.info(`[sim] order ${Array.from(payload.subarray(0, 12)).join(' ')}`);
+        return emit(CMD.PRESET_CHANGED, u32le(1));
+      case CMD.SET_ALG: {
+        const v = new DataView(payload.buffer, payload.byteOffset);
+        const [slot, cat, code, on] = [payload[0], payload[1], v.getUint32(2, true), payload[6]];
+        const params = new Float32Array(25);
+        for (const p of algInfo(code)?.params ?? []) params[p.id] = p.def;
+        presets.set(current, setPresetAlg(preset(current), slot, cat, code, Array.from(params)));
+        console.info(`[sim] slot ${slot}: category ${cat}, alg ${hex32(code)}, on ${on}`);
+        emit(CMD.PRESET_CHANGED, u32le(1));
+        if (code === 0xffffffff) return undefined;
+        const push = new Uint8Array(116);
+        const pv = new DataView(push.buffer);
+        pv.setUint32(0, slot, true); pv.setUint32(4, cat, true); pv.setUint32(8, on, true); pv.setUint32(12, code, true);
+        params.forEach((x, i) => pv.setFloat32(16 + 4 * i, x, true));
+        return setTimeout(() => emit(CMD.SLOT_PUSH, push), 150);
       }
       case CMD.USER_IR_NAMES:
         return emit(cmd, concat(...irNames.map((n) => str(n, 32))));

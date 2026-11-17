@@ -224,6 +224,12 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .pk .sw.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
 .pk.disabled { opacity: .5; pointer-events: none; }
 .fx.sel { box-shadow: 0 0 0 2px var(--accent); }
+.fx.drop { box-shadow: 0 0 0 2px #fff; }
+.fx.empty { cursor: pointer; }
+.fx .fx-state { cursor: pointer; }
+.block-ctl { display: inline-flex; gap: 6px; align-items: center; margin-left: 12px; }
+.block-ctl select { max-width: 220px; }
+.block-ctl .sw.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
 .fx:not(.empty) { cursor: pointer; }
 .dirty-tag { color: var(--accent); font-size: 12px; }
 /* IR & NAM page */

@@ -4,6 +4,7 @@ import {
   presetChain, presetRouting, rd32, setPresetName, setPresetStyle, tlvSplit,
   paramPayload, presetParam, savePayload, setPresetParam,
   NAM_SLOTS, UPLOAD_NAME, USER_IRS,
+  EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -14,7 +15,7 @@ import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
 import { diffProbes, probe } from './probe.js';
 import { commandGroup } from './sniffer.js';
-import { algInfo, clampValue, formatValue, loadAlgDb } from './algdb.js';
+import { algDbLoaded, algInfo, algsOfCategory, categoryNames, clampValue, formatValue, loadAlgDb } from './algdb.js';
 
 const $ = (id) => document.getElementById(id);
 let sniffer = null;
@@ -46,6 +47,7 @@ const state = {
   selSlot: -1, // effect slot (0..11) shown in the parameter editor
   dirty: -1, // preset index with parameter changes sent to the pedal but not saved
   dragging: false, // a knob is being dragged: do not rebuild the parameter editor
+  dragPos: null, // chain position of the block being dragged
   irNames: null, // string[50] user IR names from the pedal
   namNames: null, // string[30] NAM slot names from the pedal ('' = empty)
   uploadStatus: new Map(), // 'ir:3' / 'nam:1' -> {cls, text}
@@ -264,6 +266,10 @@ function onPushedDump(payload) {
 }
 
 function onNotify({ cmd, payload }) {
+  if (cmd === CMD.SLOT_PUSH) {
+    onSlotPush(payload);
+    return;
+  }
   if (cmd === CMD.PRESET_DUMP) {
     if (!state.busy) onPushedDump(payload); // while busy the dumps are our own (late) answers
     return;
@@ -651,8 +657,36 @@ function renderEditor() {
   $('chainLeft').replaceChildren(io(!!rt, twoIn ? '1' : '→'), io(twoIn, '2'));
   $('chainRight').replaceChildren(io(!!rt && !serial, twoOut ? '1' : '→'), io(!!rt && merge === null, serial ? '→' : '2'));
 
+  // drag & drop: drop a block on another position = swap the two positions (like the Hotone software)
+  const dnd = (b, c) => {
+    if (!raw || !c) return;
+    b.ondragover = (e) => {
+      if (state.dragPos == null || state.dragPos === c.pos) return;
+      e.preventDefault();
+      b.classList.add('drop');
+    };
+    b.ondragleave = () => b.classList.remove('drop');
+    b.ondrop = (e) => {
+      e.preventDefault();
+      b.classList.remove('drop');
+      const from = state.dragPos;
+      state.dragPos = null;
+      if (from != null && from !== c.pos) swapPositions(from, c.pos);
+    };
+  };
   const box = (c) => {
-    if (!c || c.code === 0xffffffff) return el('div', 'fx empty', '+');
+    if (!c || c.code === 0xffffffff) {
+      const e = el('div', `fx empty${c && c.slot === state.selSlot ? ' sel' : ''}`, '+');
+      if (c && raw) {
+        e.title = `empty position ${c.pos + 1} – click to insert a block, or drop one here`;
+        e.onclick = () => {
+          state.selSlot = c.slot;
+          renderEditor();
+        };
+        dnd(e, c);
+      }
+      return e;
+    }
     const mod = MODULES[c.code >>> 24] ?? '?';
     const b = el('div', `fx m-${mod.replace(' ', '-')}${c.on[scene] ? '' : ' off'}`);
     const icon = el('span', 'fx-icon');
@@ -663,7 +697,25 @@ function renderEditor() {
       state.selSlot = c.slot;
       renderEditor();
     };
-    b.append(el('span', 'fx-label', mod), icon, el('span', 'fx-state'));
+    const dot = el('span', 'fx-state');
+    dot.title = `${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1} – click to switch`;
+    dot.onclick = (e) => {
+      e.stopPropagation();
+      toggleOn(c.slot);
+    };
+    if (raw) {
+      b.draggable = true;
+      b.ondragstart = (e) => {
+        state.dragPos = c.pos;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(c.pos));
+      };
+      b.ondragend = () => {
+        state.dragPos = null;
+      };
+      dnd(b, c);
+    }
+    b.append(el('span', 'fx-label', mod), icon, dot);
     if (alg) b.append(el('span', 'fx-name', alg.name));
     b.title = `${alg ? `${alg.name} (${mod})` : mod} – slot ${c.slot + 1}, algorithm 0x${c.code.toString(16).padStart(8, '0')}, ` +
       `${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1}`;
@@ -704,17 +756,19 @@ function renderParams(raw, chain) {
   if (state.dragging) return;
   const box = $('edParams');
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
-  const c = chain.find((x) => x.slot === state.selSlot && x.code !== 0xffffffff);
+  const c = chain.find((x) => x.slot === state.selSlot);
   if (!raw || !c) {
-    box.replaceChildren(el('div', 'params-empty', raw ? 'Click an effect in the chain to edit its parameters.'
+    box.replaceChildren(el('div', 'params-empty', raw ? 'Click an effect in the chain to edit it, or an empty position to insert one. Drag a block onto another position to swap them; the dot switches it on/off.'
       : 'Read a preset from the pedal to edit it.'));
     return;
   }
-  const alg = algInfo(c.code);
+  const empty = c.code === 0xffffffff;
+  const alg = empty ? null : algInfo(c.code);
   const scene = editScene();
   const head = el('div', 'params-head');
-  head.append(el('span', 'p-title', alg ? alg.name : hex32(c.code)),
-    el('span', 'muted small', `${alg?.module ?? MODULES[c.code >>> 24] ?? '?'} · slot ${c.slot + 1} · scene ${scene + 1}`));
+  head.append(el('span', 'p-title', empty ? 'Empty position' : alg ? alg.name : hex32(c.code)),
+    el('span', 'muted small', `${empty ? `position ${c.pos + 1}` : `${alg?.module ?? MODULES[c.code >>> 24] ?? '?'} · slot ${c.slot + 1} · scene ${scene + 1}`}`));
+  head.append(blockControls(raw, c, empty));
   if (state.dirty === state.current) head.append(el('span', 'dirty-tag', '● modified – not saved'));
   const save = el('button', 'p-save primary', 'Save');
   save.disabled = state.dirty !== state.current || !canTalk();
@@ -722,7 +776,9 @@ function renderParams(raw, chain) {
   save.onclick = savePreset;
   head.append(save);
   const grid = el('div', 'params-grid');
-  if (!alg) {
+  if (empty) {
+    grid.append(el('div', 'muted', 'Choose a module and an algorithm to insert a block here.'));
+  } else if (!alg) {
     grid.append(el('div', 'muted', 'Unknown algorithm – effect database not loaded?'));
   } else {
     const live = canTalk();
@@ -799,6 +855,135 @@ function paramControl(raw, slot, p, scene, live) {
     wrap.append(dial, val, label);
   }
   return wrap;
+}
+
+// ------------------------------------------------------------------ blocks: algorithm, on/off, order
+
+/** Module + algorithm selectors, on/off and remove for the selected block. */
+function blockControls(raw, c, empty) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
+  const wrap = el('span', 'block-ctl');
+  const live = canTalk() && algDbLoaded();
+  const cat = el('select');
+  const cur = empty ? -1 : algInfo(c.code)?.category ?? -1;
+  if (empty) cat.append(new Option('Module…', '-1'));
+  for (const [i, name] of (categoryNames() ?? []).entries()) {
+    if (algsOfCategory(i).length) cat.append(new Option(name, String(i)));
+  }
+  cat.value = String(cur);
+  const algSel = el('select');
+  const fillAlgs = (ci) => {
+    algSel.replaceChildren(new Option(ci < 0 ? '–' : 'Algorithm…', ''));
+    for (const a of ci < 0 ? [] : algsOfCategory(ci)) algSel.append(new Option(algLabel(a), String(a.code)));
+    algSel.value = !empty && ci === cur ? String(c.code) : '';
+  };
+  fillAlgs(cur);
+  cat.onchange = () => fillAlgs(+cat.value);
+  algSel.onchange = () => {
+    if (algSel.value !== '') setBlockAlg(c.slot, +cat.value, +algSel.value, empty);
+  };
+  cat.disabled = algSel.disabled = !live;
+  wrap.append(cat, algSel);
+  if (!empty) {
+    const on = c.on[editScene()];
+    const t = el('button', `sw${on ? ' on' : ''}`, on ? 'On' : 'Off');
+    t.title = `on/off in scene ${editScene() + 1}`;
+    t.disabled = !canTalk();
+    t.onclick = () => toggleOn(c.slot);
+    const rm = el('button', 'danger', 'Remove');
+    rm.title = 'remove the block from this position';
+    rm.disabled = !canTalk();
+    rm.onclick = () => removeBlock(c.slot);
+    wrap.append(t, rm);
+  }
+  return wrap;
+}
+
+/** Option label: NAM / user IR slots show the name of the uploaded model / IR. */
+function algLabel(a) {
+  if ((a.code >>> 24) === 0x10 && state.namNames) {
+    const n = state.namNames[a.code & 0xffff];
+    return n ? `${a.name} – ${n}` : `${a.name} (empty)`;
+  }
+  if ((a.code >>> 16) === 0x0a10 && state.irNames?.[a.code & 0xffff]) return `${a.name} – ${state.irNames[a.code & 0xffff]}`;
+  return a.name;
+}
+
+/** Apply an edit to our copy of the current preset and mark it modified. */
+function editPreset(fn) {
+  const i = state.current, raw = state.presets.get(i);
+  if (!raw || !canTalk()) {
+    if (!canTalk()) log('editing needs the pedal (connected, not paused, sniffer off)');
+    return false;
+  }
+  state.presets.set(i, fn(raw));
+  state.dirty = i;
+  return true;
+}
+
+async function toggleOn(slot) {
+  const scene = editScene();
+  let on;
+  if (!editPreset((raw) => {
+    on = presetOn(raw, scene);
+    on[slot] = !on[slot];
+    return setPresetOn(raw, scene, slot, on[slot]);
+  })) return;
+  renderEditor();
+  await state.dev.send(CMD.SLOT_ON, slotOnPayload(scene, on));
+}
+
+async function setBlockAlg(slot, category, code, wasEmpty) {
+  const a = algInfo(code);
+  const params = [];
+  for (const p of a?.params ?? []) params[p.id] = p.def;
+  const scene = editScene();
+  let on = true;
+  if (!editPreset((raw) => {
+    if (!wasEmpty) on = presetOn(raw, scene)[slot];
+    let r = setPresetAlg(raw, slot, category, code, params);
+    if (wasEmpty) for (let s = 0; s < 3; s++) r = setPresetOn(r, s, slot, true);
+    return r;
+  })) return;
+  state.selSlot = slot;
+  renderEditor();
+  await state.dev.send(CMD.SET_ALG, setAlgPayload(slot, category, code, on));
+  log(`slot ${slot + 1}: ${a?.name ?? hex32(code)}`);
+}
+
+async function removeBlock(slot) {
+  if (!editPreset((raw) => {
+    let r = setPresetAlg(raw, slot, 0xff, EMPTY_ALG, []);
+    for (let s = 0; s < 3; s++) r = setPresetOn(r, s, slot, false);
+    return r;
+  })) return;
+  renderEditor();
+  // what the Hotone app sends (deleteSlotData) – not confirmed by a capture yet
+  await state.dev.send(CMD.SET_ALG, setAlgPayload(slot, 0xff, EMPTY_ALG, false));
+  log(`slot ${slot + 1}: removed`);
+}
+
+async function swapPositions(a, b) {
+  let seq;
+  if (!editPreset((raw) => {
+    seq = presetSeq(raw);
+    [seq[a], seq[b]] = [seq[b], seq[a]];
+    return setPresetSeq(raw, seq);
+  })) return;
+  renderEditor();
+  await state.dev.send(CMD.REORDER, reorderPayload(seq));
+}
+
+/** The pedal reports the new contents of a slot after SET_ALG: take its parameters (all scenes). */
+function onSlotPush(payload) {
+  const raw = state.presets.get(state.current);
+  if (!raw || payload.length < 116) return;
+  const v = new DataView(payload.buffer, payload.byteOffset);
+  const slot = v.getUint32(0, true), code = v.getUint32(12, true);
+  if (slot >= 12 || presetChain(raw).find((x) => x.slot === slot)?.code !== code) return;
+  const params = Array.from({ length: 25 }, (_, i) => v.getFloat32(16 + 4 * i, true));
+  state.presets.set(state.current, setPresetAlg(raw, slot, v.getUint32(4, true), code, params));
+  if (!state.dragging) renderEditor();
 }
 
 /** One parameter changed: update our copy of the preset, send to the pedal (throttled, last value wins). */
@@ -932,7 +1117,12 @@ async function uploadNam(slot) {
       namb = bytes;
       desc = `${file.name}: NAMB file, ${bytes.length} bytes.`;
     } else {
-      const r = namToNamb(JSON.parse(new TextDecoder().decode(bytes)));
+      const model = JSON.parse(new TextDecoder().decode(bytes));
+      if (model.architecture !== 'SlimmableContainer') {
+        throw new Error(`this is a NAM A1 model (${model.architecture}) – the Hotone software converts those into its own ` +
+          'format, which this app does not support. Use a NAM A2 model.');
+      }
+      const r = namToNamb(model);
       namb = r.namb;
       desc = `${file.name}: ${r.architecture}, ${r.weights} weights, ${namb.length} bytes` +
         `${r.submodel ? ` (NAM A2: submodel ${r.submodel.index + 1} of ${r.submodel.count}, the smallest)` : ''}.`;

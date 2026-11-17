@@ -56,8 +56,9 @@
 
     <!-- ===================================================== Edit (mockup) -->
     <section class="content page" id="page-edit" hidden>
-      <div class="mockup-note">Work in progress – click an effect to edit its parameters (current scene, sent to the
-        pedal live; <b>Save</b> stores the preset). Changing the algorithm, order and on/off is not implemented yet.</div>
+      <div class="mockup-note">Work in progress – click a block to edit it (parameters of the current scene, module /
+        algorithm, on/off, remove), an empty position to insert one, drag a block onto another position to swap them.
+        Changes go to the pedal live; <b>Save</b> stores the preset.</div>
       <div class="card editor-head">
         <div class="preset-title">
           <span id="edLabel" class="cur-lbl">–</span>
@@ -160,9 +161,10 @@
       </div>
       <div class="card">
         <h2>NAM models</h2>
-        <p class="muted">Upload a Neural Amp Modeler capture (<code>.nam</code>, or an already converted <code>.namb</code>).
-          The app converts it like the Hotone software (TONE3000's NAMB format); of a NAM A2 model only the smallest
-          submodel is sent, as the pedal's DSP needs it. The upload replaces the model in that slot.</p>
+        <p class="muted">Upload a Neural Amp Modeler <b>A2</b> capture (<code>.nam</code>, or an already converted
+          <code>.namb</code>). The app converts it like the Hotone software (TONE3000's NAMB format) and sends the smallest
+          submodel, as the pedal's DSP needs it. The upload replaces the model in that slot. NAM A1 models are not
+          supported (the Hotone software converts them into a format of its own).</p>
         <div class="row"><button id="namReadBtn">Read list</button><span id="namInfo" class="muted"></span></div>
         <div class="table-wrap files-wrap">
           <table id="namTable"><thead><tr><th>Slot</th><th>Name on the pedal</th><th></th><th>Status</th></tr></thead><tbody></tbody></table>

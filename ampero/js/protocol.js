@@ -460,6 +460,72 @@ export function paramPayload(slot, id, value) {
   return p;
 }
 
+// ------------------------------------------------------------------ blocks (effect slots)
+
+export const EMPTY_ALG = 0xffffffff;
+const SCENES = 3;
+const ON_OFFSET = 3600; // tag 5: u8 on[3 scenes][12 slots]
+
+/** Payload of CMD.SET_ALG: u8 slot, u8 category, u32 alg code, u8 on. Remove = category 0xFF, code 0xFFFFFFFF, on 0. */
+export function setAlgPayload(slot, category, code, on) {
+  const p = new Uint8Array(7);
+  const v = new DataView(p.buffer);
+  p[0] = slot;
+  p[1] = category & 0xff;
+  v.setUint32(2, code >>> 0, true);
+  p[6] = on ? 1 : 0;
+  return p;
+}
+
+/** Payload of CMD.SLOT_ON: u8 scene, u8 on[12]. */
+export function slotOnPayload(scene, on) {
+  return Uint8Array.of(scene, ...Array.from({ length: SLOTS }, (_, s) => (on[s] ? 1 : 0)));
+}
+
+/** Payload of CMD.REORDER: u8 seq[12] (position -> slot). */
+export const reorderPayload = (seq) => Uint8Array.from(seq);
+
+/** u8 seq[12] (tag 4: position -> slot). */
+export function presetSeq(raw) {
+  const o = tagOffset(raw, 4);
+  return Array.from(raw.subarray(o, o + SLOTS));
+}
+
+/** Copy of the preset with a new order (what the pedal does on REORDER). */
+export function setPresetSeq(raw, seq) {
+  const out = raw.slice();
+  out.set(seq, tagOffset(raw, 4));
+  return out;
+}
+
+/** Slot on/off states of one scene: bool[12]. */
+export function presetOn(raw, scene) {
+  const o = tagOffset(raw, 5) + ON_OFFSET + SLOTS * scene;
+  return Array.from(raw.subarray(o, o + SLOTS), (b) => b !== 0);
+}
+
+export function setPresetOn(raw, scene, slot, on) {
+  const out = raw.slice();
+  out[tagOffset(raw, 5) + ON_OFFSET + SLOTS * scene + slot] = on ? 1 : 0;
+  return out;
+}
+
+/**
+ * Copy of the preset with another algorithm in `slot` (what the pedal does on SET_ALG): category and code in tag 4,
+ * the slot's 25 parameters in all three scenes = `params` (missing ids 0). code EMPTY_ALG removes the block.
+ */
+export function setPresetAlg(raw, slot, category, code, params = []) {
+  const out = raw.slice();
+  const v = new DataView(out.buffer);
+  const t4 = tagOffset(raw, 4);
+  out[t4 + SLOTS + slot] = category & 0xff;
+  v.setUint32(t4 + 2 * SLOTS + 4 * slot, code >>> 0, true);
+  for (let s = 0; s < SCENES; s++) {
+    for (let id = 0; id < SLOT_PARAMS; id++) v.setFloat32(paramOffset(raw, s, slot, id), params[id] ?? 0, true);
+  }
+  return out;
+}
+
 /** Payload of CMD.SAVE: u32 preset, char name[17]. */
 export function savePayload(index, name) {
   const p = new Uint8Array(4 + NAME_LEN);
