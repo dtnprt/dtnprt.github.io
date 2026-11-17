@@ -6,7 +6,7 @@ import {
   NAM_SLOTS, UPLOAD_NAME, USER_IRS,
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
-  FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
+  FS_FUNCTIONS, STOMP_FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush, presetSceneCount,
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
 } from './protocol.js';
@@ -1027,8 +1027,12 @@ function fsAssignments(raw, slot) {
 // ------------------------------------------------------------------ footswitches of the preset (tag 3 / tag 8)
 
 const FS_CHOICES = [...FS_FUNCTIONS].filter(([c]) => c < 51 || c === 0xff); // 51..54 = global PATCH FS FUNC
-/** Footswitch functions offered for a preset: "Scene n" only for scenes it has (Stomp: 1–3, Stage: 1–5). */
-const fsChoices = (raw) => FS_CHOICES.filter(([c]) => c < 27 || c > 31 || c - 27 < presetSceneCount(raw));
+/**
+ * Footswitch functions offered for a preset: on the Stomp only the ones it accepts (others, e.g. Ctrl 5/6, stop its
+ * firmware), "Scene n" only for scenes the preset has (Stomp: 1–3, Stage: 1–5).
+ */
+const fsChoices = (raw) => FS_CHOICES.filter(([c]) => (isStage() || STOMP_FS_FUNCTIONS.has(c)) &&
+  (c < 27 || c > 31 || c - 27 < presetSceneCount(raw)));
 
 /** The footswitch functions in groups for the dropdown (codes, see FS_FUNCTIONS). */
 const FS_GROUPS = [
@@ -1096,6 +1100,11 @@ function renderFs(raw, chain) {
 }
 
 async function setFsFunction(f, code) {
+  if (!isStage() && !STOMP_FS_FUNCTIONS.has(code)) {
+    log(`FS${f + 1}: "${fsFunctionName(code)}" is not available on the Stomp (it stops its firmware) – not sent`);
+    renderEditor();
+    return;
+  }
   let click;
   if (!editPreset((raw) => {
     const r = setPresetFsClick(raw, f, code);
@@ -1551,6 +1560,10 @@ async function readGlobals() {
 
 async function setGlobal(p, value) {
   if (!canTalk()) return;
+  if (p.choices && !isStage() && !STOMP_FS_FUNCTIONS.has(value)) {
+    log(`${p.name}: "${describeGlobal(p, value)}" is not available on the Stomp – not sent`);
+    return;
+  }
   const ans = state.globals?.get(groupOf(p.addr));
   const i = paramByte(p);
   if (ans && i < ans.length) ans[i] = rawByte(p, value);
@@ -1620,7 +1633,7 @@ function renderGlobals() {
       } else {
         const s = el('select');
         if (p.choices) { // explicit [value, label] pairs; "Scene 4/5" only on a pedal with 5 scenes (Stage)
-          const choices = p.choices.filter(([val]) => (val !== 30 && val !== 31) || isStage());
+          const choices = p.choices.filter(([val]) => isStage() || STOMP_FS_FUNCTIONS.has(val));
           for (const [val, lab] of choices) s.append(new Option(lab, String(val)));
           if (v != null && !p.choices.some(([val]) => val === v)) s.append(new Option(`value ${v}`, String(v)));
           s.value = v == null ? '' : String(v);
