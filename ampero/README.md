@@ -26,7 +26,11 @@ exklusiv), *Connect*.
 * **Sniffer** – Mitschnitte ansehen: live (nur zuhören; verbunden = eigener Verkehr beider Richtungen, sonst nur
   was das Gerät sendet), App-Traces (`.txt`) und Wireshark/USBPcap-`.pcapng` (beide Richtungen, auch
   Drag & Drop). Liste mit bekannten/unbekannten Befehlen, Filter, Feldbaum + farbiger Hexdump (Klick verknüpft
-  beide), Rohframes mit Header-Feldern, Speichern als Trace.
+  beide), Rohframes mit Header-Feldern, Speichern als Trace. Presets werden mit allen zehn Sektionen
+  zerlegt (Setting, Info, Quick-Knobs, Footswitches, Effekt-Slots, Szenen, Routing, Expression, Ctrl, MIDI);
+  Feldnamen und Größen stammen aus der dekompilierten Android-App (`HTModelPreset`, siehe `tools/FORMAT.md` 3).
+  Die Prüfsumme (Byte 7) der Geräte-Frames folgt einer unbekannten Regel – auch der Hotone-Editor meldet
+  dort nur „crc fail“ und arbeitet weiter; die App prüft stattdessen die Länge.
 
 Der Stil steht im Preset (Tag 1, Offset 91). Die Namensliste `0x01080000` enthält ihn nach bisherigem Stand
 nicht erkennbar; die App kennt ihn daher nur für Presets, die sie in dieser Sitzung gelesen hat (Backup,

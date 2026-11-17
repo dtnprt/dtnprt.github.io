@@ -2,12 +2,17 @@
 //
 // Frame:  F0 21 25 4D 50 00 00 | cs | kind | totLo totHi | offLo offHi | nibbles … | F7
 // Stream: u32 cmd | u32 len | data[len]   (data = LZO1X-1 stream, empty if len = 0)
+//
+// Field names of the Hotone app (Dart, bluetooth/trans.dart HeadDataMap): ManufactID1 21, ManufactID2 25,
+// productID "MP", serId 00, resv 00, moduleCode (= cs), transType (= kind), totalLenL/H, offSetL/H;
+// stream = CmdCode, dataLen, data.
 
 import * as lzo from './lzo1x.js';
 
 export const HEADER = Uint8Array.of(0xf0, 0x21, 0x25, 0x4d, 0x50, 0x00, 0x00);
 export const KIND_GET = 0x11;
 export const KIND_SET = 0x12;
+export const KIND_ERROR = 0x13; // transType 0x13 = TransErrorStatus (seen in the app's Bluetooth path)
 export const CHUNK = 183; // stream bytes per frame sent by the editor (captured); the device sends 185
 const RX_CHUNKS = [183, 185];
 
@@ -95,7 +100,9 @@ export function encodeTransfer(cmd, payload = new Uint8Array(0), kind = KIND_SET
  * Parse one frame. Returns null for foreign messages, {damaged: true, …} for an Ampero frame whose length
  * does not match its header: on Windows/Web MIDI about 1 % of the device's frames arrive with 1–5 bytes
  * missing (debug/ampero_trace_2026-11-06-08-06-00.txt). A missing byte always shortens the frame, so the
- * length check catches it (the checksum of device frames follows an unknown rule).
+ * length check catches it. The checksum (byte 7) is not checked: the Hotone editor checks device frames with
+ * the same rule as host frames (sum of nibbles & 0x7F, HTUSBTools.dll RVA 0xce1fa) but the pedal follows another,
+ * unknown rule – the editor only logs "crc fail != crcFlag" and uses the frame anyway.
  */
 export function parseFrame(m) {
   if (m.length < 14 || m[m.length - 1] !== 0xf7) return null;
@@ -270,6 +277,21 @@ export function setPresetStyle(raw, style) {
   return out;
 }
 
+/**
+ * Preset sections (TLV tags) as the Hotone app builds them (HTModelPreset.getSendData, in this order):
+ * 0 Setting, 1 Info, 2 Knob (quick knobs), 3 FS, 4 Effect, 5 Scene, 6 Temp (routing), 7 Exp, 8 Ctrl, 9 Midi.
+ * Layouts: see tools/FORMAT.md chapter 3.
+ */
+export const TLV_SECTIONS = { 0: 'setting', 1: 'info', 2: 'quick knobs', 3: 'footswitches', 4: 'effect slots',
+  5: 'scenes', 6: 'routing', 7: 'expression', 8: 'ctrl (FS → slots)', 9: 'midi' };
+
+/**
+ * Module category of a slot (tag 4: u8 mod[12]) = Catalog[].Index of the algorithm database
+ * (verified against the alg codes of all sample presets). 0xFF = empty.
+ */
+export const CATEGORIES = ['DYN', 'FREQ', 'WAH', 'DRV', 'AMP', 'PRE AMP', 'CAB', 'IR', 'EQ', 'MOD', 'DLY', 'RVB',
+  'FX SND', 'FX RTN', 'FX LOOP', 'VOL', 'CLONE', 'NAM'];
+
 /** u32 alg[12] of the effect slots (tag 4 at data offset 24); 0xFFFFFFFF = empty. */
 export function presetSlots(raw) {
   const o = tagOffset(raw, 4) + 24;
@@ -301,7 +323,9 @@ export function presetChain(raw) {
  * and has no output of its own (bytes 2/4/6 = 05 02 00 there).
  * Verified with screenshots of the Hotone software: Sweet Dream 04/05, Dual Plexi 01/03, Tap Tap 03/04,
  * Ampero Strikes!/Le Chug (Serial); the five factory templates from debug/chain-changes.pcapng.
- * Bytes 2, 4, 6 also differ between templates (meaning unknown, kept for display).
+ * Bytes 2, 4, 6 also differ between templates. Names from the Hotone app (Temp section): i16 inputSource[2]
+ * (bytes 0–3), i16 outputSource[2] (bytes 4–7) – so byte 2 = input source of row 2, bytes 4/6 = output source
+ * of row 1/2 (values not decoded yet). 456 = splitNodeAddr, 457 = mixerNodeAddr.
  */
 export const CHAIN_MODES = [
   { id: 0, name: 'Parallel', sig: [0x06, 0x00, 0x03, 0xff, 0xff] },
@@ -334,10 +358,18 @@ export function presetChainMode(raw) {
   return r.template ?? { id: -1, name: r.name, bytes: r.bytes };
 }
 
-/** Module of an algorithm code (highest byte), see tools/FORMAT.md chapter 5. */
+/**
+ * Module of an algorithm code (highest byte), see tools/FORMAT.md chapter 5. 0x06 also holds FX LOOP/SND/RTN
+ * and – Ampero II Stage only – the Split Mixer (0x06000004–06); 0x01 also Global EQ 2 (0x0100004B, Stage).
+ */
 export const MODULES = {
   0x00: 'DYN', 0x01: 'EQ', 0x03: 'DRV', 0x04: 'MOD', 0x05: 'WAH', 0x06: 'VOL', 0x07: 'AMP', 0x08: 'PRE AMP',
   0x09: 'CAB', 0x0a: 'IR', 0x0b: 'DLY', 0x0c: 'RVB', 0x0e: 'FREQ', 0x0f: 'CLONE', 0x10: 'NAM',
+};
+
+/** Single algorithms with their own name (Stage-only codes from the Android app's database). */
+export const SPECIAL_ALGS = {
+  0x0100004b: 'Global EQ 2', 0x06000004: 'Split (Mode I)', 0x06000005: 'Mixer', 0x06000006: 'Split (Mode II)',
 };
 
 /** Name, style and scene names from a TLV preset (tag 1 = info, tag 5 = scenes). */
@@ -359,7 +391,8 @@ export function presetInfo(raw) {
 /**
  * Compare a written preset with what the pedal stored (read back).
  * Known normalization (debug/ampero_trace_2026-11-06-10-21-56.txt, 185 of 300 slots): never-saved "Empty"
- * slots are format version 2 (tag 1 info, u32 version = 2) with tag 2 bytes 3..5 = FF FF FF; when such a
+ * slots are format version 2 (tag 1 info, u32 version = 2) with tag 2 bytes 3..5 (quick knobs: u8 param[3])
+ * = FF FF FF; when such a
  * preset is written, the pedal stores it as version 3 with 00 00 00 there. Nothing else changes.
  * Returns {identical, upgraded, diff}: upgraded = the only differences are exactly that conversion.
  */

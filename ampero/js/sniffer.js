@@ -2,8 +2,8 @@
 // transfers of both directions and describe them as fields with byte ranges (for the hex view).
 
 import {
-  CHAIN_MODES, CMD, MODULES, PRESET_COUNT, cString, decodeStream, parseFrame, presetChainMode, presetInfo, presetLabel,
-  presetRouting, rd32,
+  CATEGORIES, CHAIN_MODES, CMD, MODULES, PRESET_COUNT, SPECIAL_ALGS, TLV_SECTIONS, cString, decodeStream, parseFrame,
+  presetChainMode, presetInfo, presetLabel, presetRouting, rd32,
 } from './protocol.js';
 
 const HOTONE_VID = 0x84ef;
@@ -170,8 +170,71 @@ const rest = (p, off, name = 'unknown') => (p.length > off ? [F(name, off, p.len
 const slotf = (p, name, off) => u32f(p, name, off, (v) => (v < PRESET_COUNT ? `${v} = ${presetLabel(v)}` : `${v}`));
 const u16 = (p, o) => p[o] | (p[o + 1] << 8);
 
-const TLV_NAMES = { 0: 'header', 1: 'info', 2: 'tag 2', 3: 'footswitch', 4: 'slots', 5: 'scenes', 6: 'routing',
-  7: 'tag 7', 8: 'ctrl / fs slots', 9: 'midi' };
+const f32 = (p, o) => new DataView(p.buffer, p.byteOffset + o, 4).getFloat32(0, true);
+const fmtF = (v) => (Number.isNaN(v) ? 'NaN' : String(Math.round(v * 100) / 100));
+const f32s = (p, o, n) => Array.from({ length: n }, (_, i) => f32(p, o + 4 * i));
+const i16 = (p, o) => (u16(p, o) << 16) >> 16;
+/** byte list, 0xFF shown as "–" (unused) */
+const bytesf = (p, name, off, len, fmt = (b) => (b === 0xff ? '–' : `${b}`)) =>
+  F(name, off, len, Array.from(p.subarray(off, off + len), fmt).join(' '));
+const floatsf = (p, name, off, n) => F(name, off, 4 * n, f32s(p, off, n).map(fmtF).join(' '));
+const slotNo = (b) => (b === 0xff ? '–' : `${b + 1}`);
+const algName = (c) => (c === 0xffffffff ? 'empty' : `${SPECIAL_ALGS[c] ?? MODULES[c >>> 24] ?? '?'} 0x${hex32(c)}`);
+
+/** Sections 2, 3, 6, 7, 8 – names and sizes from the Hotone app (HTModelPreset.get…Data), see FORMAT.md 3. */
+function sectionFields(p, tag, d, len, base) {
+  if (tag === 2 && len >= 6) {
+    return [bytesf(p, 'obj[3] (target slot per knob)', d, 3, slotNo), bytesf(p, 'param[3] (parameter index)', d + 3, 3)];
+  }
+  if (tag === 3 && len >= 8) {
+    const h = (b) => (b === 0xff ? '–' : hex2(b));
+    return [bytesf(p, 'click[3] (FS1–3 function)', d, 3, h), bytesf(p, 'hold[3] (function when held)', d + 3, 3, h),
+      bytesf(p, 'comb[2] (combinations)', d + 6, 2, h), ...(len > 8 ? [F('rest', d + 8, len - 8, hexBytes(p.subarray(d + 8, d + len)))] : [])];
+  }
+  if (tag === 6 && len >= 540) {
+    const r = presetRouting(p.subarray(base)); // wants the whole TLV chain
+    const pos = (v) => (v === 0xff ? 'none' : v === 6 ? 'end of row 1' : `before row-1 position ${v + 1}`);
+    return [
+      F('routing', d + 456, 2, `${r.name}${r.template ? ' (template)' : ''}`),
+      F('i16 inputSource[2]', d, 4, `${i16(p, d)} ${i16(p, d + 2)}`),
+      F('i16 outputSource[2]', d + 4, 4, `${i16(p, d + 4)} ${i16(p, d + 6)}`),
+      F('f32 inputSourceParam[56]', d + 8, 224, f32s(p, d + 8, 8).map(fmtF).join(' ') + ' …'),
+      F('f32 outputSourceParam[56]', d + 232, 224, f32s(p, d + 232, 8).map(fmtF).join(' ') + ' …'),
+      F('splitNodeAddr', d + 456, 1, pos(p[d + 456])),
+      F('mixerNodeAddr (merge)', d + 457, 1, pos(p[d + 457])),
+      F('splitNodeMode', d + 458, 1, `${p[d + 458]}`),
+      F('mixerNodeMode', d + 459, 1, `${p[d + 459]}`),
+      floatsf(p, 'f32 splitNodeModeParam[10]', d + 460, 10),
+      floatsf(p, 'f32 mixerNodeModeParam[10] (A/B level, A/B pan, B polarity, master …)', d + 500, 10),
+    ];
+  }
+  if (tag === 7 && len >= 114) {
+    const targets = [];
+    for (let i = 0; i < 8; i++) {
+      if (p[d + 2 + i] === 0xff) continue;
+      targets.push(F(`target ${i + 1}`, d + 2 + i, 1, `slot ${slotNo(p[d + 2 + i])}, param ${p[d + 10 + i]}, ` +
+        `${fmtF(f32(p, d + 18 + 4 * i))}…${fmtF(f32(p, d + 50 + 4 * i))}, curve ${fmtF(f32(p, d + 82 + 4 * i))}`));
+    }
+    return [
+      bytesf(p, 'expState[2] (EXP1/EXP2)', d, 2),
+      bytesf(p, 'expTargetAlgorObjectList[8] (slot)', d + 2, 8, slotNo),
+      bytesf(p, 'expTargetAlgorEffectNum[8] (parameter)', d + 10, 8),
+      floatsf(p, 'f32 min[8]', d + 18, 8), floatsf(p, 'f32 max[8]', d + 50, 8), floatsf(p, 'f32 curve[8]', d + 82, 8),
+      ...(targets.length ? [F('used targets', d + 2, 16, `${targets.length}`, targets)] : []),
+      ...(len >= 178 ? [floatsf(p, 'f32 autoOff[8] (pedal only)', d + 114, 8), floatsf(p, 'f32 offTime[8] (pedal only)', d + 146, 8)] : []),
+    ];
+  }
+  if (tag === 8 && len >= 39) {
+    const fs = [0, 1, 2].map((i) => {
+      const o = d + 3 + 12 * i;
+      const on = [];
+      for (let s = 0; s < 12; s++) if (p[o + s] === 1) on.push(s + 1);
+      return F(`FS${i + 1} → slots`, o, 12, on.length ? on.join(' ') : 'none', [bytesf(p, 'ctrlTargetSlot[12]', o, 12)]);
+    });
+    return [bytesf(p, 'ctrlLED[3]', d, 3), ...fs];
+  }
+  return null;
+}
 
 function tlvFields(p, base) {
   const out = [];
@@ -184,37 +247,35 @@ function tlvFields(p, base) {
     }
     const d = o + 8;
     const ch = [u32f(p, 'tag', o), u32f(p, 'length', o + 4)];
-    if (tag === 1 && len >= 101) {
-      ch.push(u32f(p, 'version', d), strf(p, 'name', d + 4, 17), F('unknown', d + 21, 70, hexBytes(p.subarray(d + 21, d + 91), 8)),
-        strf(p, 'style', d + 91, 10));
-    } else if (tag === 3 && len >= 3) {
-      ch.push(F('fs_func[3]', d, 3, hexBytes(p.subarray(d, d + 3))), ...(len > 3 ? [F('rest', d + 3, len - 3, hexBytes(p.subarray(d + 3, d + len)))] : []));
+    const sec = sectionFields(p, tag, d, len, base);
+    if (sec) {
+      ch.push(...sec);
+    } else if (tag === 1 && len >= 101) {
+      ch.push(u32f(p, 'version', d), strf(p, 'name', d + 4, 17), strf(p, 'patchAuthorInfo (author)', d + 21, 20),
+        strf(p, 'info (description)', d + 41, 50), strf(p, 'pathTypeinfo (style)', d + 91, 10));
     } else if (tag === 4 && len >= 72) {
       const algs = [];
       for (let s = 0; s < 12; s++) {
         const c = rd32(p, d + 24 + 4 * s);
-        algs.push(F(`slot ${s + 1}`, d + 24 + 4 * s, 4, c === 0xffffffff ? 'empty' : `${MODULES[c >>> 24] ?? '?'} 0x${hex32(c)}`));
+        algs.push(F(`slot ${s + 1}`, d + 24 + 4 * s, 4, algName(c)));
       }
-      ch.push(F('order[12] (position → slot)', d, 12, Array.from(p.subarray(d, d + 12)).join(' ')),
-        F('chain[12]', d + 12, 12, hexBytes(p.subarray(d + 12, d + 24))), F('alg[12]', d + 24, 48, '', algs));
-    } else if (tag === 5 && len >= 3636) {
+      ch.push(F('seq[12] (position → slot)', d, 12, Array.from(p.subarray(d, d + 12)).join(' ')),
+        bytesf(p, 'mod[12] (category per slot)', d + 12, 12, (b) => (b === 0xff ? '–' : CATEGORIES[b] ?? `${b}`)),
+        F('alg[12]', d + 24, 48, '', algs));
+    } else if (tag === 5 && len >= 3648) {
       const on = [0, 1, 2].map((s) => F(`scene ${s + 1} on[12]`, d + 3600 + 12 * s, 12,
         Array.from(p.subarray(d + 3600 + 12 * s, d + 3612 + 12 * s), (b) => (b ? '1' : '0')).join('')));
       const names = [0, 1, 2].map((s) => strf(p, `scene ${s + 1} name`, d + len - 24 + 8 * s, 8));
-      ch.push(F('parameters', d, 3600, '12 slots × 25 floats per scene …'), F('slot on/off', d + 3600, 36, '', on),
-        F('more', d + 3636, len - 3636 - 24, ''), F('scene names', d + len - 24, 24, '', names));
-    } else if (tag === 6 && len >= 458) {
-      const r = presetRouting(p.subarray(base));
-      const pos = (v) => (v === 0xff ? 'none' : v === 6 ? 'end of row 1' : `before row-1 position ${v + 1}`);
-      ch.push(F('routing', d + 2, 456, `${r.name}${r.template ? ' (template)' : ''}`, [
-        F('bytes 2 / 4 / 6 (meaning unknown)', d + 2, 5, [2, 4, 6].map((k) => hex2(p[d + k])).join(' ')),
-        F('split', d + 456, 1, pos(p[d + 456])),
-        F('merge', d + 457, 1, pos(p[d + 457])),
-      ]));
+      ch.push(F('effectSlotAlgroParam', d, 3600, '3 scenes × 12 slots × 25 floats …'),
+        F('effectSlotState (slot on/off)', d + 3600, 36, '', on),
+        F('patchVol[3]', d + 3636, 6, [0, 1, 2].map((s) => u16(p, d + 3636 + 2 * s)).join(' ')),
+        F('patchTempo[3] (BPM)', d + 3642, 6, [0, 1, 2].map((s) => u16(p, d + 3642 + 2 * s)).join(' ')),
+        F('empty / vol / bpm / sta / para (scene follow?)', d + 3648, len - 3648 - 24, hexBytes(p.subarray(d + 3648, d + len - 24), 8)),
+        F('scene names', d + len - 24, 24, '', names));
     } else if (len) {
       ch.push(F('data', d, len, hexBytes(p.subarray(d, d + len), 16)));
     }
-    out.push(F(`tag ${tag} – ${TLV_NAMES[tag] ?? '?'}`, o, 8 + len, `${len} B`, ch));
+    out.push(F(`tag ${tag} – ${TLV_SECTIONS[tag] ?? '?'}`, o, 8 + len, `${len} B`, ch));
     o += 8 + len;
   }
   return out;
@@ -260,9 +321,9 @@ export const KNOWN = {
     Array.from({ length: Math.floor(p.length / 32) }, (_, i) => strf(p, `IR ${i + 1}`, 32 * i, 32)))] },
   [CMD.PRESET_SAVED]: { name: 'preset saved on the pedal' },
   [CMD.NAME_EDIT]: { name: 'name editor (0 open / 1 closed?)', fields: (p) => [u32f(p, 'value', 0)] },
-  0x01030000: { name: 'footswitch functions (get)', fields: (p) => [F('fs_func[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3, 'rest')] },
-  0x01030001: { name: 'footswitch functions (set)', fields: (p) => [F('fs_func[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3)] },
-  0x01070001: { name: 'footswitch → slots (set)', fields: (p) => [F('footswitch', 0, 1, `${p[0] + 1}`), F('slot_on[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
+  0x01030000: { name: 'footswitch functions (get)', fields: (p) => (p.length >= 8 ? sectionFields(p, 3, 0, p.length, 0) : [F('click[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3, 'rest')]) },
+  0x01030001: { name: 'footswitch functions (set)', fields: (p) => [F('click[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3)] },
+  0x01070001: { name: 'footswitch → slots (set)', fields: (p) => [F('footswitch', 0, 1, `${p[0] + 1}`), F('ctrlTargetSlot[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
   0x01090001: { name: 'patch volume', fields: (p) => [F('u16 ?', 0, 2, `${u16(p, 0)}`), F('volume', 2, 2, `${u16(p, 2)}`), ...rest(p, 4)] },
   0x01090002: { name: 'patch tempo (BPM)', fields: (p) => [F('u16 ?', 0, 2, `${u16(p, 0)}`), F('tempo', 2, 2, `${u16(p, 2)}`), ...rest(p, 4)] },
   0x01090004: { name: 'slot on/off states', fields: (p) => [F('scene', 0, 1, `${p[0] + 1}`), F('on[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
@@ -289,7 +350,7 @@ export const COMMAND_GROUPS = [
   [0x0003, 5, 'global ?'], [0x0004, 3, 'global ?'], [0x0005, 7, 'global ?'], [0x0006, 12, 'global ?'],
   [0x0007, 8, 'global settings (00070000)'], [0x0008, 14, 'global / system (0008000a, name editor 00080003)'],
   [0x0009, 1, 'current preset'], [0x000a, 7, 'global ?'],
-  [0x0100, 2, 'preset (dump / write)'], [0x0101, 5, 'preset info (tag 1: name, style)'], [0x0102, 2, 'preset tag 2'],
+  [0x0100, 2, 'preset (dump / write)'], [0x0101, 5, 'preset info (tag 1: name, style)'], [0x0102, 2, 'preset quick knobs (tag 2)?'],
   [0x0103, 2, 'preset footswitches (tag 3)'], [0x0104, 5, 'preset slots (tag 4)'], [0x0105, 12, 'preset scenes (tag 5)'],
   [0x0106, 5, 'preset routing (tag 6)'], [0x0107, 2, 'preset tag 7 / FS → slots'], [0x0108, 2, 'preset list'],
   [0x0109, 9, 'scene parameters (volume, tempo, slot on/off)'], [0x010a, 4, 'slot times / DSP load'], [0x010b, 3, 'preset ?'],

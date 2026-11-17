@@ -309,7 +309,8 @@ export function initSniffer({ getAccess, getDevice, log, download, onLive = () =
   /** Raw frames with their header fields colored. */
   function renderFrames(e, el) {
     const seg = [
-      ['F0 21 25 4D 50 00 00 header', 0, 7, '#444'], ['checksum', 7, 1, COLORS[1]], ['kind', 8, 1, COLORS[2]],
+      ['F0 · 21 25 manufacturer · "MP" product · serId · resv', 0, 7, '#444'],
+      ['checksum (moduleCode)', 7, 1, COLORS[1]], ['kind (transType)', 8, 1, COLORS[2]],
       ['total (7-bit lo/hi)', 9, 2, COLORS[3]], ['offset (7-bit lo/hi)', 11, 2, COLORS[4]],
     ];
     const legend = document.createElement('div');
