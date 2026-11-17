@@ -1176,35 +1176,14 @@ function paramControl(raw, slot, p, scene, live) {
 function blockControls(raw, c, empty) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
   const wrap = el('span', 'block-ctl');
-  const copy = el('button', 'small-btn', 'Copy');
-  copy.title = 'copy this block (algorithm + parameters of all scenes) – also in the block\'s context menu';
-  copy.hidden = empty;
-  copy.onclick = () => copyBlock(raw, c);
-  const paste = el('button', 'small-btn', 'Paste');
-  const clip = state.blockClip;
-  paste.title = clip ? `insert "${clip.name}" here (replaces this block)` : 'copy a block first';
-  paste.disabled = !clip || !canTalk();
-  paste.onclick = () => restoreBlock(c.slot, clip);
-  const save = el('button', 'small-btn', 'Save…');
-  save.title = 'save this block as a file';
-  save.hidden = empty;
-  save.onclick = () => saveBlockFile(raw, c);
-  const load = el('button', 'small-btn', 'Load…');
-  load.title = 'load a block file into this position';
-  load.disabled = !canTalk();
-  load.onclick = () => loadBlockFile(c);
-  wrap.append(copy, paste, save, load);
+  // Copy / Paste / Save / Load / Delete: in the block's context menu (right-click)
   if (!empty) {
     const on = c.on[editScene()];
-    const t = el('button', `sw${on ? ' on' : ''}`, on ? 'On' : 'Off');
-    t.title = `on/off in scene ${editScene() + 1}`;
+    const t = el('button', `small-btn sw${on ? ' on' : ''}`, on ? 'On' : 'Off');
+    t.title = `on/off in scene ${editScene() + 1} – right-click the block for copy, paste, save, load, delete`;
     t.disabled = !canTalk();
     t.onclick = () => toggleOn(c.slot);
-    const rm = el('button', 'danger', 'Remove');
-    rm.title = 'remove the block from this position';
-    rm.disabled = !canTalk();
-    rm.onclick = () => removeBlock(c.slot);
-    wrap.append(t, rm);
+    wrap.append(t);
   }
   return wrap;
 }
@@ -1349,7 +1328,7 @@ async function removeBlock(slot) {
   renderEditor();
   // what the Hotone app sends (deleteSlotData) – not confirmed by a capture yet
   await state.dev.send(CMD.SET_ALG, setAlgPayload(slot, 0xff, EMPTY_ALG, false));
-  log(`slot ${slot + 1}: removed`);
+  log(`slot ${slot + 1}: deleted`);
 }
 
 async function swapPositions(a, b) {
