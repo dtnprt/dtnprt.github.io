@@ -76,13 +76,14 @@ export class AmperoDevice extends EventTarget {
     }
     let v;
     try {
-      v = await this.request(CMD.FIRMWARE_VERSION, new Uint8Array(0), { timeout: 1500, retries: 2 });
+      v = await this.request(CMD.FIRMWARE_VERSION, new Uint8Array(0), { timeout: 3000, retries: 2 });
     } catch {
       throw new Error(this.echoes ? 'this port only echoes what is sent (loopback, e.g. "Midi Through") – not an Ampero II'
         : 'no answer from an Ampero II on this port');
     }
     this.firmware = cString(v, 0, v.length);
     if (!/^V\d+\.\d+/.test(this.firmware)) throw new Error(`unexpected answer "${this.firmware}" – not an Ampero II`);
+    this.connectedAt = performance.now();
     this._log(`connected, firmware ${this.firmware}`);
     return this.firmware;
   }
@@ -190,7 +191,14 @@ export class AmperoDevice extends EventTarget {
   }
 
   /** Send one request and wait for the answer with the same cmd. Requests run one after another. */
+  /** True if this app itself asked for `cmd` within the last `ms` (a late / repeated answer is then not foreign). */
+  askedRecently(cmd, ms = 10000) {
+    const t = this.asked?.get(cmd);
+    return t !== undefined && performance.now() - t < ms;
+  }
+
   request(cmd, payload = new Uint8Array(0), { kind = KIND_GET, timeout = 2000, retries = 0, answer = cmd } = {}) {
+    (this.asked ??= new Map()).set(answer, performance.now());
     const run = async () => {
       for (let attempt = 0; ; attempt++) {
         try {

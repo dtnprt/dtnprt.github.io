@@ -371,6 +371,10 @@ const OTHER_HOST_SIGNS = new Set([
 
 function otherHostDetected(cmd) {
   if (state.otherHost || state.sniffing) return; // while sniffing, other programs are what we want to see
+  const dev = state.dev ?? state.lastDev;
+  // not a sign of another program: a late or repeated answer to our own request, or what the pedal reports by
+  // itself right after connecting (e.g. its firmware version)
+  if (dev?.askedRecently(cmd) || !dev?.connectedAt || performance.now() - dev.connectedAt < 5000) return;
   state.otherHost = true;
   log(`Another program is talking to the pedal (message ${hex32(cmd)}) – probably the Hotone software. ` +
     'Automatic refresh and all reading/writing are paused so it is not disturbed. Click "Resume" after closing it.');

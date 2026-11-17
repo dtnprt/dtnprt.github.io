@@ -47,6 +47,9 @@ export async function install() {
     console.debug(`[sim] ${kind === KIND_SET ? 'set' : 'get'} ${hex32(cmd)} ${payload.length} B`);
     const get = kind !== KIND_SET;
     switch (cmd) {
+      case CMD.CONNECT: // like the pedal: it reports its firmware version by itself a little later
+        setTimeout(() => emit(CMD.FIRMWARE_VERSION, new TextEncoder().encode('V2.5.0\0\0\0\0\0\0')), 1400);
+        return undefined;
       case CMD.FIRMWARE_VERSION:
         return emit(cmd, new TextEncoder().encode('V2.5.0\0\0\0\0\0\0'));
       case CMD.PRESET_LIST: {
