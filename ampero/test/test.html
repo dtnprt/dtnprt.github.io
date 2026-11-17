@@ -20,7 +20,7 @@
     import { Assembler, describe, parseTraceText } from '../js/sniffer.js';
     import { algInfo, algParam, algsOfCategory, formatValue, setAlgDb } from '../js/algdb.js';
     import { paramPayload, presetParam, savePayload, setPresetParam } from '../js/protocol.js';
-    import { irPayload, namPayload, presetBlock, presetFs, setPresetBlock, presetSceneCount, presetScene, presetOn, tlvSplit } from '../js/protocol.js';
+    import { irPayload, namPayload, presetBlock, presetFs, setPresetBlock, presetSceneCount, presetScene, presetOn, tlvSplit, presetMidi, setPresetMidi, fsMidiPayload, patchMidiPayload } from '../js/protocol.js';
     import { namToNamb } from '../js/nam2namb.js';
     import { wavToIr } from '../js/irwav.js';
 
@@ -305,6 +305,13 @@
         presetBlock(moved, 9).code === blk.code && JSON.stringify(presetBlock(moved, 4)) === JSON.stringify(blk));
       check('footswitches: tag 3 click codes', presetFs(pr).click.length === 3);
       // scene count from the tag 5 length: Stomp 3 scenes; a synthetic 5-scene ("Stage") preset built from it
+      {
+        const m = setPresetMidi(pr, 8, { ch: 15, cmd: 128, data: 5 });
+        check('midi: 15 messages, set FS3 row 3', presetMidi(pr).length === 15 && presetMidi(m)[8].ch === 15 &&
+          presetMidi(m)[8].cmd === 128 && presetMidi(m)[8].data === 5 && presetMidi(m)[9].ch === presetMidi(pr)[9].ch);
+        check('midi: payloads', fsMidiPayload(2, 2, { ch: 15, cmd: 128, data: 5 }).join() === '2,0,0,0,2,0,0,0,15,128,5' &&
+          patchMidiPayload(0, { ch: 2, cmd: 11, data: 64 }).join() === '0,0,0,0,2,11,64');
+      }
       check('scenes: Stomp preset has 3', presetSceneCount(pr) === 3 && presetScene(pr, 2).name.length > 0);
       {
         const t = tlvSplit(pr), parts = [];

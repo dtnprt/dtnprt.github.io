@@ -764,6 +764,34 @@ export function setPresetFsSlot(raw, fs, slot, on) {
 
 export const fsSlotsPayload = (fs, on) => Uint8Array.of(fs, ...on.map((x) => (x ? 1 : 0)));
 
+// ------------------------------------------------------------------ MIDI messages (tag 9)
+//
+// tag 9 = 15 messages of 3 bytes: u8 channel (0xFF = OFF, 0..15 = channel 1..16), u8 command (0..127 = CC n,
+// 128 = PC), u8 data (0..127). Messages 0..8: footswitch MIDI, FS n message r at 3n + r; 9..14: patch MIDI (sent
+// when the preset is loaded). Verified with data/A98-1-MIDI-Test.raw (values set in the Hotone editor).
+// Set (from the Hotone app, HTModelPreset.setFSMidiParam / setPatchMidiParam – not yet seen in a capture):
+// 0x010B0001 u32 fs, u32 id, char[3]; 0x010B0002 u32 id, char[3]. id = row within the footswitch / patch MIDI.
+export const MIDI = { FS: 0x010b0001, PATCH: 0x010b0002, FS_ROWS: 3, PATCH_ROWS: 6, PC: 128, OFF: 0xff };
+
+export function presetMidi(raw) {
+  const o = tagOffset(raw, 9), len = rd32(raw, o - 4);
+  return Array.from({ length: Math.floor(len / 3) }, (_, i) => ({ ch: raw[o + 3 * i], cmd: raw[o + 3 * i + 1], data: raw[o + 3 * i + 2] }));
+}
+
+export function setPresetMidi(raw, index, m) {
+  const out = raw.slice();
+  out.set([m.ch, m.cmd, m.data], tagOffset(raw, 9) + 3 * index);
+  return out;
+}
+
+/** A message limited to the values the Hotone editor uses. */
+export const midiValid = (m) => (m.ch === MIDI.OFF || (m.ch >= 0 && m.ch <= 15)) && m.cmd >= 0 && m.cmd <= MIDI.PC &&
+  m.data >= 0 && m.data <= 127;
+
+export const fsMidiPayload = (fs, row, m) => concat(u32le(fs), u32le(row), Uint8Array.of(m.ch, m.cmd, m.data));
+export const patchMidiPayload = (row, m) => concat(u32le(row), Uint8Array.of(m.ch, m.cmd, m.data));
+export const midiText = (m) => (m.ch === MIDI.OFF ? 'OFF' : `ch ${m.ch + 1} · ${m.cmd === MIDI.PC ? 'PC' : `CC ${m.cmd}`} · ${m.data}`);
+
 /**
  * Footswitch functions the Ampero II Stomp accepts. The table above is from the app for both models; on the Stomp,
  * "Ctrl 5/6" (and editing scenes 4/5) stop the firmware with an error. Allowed: what the Stomp's factory presets use

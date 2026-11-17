@@ -6,7 +6,8 @@ import {
   NAM_SLOTS, UPLOAD_NAME, USER_IRS,
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
-  FS_FUNCTIONS, STOMP_FS_FUNCTIONS, STOMP_FS_CTRL, STOMP_FS_FIXED, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
+  FS_FUNCTIONS, STOMP_FS_FUNCTIONS, STOMP_FS_CTRL, STOMP_FS_FIXED, FS_SET, FS_SLOTS_SET,
+  MIDI, fsMidiPayload, midiText, midiValid, patchMidiPayload, presetMidi, setPresetMidi, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush, presetSceneCount,
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
 } from './protocol.js';
@@ -1105,8 +1106,63 @@ function renderFs(raw, chain) {
       }
       b.append(slots);
     }
+    b.append(midiRows(raw, 'fs', f));
     box.append(b);
   }
+  box.append(midiRows(raw, 'patch', 0));
+}
+
+/** MIDI messages of footswitch f (3) or of the preset (patch MIDI, 6) – collapsible, like the Hotone editor. */
+function midiRows(raw, kind, f) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  let all = [];
+  try {
+    all = presetMidi(raw);
+  } catch { /* ignore */ }
+  const first = kind === 'fs' ? MIDI.FS_ROWS * f : MIDI.FS_ROWS * 3;
+  const rows = all.slice(first, first + (kind === 'fs' ? MIDI.FS_ROWS : MIDI.PATCH_ROWS));
+  const used = rows.filter((m) => m.ch !== MIDI.OFF).length;
+  const d = el('details', `midi-box ${kind}`);
+  const key = `${kind}${f}`;
+  d.open = !!state.midiOpen?.[key];
+  d.ontoggle = () => {
+    (state.midiOpen ??= {})[key] = d.open;
+  };
+  d.append(el('summary', '', `${kind === 'fs' ? 'MIDI' : 'Patch MIDI (sent when the preset is loaded)'}${used ? ` · ${used} set` : ''}`));
+  const live = canTalk();
+  rows.forEach((m, r) => {
+    const row = el('div', 'midi-row');
+    const ch = el('select');
+    ch.append(new Option('OFF', String(MIDI.OFF)));
+    for (let c = 0; c < 16; c++) ch.append(new Option(`ch ${c + 1}`, String(c)));
+    ch.value = String(m.ch);
+    const cmd = el('select');
+    for (let c = 0; c < 128; c++) cmd.append(new Option(`CC ${c}`, String(c)));
+    cmd.append(new Option('PC', String(MIDI.PC)));
+    cmd.value = String(m.cmd);
+    const data = el('input');
+    Object.assign(data, { type: 'number', min: 0, max: 127, step: 1, value: m.data });
+    const off = m.ch === MIDI.OFF;
+    ch.disabled = !live;
+    cmd.disabled = data.disabled = !live || off;
+    const send = () => setMidi(kind, f, r, first + r, { ch: +ch.value, cmd: +cmd.value, data: Math.max(0, Math.min(127, Math.round(+data.value) || 0)) });
+    ch.onchange = cmd.onchange = data.onchange = send;
+    row.append(el('span', 'midi-n', `${r + 1}`), ch, cmd, data);
+    row.title = midiText(m);
+    d.append(row);
+  });
+  return d;
+}
+
+async function setMidi(kind, f, row, index, m) {
+  if (!midiValid(m)) {
+    log(`MIDI: invalid value – not sent`);
+    return;
+  }
+  if (!editPreset((raw) => setPresetMidi(raw, index, m))) return;
+  renderEditor();
+  await state.dev.send(kind === 'fs' ? MIDI.FS : MIDI.PATCH, kind === 'fs' ? fsMidiPayload(f, row, m) : patchMidiPayload(row, m));
+  log(`${kind === 'fs' ? `FS${f + 1}` : 'Patch'} MIDI ${row + 1}: ${midiText(m)}`);
 }
 
 async function setFsFunction(f, code) {
