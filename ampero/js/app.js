@@ -1026,9 +1026,35 @@ function fsAssignments(raw, slot) {
 
 // ------------------------------------------------------------------ footswitches of the preset (tag 3 / tag 8)
 
-const FS_CHOICES = [...FS_FUNCTIONS].filter(([c]) => c < 51); // 51..54 = global PATCH FS FUNC
+const FS_CHOICES = [...FS_FUNCTIONS].filter(([c]) => c < 51 || c === 0xff); // 51..54 = global PATCH FS FUNC
 /** Footswitch functions offered for a preset: "Scene n" only for scenes it has (Stomp: 1–3, Stage: 1–5). */
 const fsChoices = (raw) => FS_CHOICES.filter(([c]) => c < 27 || c > 31 || c - 27 < presetSceneCount(raw));
+
+/** The footswitch functions in groups for the dropdown (codes, see FS_FUNCTIONS). */
+const FS_GROUPS = [
+  ['', [0xff]],
+  ['Ctrl – switch blocks', [12, 32, 33, 34, 35, 36, 37]],
+  ['Block on/off', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]],
+  ['Scenes', [27, 28, 29, 30, 31]],
+  ['Patch & bank', [22, 23, 24, 25, 26, 38, 39, 15, 16]],
+  ['Tempo & tools', [13, 18, 19, 41, 20, 21, 40]],
+  ['Looper', [17, 42, 43, 47, 44, 45, 46, 49]],
+  ['Drum', [50, 48]],
+];
+
+/** Fill a select with the allowed footswitch functions, grouped. */
+function fillFsSelect(sel, allowed, current) {
+  const ok = new Set(allowed.map(([c]) => c));
+  for (const [label, codes] of FS_GROUPS) {
+    const list = codes.filter((c) => ok.has(c));
+    if (!list.length) continue;
+    const parent = label ? Object.assign(document.createElement('optgroup'), { label }) : sel;
+    for (const c of list) parent.append(new Option(fsFunctionName(c), String(c)));
+    if (label) sel.append(parent);
+  }
+  if (![...sel.options].some((o) => +o.value === current)) sel.append(new Option(fsFunctionName(current), String(current)));
+  sel.value = String(current);
+}
 
 function renderFs(raw, chain) {
   const box = $('edFs');
@@ -1040,15 +1066,12 @@ function renderFs(raw, chain) {
   box.hidden = !fs;
   if (!fs) return;
   const live = canTalk();
-  box.replaceChildren(el('div', 'fs-title', 'Footswitches of this preset (stomp mode) – "Ctrl" functions switch the blocks selected below'));
+  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), el('div', 'fs-title', '"Ctrl" functions switch the blocks selected below'));
   for (let f = 0; f < 3; f++) {
     const b = el('div', 'fs-box');
     const head = el('div', 'fs-head');
     const sel = el('select');
-    const choices = fsChoices(raw);
-    for (const [code, name] of choices) sel.append(new Option(name, String(code)));
-    if (!choices.some(([c]) => c === fs.click[f])) sel.append(new Option(fsFunctionName(fs.click[f]), String(fs.click[f])));
-    sel.value = String(fs.click[f]);
+    fillFsSelect(sel, fsChoices(raw), fs.click[f]);
     sel.disabled = !live;
     sel.onchange = () => setFsFunction(f, +sel.value);
     head.append(el('b', '', `FS${f + 1}`), sel);

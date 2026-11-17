@@ -218,7 +218,10 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .fx.m-Split-Mixer { border-color: #9aa0a6; }
 .editor-params { display: flex; gap: 24px; min-height: 220px; }
 .mock-modules ul { list-style: none; margin: 6px 0 0; padding: 0; columns: 2; color: #999; }
-.ed-left { width: 250px; flex: none; display: flex; flex-direction: column; gap: 16px; }
+.ed-left { width: 250px; flex: none; display: flex; flex-direction: column; gap: 12px; }
+.ed-left .modules, .ed-left .editor-fs { padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
+.ed-left .editor-fs .fs-title { font-size: 11px; margin-top: -6px; }
+.fs-box + .fs-box { border-top: 1px solid #262626; padding-top: 8px; }
 .modules .hint { font-size: 11px; }
 .modules li { cursor: pointer; border-radius: 3px; padding-left: 3px; }
 .modules li:hover { color: #fff; background: #2a2a2a; }
