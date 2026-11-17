@@ -325,6 +325,23 @@ export function presetSlots(raw) {
 }
 
 /**
+ * Number of scenes of a preset, from the length of tag 5: per scene f32[12][25] + u8 on[12] + u16 volume + u16 tempo
+ * + char name[8] = 1224 bytes, plus 317 bytes of other data. Stomp: 3989 bytes = 3 scenes (confirmed). An Ampero II
+ * Stage preset with 5 scenes would have 6437 bytes (derived, not confirmed with a Stage). Unknown lengths: 3.
+ */
+export const SCENE_BYTES = 1224;
+const SCENE_EXTRA = 317;
+export function presetSceneCount(raw) {
+  try {
+    const len = rd32(raw, tagOffset(raw, 5) - 4);
+    const n = (len - SCENE_EXTRA) / SCENE_BYTES;
+    return Number.isInteger(n) && n >= 1 && n <= 8 ? n : 3;
+  } catch {
+    return 3;
+  }
+}
+
+/**
  * Signal chain as the Hotone software shows it: 12 positions (2 rows of 6, serial), position p holds
  * slot order[p] (tag 4: u8 order[12]); per scene the slot is on/off (tag 5 at data offset 3600:
  * u8 on[3][12] by slot, 0 = off). Verified with the software's screenshots of A00-1 and A99-1.
@@ -335,7 +352,8 @@ export function presetChain(raw) {
   return Array.from({ length: 12 }, (_, pos) => {
     const slot = raw[t4 + pos] < 12 ? raw[t4 + pos] : pos;
     const code = rd32(raw, t4 + 24 + 4 * slot);
-    const on = [0, 1, 2].map((s) => raw[t5 + 3600 + 12 * s + slot] !== 0);
+    const n = presetSceneCount(raw);
+    const on = Array.from({ length: n }, (_, s) => raw[t5 + 1200 * n + 12 * s + slot] !== 0);
     return { pos, slot, code, on };
   });
 }
@@ -468,7 +486,8 @@ export function presetInfo(raw) {
       info.style = s[0] === 0xff ? '' : cString(s, 0, STYLE_LEN);
     }
     if (tag === 5 && data.length >= 24) {
-      for (let s = 0; s < 3; s++) info.scenes.push(cString(data, data.length - 24 + 8 * s, 8));
+      const n = Number.isInteger((data.length - SCENE_EXTRA) / SCENE_BYTES) ? (data.length - SCENE_EXTRA) / SCENE_BYTES : 3;
+      for (let s = 0; s < n; s++) info.scenes.push(cString(data, data.length - 8 * n + 8 * s, 8));
     }
   }
   return info;
@@ -537,8 +556,9 @@ export function paramPayload(slot, id, value) {
 // ------------------------------------------------------------------ blocks (effect slots)
 
 export const EMPTY_ALG = 0xffffffff;
-const SCENES = 3;
-const ON_OFFSET = 3600; // tag 5: u8 on[3 scenes][12 slots]
+// tag 5 layout for n scenes: f32 params[n][12][25] @0, u8 on[n][12] @1200n, u16 vol[n] @1212n, u16 tempo[n] @1214n,
+// 317 bytes, char name[n][8] at the end
+const onOffset = (raw) => 1200 * presetSceneCount(raw);
 
 /** Payload of CMD.SET_ALG: u8 slot, u8 category, u32 alg code, u8 on. Remove = category 0xFF, code 0xFFFFFFFF, on 0. */
 export function setAlgPayload(slot, category, code, on) {
@@ -574,13 +594,13 @@ export function setPresetSeq(raw, seq) {
 
 /** Slot on/off states of one scene: bool[12]. */
 export function presetOn(raw, scene) {
-  const o = tagOffset(raw, 5) + ON_OFFSET + SLOTS * scene;
+  const o = tagOffset(raw, 5) + onOffset(raw) + SLOTS * scene;
   return Array.from(raw.subarray(o, o + SLOTS), (b) => b !== 0);
 }
 
 export function setPresetOn(raw, scene, slot, on) {
   const out = raw.slice();
-  out[tagOffset(raw, 5) + ON_OFFSET + SLOTS * scene + slot] = on ? 1 : 0;
+  out[tagOffset(raw, 5) + onOffset(raw) + SLOTS * scene + slot] = on ? 1 : 0;
   return out;
 }
 
@@ -594,7 +614,7 @@ export function setPresetAlg(raw, slot, category, code, params = []) {
   const t4 = tagOffset(raw, 4);
   out[t4 + SLOTS + slot] = category & 0xff;
   v.setUint32(t4 + 2 * SLOTS + 4 * slot, code >>> 0, true);
-  for (let s = 0; s < SCENES; s++) {
+  for (let s = 0; s < presetSceneCount(raw); s++) {
     for (let id = 0; id < SLOT_PARAMS; id++) v.setFloat32(paramOffset(raw, s, slot, id), params[id] ?? 0, true);
   }
   return out;
@@ -602,14 +622,15 @@ export function setPresetAlg(raw, slot, category, code, params = []) {
 
 // ------------------------------------------------------------------ scenes (tag 5)
 
-const SCENE_VOL = 3636, SCENE_BPM = 3642; // u16 [3] each
+const sceneVol = (n) => 1212 * n, sceneBpm = (n) => 1214 * n; // u16 [n] each
 export const SCENE_NAME_LEN = 8; // char name[8]; the pedal keeps everything up to the first 0
 
 export function presetScene(raw, scene) {
   const o = tagOffset(raw, 5), d = new DataView(raw.buffer, raw.byteOffset);
   const len = rd32(raw, o - 4);
-  return { volume: d.getUint16(o + SCENE_VOL + 2 * scene, true), tempo: d.getUint16(o + SCENE_BPM + 2 * scene, true),
-    name: cString(raw, o + len - 24 + SCENE_NAME_LEN * scene, SCENE_NAME_LEN) };
+  const n = presetSceneCount(raw);
+  return { volume: d.getUint16(o + sceneVol(n) + 2 * scene, true), tempo: d.getUint16(o + sceneBpm(n) + 2 * scene, true),
+    name: cString(raw, o + len - SCENE_NAME_LEN * n + SCENE_NAME_LEN * scene, SCENE_NAME_LEN) };
 }
 
 /** Copy of the preset with scene volume / tempo / name changed ({volume, tempo, name}, each optional). */
@@ -617,10 +638,11 @@ export function setPresetScene(raw, scene, { volume, tempo, name } = {}) {
   const out = raw.slice();
   const o = tagOffset(raw, 5), d = new DataView(out.buffer);
   const len = rd32(raw, o - 4);
-  if (volume != null) d.setUint16(o + SCENE_VOL + 2 * scene, volume, true);
-  if (tempo != null) d.setUint16(o + SCENE_BPM + 2 * scene, tempo, true);
+  const n = presetSceneCount(raw);
+  if (volume != null) d.setUint16(o + sceneVol(n) + 2 * scene, volume, true);
+  if (tempo != null) d.setUint16(o + sceneBpm(n) + 2 * scene, tempo, true);
   if (name != null) { // like the pedal: only up to and including the terminating 0
-    const at = o + len - 24 + SCENE_NAME_LEN * scene;
+    const at = o + len - SCENE_NAME_LEN * n + SCENE_NAME_LEN * scene;
     const b = new TextEncoder().encode(name.slice(0, SCENE_NAME_LEN - 1));
     out.set(b, at);
     out[at + b.length] = 0;
@@ -659,24 +681,25 @@ export function presetBlock(raw, slot) {
   return {
     format: 'ampero-block', version: 1,
     code: rd32(raw, t4 + 2 * SLOTS + 4 * slot), category: raw[t4 + SLOTS + slot],
-    on: [0, 1, 2].map((s) => presetOn(raw, s)[slot]),
-    params: [0, 1, 2].map((s) => Array.from({ length: SLOT_PARAMS }, (_, id) => presetParam(raw, s, slot, id))),
+    on: Array.from({ length: presetSceneCount(raw) }, (_, s) => presetOn(raw, s)[slot]),
+    params: Array.from({ length: presetSceneCount(raw) }, (_, s) => Array.from({ length: SLOT_PARAMS }, (_, id) => presetParam(raw, s, slot, id))),
   };
 }
 
 /** Copy of the preset with `block` in `slot` (what the pedal ends up with after restoreBlock). */
 export function setPresetBlock(raw, slot, block) {
   let r = setPresetAlg(raw, slot, block.category, block.code, block.params[0]);
-  for (let s = 0; s < 3; s++) {
-    for (let id = 0; id < SLOT_PARAMS; id++) r = setPresetParam(r, s, slot, id, block.params[s][id] ?? 0);
-    r = setPresetOn(r, s, slot, block.on[s]);
+  for (let s = 0; s < presetSceneCount(raw); s++) {
+    const src = Math.min(s, block.params.length - 1); // a block from a preset with fewer scenes: repeat its last one
+    for (let id = 0; id < SLOT_PARAMS; id++) r = setPresetParam(r, s, slot, id, block.params[src][id] ?? 0);
+    r = setPresetOn(r, s, slot, block.on[src]);
   }
   return r;
 }
 
 /** Validate a parsed block file; throws on a bad one. */
 export function checkBlock(b) {
-  if (b?.format !== 'ampero-block' || !Number.isInteger(b.code) || !Array.isArray(b.params) || b.params.length !== 3 ||
+  if (b?.format !== 'ampero-block' || !Number.isInteger(b.code) || !Array.isArray(b.params) || !b.params.length ||
       b.params.some((p) => !Array.isArray(p)) || !Array.isArray(b.on)) throw new Error('not an Ampero block file');
   return b;
 }

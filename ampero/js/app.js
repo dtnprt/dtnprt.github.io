@@ -7,7 +7,7 @@ import {
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
   FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
-  checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush,
+  checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush, presetSceneCount,
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
@@ -419,7 +419,6 @@ function setCurrent(index, scene) {
   const changed = index !== state.current;
   if (changed) {
     // the pedal drops unsaved changes when another preset is loaded: our edited copy is out of date too
-    xsStore.delete(state.current);
     if (state.dirty >= 0 && state.dirty === state.current) {
       state.presets.delete(state.dirty);
       log(`${presetLabel(state.dirty)}: unsaved changes discarded (other preset selected)`);
@@ -690,16 +689,17 @@ function renderEditor() {
   const scene = Math.max(0, state.scene);
   const scenes = $('edScenes').children;
   for (let s = 0; s < 5; s++) {
-    scenes[s].hidden = s >= sceneCount() && s !== scene;
+    const n = sceneCount();
+    scenes[s].hidden = s >= n && s !== scene;
     let name = `Scene ${s + 1}`;
     try {
-      name = s < XS ? info?.scenes[s] || name : raw ? sceneMeta(raw, s).name : name;
+      name = s < n ? info?.scenes[s] || name : name;
     } catch { /* ignore */ }
     scenes[s].textContent = name;
     scenes[s].classList.toggle('on', s === scene);
-    scenes[s].title = s >= XS ? 'the pedal is in this scene (switched by a footswitch) – it cannot be edited on the Stomp'
+    scenes[s].title = s >= n ? 'the pedal is in this scene (switched by a footswitch), which this preset does not have – it cannot be edited'
       : raw ? 'click: select · double-click: rename' : '';
-    scenes[s].disabled = s >= XS;
+    scenes[s].disabled = s >= n;
   }
   let sv = null;
   try {
@@ -1023,6 +1023,8 @@ function fsAssignments(raw, slot) {
 // ------------------------------------------------------------------ footswitches of the preset (tag 3 / tag 8)
 
 const FS_CHOICES = [...FS_FUNCTIONS].filter(([c]) => c < 51); // 51..54 = global PATCH FS FUNC
+/** Footswitch functions offered for a preset: "Scene n" only for scenes it has (Stomp: 1–3, Stage: 1–5). */
+const fsChoices = (raw) => FS_CHOICES.filter(([c]) => c < 27 || c > 31 || c - 27 < presetSceneCount(raw));
 
 function renderFs(raw, chain) {
   const box = $('edFs');
@@ -1039,8 +1041,9 @@ function renderFs(raw, chain) {
     const b = el('div', 'fs-box');
     const head = el('div', 'fs-head');
     const sel = el('select');
-    for (const [code, name] of FS_CHOICES) sel.append(new Option(name, String(code)));
-    if (!FS_CHOICES.some(([c]) => c === fs.click[f])) sel.append(new Option(fsFunctionName(fs.click[f]), String(fs.click[f])));
+    const choices = fsChoices(raw);
+    for (const [code, name] of choices) sel.append(new Option(name, String(code)));
+    if (!choices.some(([c]) => c === fs.click[f])) sel.append(new Option(fsFunctionName(fs.click[f]), String(fs.click[f])));
     sel.value = String(fs.click[f]);
     sel.disabled = !live;
     sel.onchange = () => setFsFunction(f, +sel.value);
@@ -1103,50 +1106,37 @@ function editScene() {
   return Math.max(0, state.scene);
 }
 
-// ------------------------------------------------------------------ scenes 4 and 5 (footswitch only)
+// ------------------------------------------------------------------ number of scenes
 //
-// The Stomp has 3 scenes. A footswitch set to "Scene 4/5" still switches it there, but any edit in scene 4/5
-// (parameter, on/off, …) stops the firmware with "Scene < SCENE_NUM" (PresetInterface.c:4196, V2.5.0 – confirmed
-// the hard way). So while the pedal is in scene 4/5, all scene-specific edits are blocked; the display falls back to
-// scene 1. (An experimental "edit scenes 4 and 5" option existed briefly and was removed for this reason.)
+// Stomp presets have 3 scenes, Stage presets presumably 5 (presetSceneCount, from the preset format). A footswitch
+// set to "Scene 4/5" still switches a Stomp there, but any edit in such a scene stops the Stomp's firmware with
+// "Scene < SCENE_NUM" (PresetInterface.c:4196, V2.5.0). So scenes beyond the preset's count are never offered and
+// all edits are blocked while the pedal is in one of them; "Scene 4/5" footswitch functions are only offered for
+// presets that have these scenes.
 
-const XS = 3; // first extra scene (0-based)
-const xsStore = new Map(); // preset index -> {params: Map "s/slot/id" -> value, on: Map "s/slot" -> bool, meta: []}
-
-function xsOf(i) {
-  if (!xsStore.has(i)) xsStore.set(i, { params: new Map(), on: new Map(), meta: [] });
-  return xsStore.get(i);
+/** Ampero II Stage (5 scenes): by the MIDI port name or by the current preset's format. */
+function isStage() {
+  const raw = state.presets.get(state.current);
+  return /stage/i.test(state.model) || (raw ? presetSceneCount(raw) >= 5 : false);
 }
 
-const sceneCount = () => 3;
+function sceneCount() {
+  const raw = state.presets.get(state.current);
+  return raw ? presetSceneCount(raw) : 3;
+}
 
-/** Scene-specific edits are possible (not when the pedal is in scene 4/5 while the option is off). */
 function sceneEditable() {
-  if (editScene() < XS) return true;
-  log(`the pedal is in scene ${editScene() + 1}: the Stomp cannot edit scenes 4/5 (its firmware stops with an error) – select scene 1–3`);
+  if (editScene() < sceneCount()) return true;
+  log(`the pedal is in scene ${editScene() + 1}, which this preset does not have (the Stomp's firmware stops with an error when it is edited) – select scene 1–${sceneCount()}`);
   return false;
 }
 
-function sceneParam(raw, s, slot, id) {
-  if (s < XS) return presetParam(raw, s, slot, id);
-  return xsOf(state.current).params.get(`${s}/${slot}/${id}`) ?? presetParam(raw, 0, slot, id);
-}
-
-function sceneOn(raw, s) {
-  if (s < XS) return presetOn(raw, s);
-  const base = presetOn(raw, 0), m = xsOf(state.current).on;
-  return base.map((v, slot) => m.get(`${s}/${slot}`) ?? v);
-}
-
+/** Display values of a scene the preset does not have: scene 1. */
+const showScene = (raw, s) => (s < presetSceneCount(raw) ? s : 0);
+const sceneParam = (raw, s, slot, id) => presetParam(raw, showScene(raw, s), slot, id);
+const sceneOn = (raw, s) => presetOn(raw, showScene(raw, s));
 function sceneMeta(raw, s) {
-  if (s < XS) return presetScene(raw, s);
-  const s1 = presetScene(raw, 0);
-  return { name: `Scene ${s + 1}`, volume: s1.volume, tempo: s1.tempo, ...xsOf(state.current).meta[s] };
-}
-
-function setXsMeta(s, values) {
-  const m = xsOf(state.current).meta;
-  m[s] = { ...m[s], ...values };
+  return s < presetSceneCount(raw) ? presetScene(raw, s) : { ...presetScene(raw, 0), name: `Scene ${s + 1}` };
 }
 
 function renderParams(raw, chain) {
@@ -1348,10 +1338,6 @@ async function toggleOn(slot) {
   if (!editPreset((raw) => {
     on = sceneOn(raw, scene);
     on[slot] = !on[slot];
-    if (scene >= XS) {
-      xsOf(state.current).on.set(`${scene}/${slot}`, on[slot]);
-      return raw;
-    }
     return setPresetOn(raw, scene, slot, on[slot]);
   })) return;
   renderEditor();
@@ -1367,7 +1353,7 @@ async function setBlockAlg(slot, category, code, wasEmpty) {
   if (!editPreset((raw) => {
     if (!wasEmpty) on = sceneOn(raw, scene)[slot];
     let r = setPresetAlg(raw, slot, category, code, params);
-    if (wasEmpty) for (let s = 0; s < 3; s++) r = setPresetOn(r, s, slot, true);
+    if (wasEmpty) for (let s = 0; s < presetSceneCount(raw); s++) r = setPresetOn(r, s, slot, true);
     return r;
   })) return;
   state.selSlot = slot;
@@ -1394,11 +1380,13 @@ async function restoreBlock(slot, block) {
   renderEditor();
   try {
     const dev = state.dev;
-    await dev.send(CMD.SET_ALG, setAlgPayload(slot, block.category, block.code, block.on[Math.min(scene, 2)]));
+    await dev.send(CMD.SET_ALG, setAlgPayload(slot, block.category, block.code, block.on[Math.min(scene, block.on.length - 1)]));
     await dev.waitQuiet(150, 1500);
-    for (let s = 0; s < 3; s++) {
+    const nScenes = presetSceneCount(state.presets.get(state.current));
+    for (let s = 0; s < nScenes; s++) {
+      const src = Math.min(s, block.params.length - 1);
       await dev.selectScene(s);
-      for (const id of ids) await dev.send(CMD.PARAM, paramPayload(slot, id, block.params[s][id] ?? 0));
+      for (const id of ids) await dev.send(CMD.PARAM, paramPayload(slot, id, block.params[src][id] ?? 0));
       await dev.send(CMD.SLOT_ON, slotOnPayload(s, presetOn(state.presets.get(state.current), s)));
     }
     await dev.selectScene(scene);
@@ -1417,7 +1405,7 @@ async function restoreBlock(slot, block) {
 async function removeBlock(slot) {
   if (!editPreset((raw) => {
     let r = setPresetAlg(raw, slot, 0xff, EMPTY_ALG, []);
-    for (let s = 0; s < 3; s++) r = setPresetOn(r, s, slot, false);
+    for (let s = 0; s < presetSceneCount(raw); s++) r = setPresetOn(r, s, slot, false);
     return r;
   })) return;
   renderEditor();
@@ -1456,11 +1444,7 @@ async function setSceneValue(what, value) {
   const scene = editScene();
   const v = what === 'tempo' ? Math.max(40, Math.min(300, Math.round(value) || 120)) : Math.max(0, Math.min(100, Math.round(value)));
   if (!sceneEditable()) return;
-  if (!editPreset((raw) => {
-    if (scene < XS) return setPresetScene(raw, scene, { [what]: v });
-    setXsMeta(scene, { [what]: v });
-    return raw;
-  })) return;
+  if (!editPreset((raw) => setPresetScene(raw, scene, { [what]: v }))) return;
   markDirty();
   await state.dev.send(what === 'tempo' ? CMD.SCENE_TEMPO : CMD.SCENE_VOLUME, sceneValuePayload(scene, v));
   log(`scene ${scene + 1}: ${what} ${v}`);
@@ -1474,11 +1458,7 @@ async function renameScene(s) {
     maxLength: SCENE_NAME_LEN - 1, ok: 'Rename', validate: (t) => (!t.trim() ? 'enter a name'
       : /^[\x20-\x7e]*$/.test(t) ? '' : 'only plain ASCII characters') });
   if (name == null || name === old) return;
-  if (!editPreset((r) => {
-    if (s < XS) return setPresetScene(r, s, { name });
-    setXsMeta(s, { name });
-    return r;
-  })) return;
+  if (!editPreset((r) => setPresetScene(r, s, { name }))) return;
   renderEditor();
   await state.dev.send(CMD.SCENE_NAME, sceneNamePayload(s, name));
   log(`scene ${s + 1} renamed to "${name}"`);
@@ -1491,9 +1471,7 @@ function changeParam(slot, id, value) {
   const i = state.current;
   const raw = state.presets.get(i);
   if (!raw || !canTalk() || !sceneEditable()) return;
-  const scene = editScene();
-  if (scene < XS) state.presets.set(i, setPresetParam(raw, scene, slot, id, value));
-  else xsOf(i).params.set(`${scene}/${slot}/${id}`, value);
+  state.presets.set(i, setPresetParam(raw, editScene(), slot, id, value));
   if (state.dirty !== i) {
     state.dirty = i;
     markDirty(); // only the head - rebuilding the panel would take the focus / drag from the control
@@ -1614,8 +1592,9 @@ function renderGlobals() {
         row.append(c);
       } else {
         const s = el('select');
-        if (p.choices) { // explicit [value, label] pairs
-          for (const [val, lab] of p.choices) s.append(new Option(lab, String(val)));
+        if (p.choices) { // explicit [value, label] pairs; "Scene 4/5" only on a pedal with 5 scenes (Stage)
+          const choices = p.choices.filter(([val]) => (val !== 30 && val !== 31) || isStage());
+          for (const [val, lab] of choices) s.append(new Option(lab, String(val)));
           if (v != null && !p.choices.some(([val]) => val === v)) s.append(new Option(`value ${v}`, String(v)));
           s.value = v == null ? '' : String(v);
           s.disabled = !live;
@@ -2079,7 +2058,7 @@ function drawRouting() {
 
 /** Scene buttons of the editor: preview the scene, and switch it on the pedal when connected. */
 async function chooseScene(s) {
-  if (s >= XS) return; // never select scene 4/5 from here (see sceneEditable)
+  if (s >= sceneCount()) return; // never select a scene the preset does not have (see sceneEditable)
   if (canTalk()) {
     await state.dev.selectScene(s);
     log(`scene ${s + 1}`);

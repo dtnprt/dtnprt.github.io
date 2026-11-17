@@ -269,15 +269,17 @@ function tlvFields(p, base) {
         bytesf(p, 'mod[12] (category per slot)', d + 12, 12, (b) => (b === 0xff ? '–' : CATEGORIES[b] ?? `${b}`)),
         F('alg[12]', d + 24, 48, '', algs));
     } else if (tag === 5 && len >= 3648) {
-      const on = [0, 1, 2].map((s) => F(`scene ${s + 1} on[12]`, d + 3600 + 12 * s, 12,
-        Array.from(p.subarray(d + 3600 + 12 * s, d + 3612 + 12 * s), (b) => (b ? '1' : '0')).join('')));
-      const names = [0, 1, 2].map((s) => strf(p, `scene ${s + 1} name`, d + len - 24 + 8 * s, 8));
-      ch.push(F('effectSlotAlgroParam', d, 3600, '3 scenes × 12 slots × 25 floats …'),
-        F('effectSlotState (slot on/off)', d + 3600, 36, '', on),
-        F('patchVol[3]', d + 3636, 6, [0, 1, 2].map((s) => u16(p, d + 3636 + 2 * s)).join(' ')),
-        F('patchTempo[3] (BPM)', d + 3642, 6, [0, 1, 2].map((s) => u16(p, d + 3642 + 2 * s)).join(' ')),
-        F('empty / vol / bpm / sta / para (scene follow?)', d + 3648, len - 3648 - 24, hexBytes(p.subarray(d + 3648, d + len - 24), 8)),
-        F('scene names', d + len - 24, 24, '', names));
+      const n = Number.isInteger((len - 317) / 1224) ? (len - 317) / 1224 : 3; // scenes (Stomp 3, Stage 5?)
+      const S = [...Array(n).keys()], on0 = 1200 * n, vol0 = 1212 * n, bpm0 = 1214 * n, rest0 = 1216 * n;
+      const on = S.map((s) => F(`scene ${s + 1} on[12]`, d + on0 + 12 * s, 12,
+        Array.from(p.subarray(d + on0 + 12 * s, d + on0 + 12 * s + 12), (b) => (b ? '1' : '0')).join('')));
+      const names = S.map((s) => strf(p, `scene ${s + 1} name`, d + len - 8 * n + 8 * s, 8));
+      ch.push(F('effectSlotAlgroParam', d, on0, `${n} scenes × 12 slots × 25 floats …`),
+        F('effectSlotState (slot on/off)', d + on0, 12 * n, '', on),
+        F(`patchVol[${n}]`, d + vol0, 2 * n, S.map((s) => u16(p, d + vol0 + 2 * s)).join(' ')),
+        F(`patchTempo[${n}] (BPM)`, d + bpm0, 2 * n, S.map((s) => u16(p, d + bpm0 + 2 * s)).join(' ')),
+        F('empty / vol / bpm / sta / para (scene follow?)', d + rest0, len - rest0 - 8 * n, hexBytes(p.subarray(d + rest0, d + len - 8 * n), 8)),
+        F('scene names', d + len - 8 * n, 8 * n, '', names));
     } else if (len) {
       ch.push(F('data', d, len, hexBytes(p.subarray(d, d + len), 16)));
     }

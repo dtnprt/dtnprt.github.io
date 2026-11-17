@@ -20,7 +20,7 @@
     import { Assembler, describe, parseTraceText } from '../js/sniffer.js';
     import { algInfo, algParam, algsOfCategory, formatValue, setAlgDb } from '../js/algdb.js';
     import { paramPayload, presetParam, savePayload, setPresetParam } from '../js/protocol.js';
-    import { irPayload, namPayload, presetBlock, presetFs, setPresetBlock } from '../js/protocol.js';
+    import { irPayload, namPayload, presetBlock, presetFs, setPresetBlock, presetSceneCount, presetScene, presetOn, tlvSplit } from '../js/protocol.js';
     import { namToNamb } from '../js/nam2namb.js';
     import { wavToIr } from '../js/irwav.js';
 
@@ -304,6 +304,35 @@
       check('block backup: presetBlock / setPresetBlock roundtrip', JSON.stringify(presetBlock(moved, 9).params) === JSON.stringify(blk.params) &&
         presetBlock(moved, 9).code === blk.code && JSON.stringify(presetBlock(moved, 4)) === JSON.stringify(blk));
       check('footswitches: tag 3 click codes', presetFs(pr).click.length === 3);
+      // scene count from the tag 5 length: Stomp 3 scenes; a synthetic 5-scene ("Stage") preset built from it
+      check('scenes: Stomp preset has 3', presetSceneCount(pr) === 3 && presetScene(pr, 2).name.length > 0);
+      {
+        const t = tlvSplit(pr), parts = [];
+        for (const { tag, data } of t) {
+          let d = data;
+          if (tag === 5) { // 3 -> 5 scenes: params, on, vol, tempo, rest, names
+            const n = 3, m = 5, out = new Uint8Array(1224 * m + 317);
+            out.set(d.subarray(0, 1200 * n), 0);
+            out.set(d.subarray(1200 * n, 1212 * n), 1200 * m);
+            out.set(d.subarray(1212 * n, 1214 * n), 1212 * m);
+            out.set(d.subarray(1214 * n, 1216 * n), 1214 * m);
+            out.set(d.subarray(1216 * n, d.length - 8 * n), 1216 * m);
+            out.set(d.subarray(d.length - 8 * n), out.length - 8 * m);
+            out.set(new TextEncoder().encode('Five'), out.length - 8);
+            d = out;
+          }
+          const h = new Uint8Array(8);
+          new DataView(h.buffer).setUint32(0, tag, true);
+          new DataView(h.buffer).setUint32(4, d.length, true);
+          parts.push(h, d);
+        }
+        const five = new Uint8Array(parts.reduce((a, b) => a + b.length, 0));
+        let o = 0;
+        for (const x of parts) { five.set(x, o); o += x.length; }
+        check('scenes: 5-scene preset recognized, scene 1 and 5 readable', presetSceneCount(five) === 5 &&
+          presetScene(five, 4).name === 'Five' && presetScene(five, 0).volume === presetScene(pr, 0).volume &&
+          JSON.stringify(presetOn(five, 0)) === JSON.stringify(presetOn(pr, 0)));
+      }
       check('algdb: categories', algsOfCategory(10).length > 20 && algsOfCategory(10).every((x) => algInfo(x.code).category === 10));
     } catch (e) {
       check('exception', false, e.stack);
