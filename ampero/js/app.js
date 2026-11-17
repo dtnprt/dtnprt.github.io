@@ -10,6 +10,7 @@ import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
 import { diffProbes, probe } from './probe.js';
 import { commandGroup } from './sniffer.js';
+import { algInfo, loadAlgDb } from './algdb.js';
 
 const $ = (id) => document.getElementById(id);
 let sniffer = null;
@@ -628,8 +629,10 @@ function renderEditor() {
     const b = el('div', `fx m-${mod.replace(' ', '-')}${c.on[scene] ? '' : ' off'}`);
     const icon = el('span', 'fx-icon');
     icon.innerHTML = moduleIcon(mod) || mod.slice(0, 3);
+    const alg = algInfo(c.code);
     b.append(el('span', 'fx-label', mod), icon, el('span', 'fx-state'));
-    b.title = `${mod} – slot ${c.slot + 1}, algorithm 0x${c.code.toString(16).padStart(8, '0')}, ` +
+    if (alg) b.append(el('span', 'fx-name', alg.name));
+    b.title = `${alg ? `${alg.name} (${mod})` : mod} – slot ${c.slot + 1}, algorithm 0x${c.code.toString(16).padStart(8, '0')}, ` +
       `${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1}`;
     return b;
   };
@@ -1264,6 +1267,10 @@ async function init() {
   });
   renderEditor();
   updateButtons();
+  loadAlgDb().then((ok) => {
+    if (ok) renderEditor();
+    else log('Effect database (data/algorithms.json) not loaded – showing modules only.');
+  });
   try {
     state.access = await requestMidi();
     fillPorts();

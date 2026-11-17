@@ -20,7 +20,7 @@ exklusiv), *Connect*.
   „No style“, „Not read yet“) und Kontextmenü (Rechtsklick oder ☰): *Import Patch* (`.prst`/`.raw` in den Slot
   schreiben), *Export Patch* (`.prst`/`.raw`), *Rename…*, *Style ▸*. Schreiben = `0x01000001` + Zurücklesen;
   Lesen/Schreiben lädt den Slot am Gerät, danach wird das vorher aktive Preset wieder gewählt.
-  Der Editorbereich ist ein **Mockup** (zeigt nur die Module des aktuellen Presets, wenn es bekannt ist).
+  Der Editorbereich ist ein **Mockup** (zeigt die Module des aktuellen Presets mit Algorithmusnamen, wenn es bekannt ist).
 * **Backup & Restore** – siehe unten.
 * **Global Settings** – **Mockup**.
 * **Sniffer** – Mitschnitte ansehen: live (nur zuhören; verbunden = eigener Verkehr beider Richtungen, sonst nur
@@ -112,4 +112,5 @@ Backup-Roundtrip.
 | `js/protocol.js` | SysEx-Rahmen, Reassembler, Befehlscodes, TLV-/Namensliste-Parser |
 | `js/device.js` | Web-MIDI-Verbindung: Handshake wie der Editor, Anfrage/Antwort mit Timeout und Wiederholung |
 | `js/zip.js`, `js/backup.js` | Sicherungsdatei schreiben/lesen |
+| `js/algdb.js`, `data/algorithms.json` | Effekt-Datenbank: 607 Algorithmen mit Parametern (Name, Bereich, Schritt, Standardwert, Optionen/Einheit) – erzeugt mit `python tools/gen_web_algdb.py "windows/windows software/data/flutter_assets/assets/data" android/extracted/base/assets/flutter_assets/assets/data -o <web>/data/algorithms.json` (Anzeigetabellen aus `tools/data/valtostr.json`) |
 | `js/app.js`, `index.html`, `css/app.css` | Oberfläche |

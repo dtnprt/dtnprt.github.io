@@ -5,6 +5,7 @@ import {
   CATEGORIES, CHAIN_MODES, CMD, MODULES, PRESET_COUNT, SPECIAL_ALGS, TLV_SECTIONS, cString, decodeStream, parseFrame,
   presetChainMode, presetInfo, presetLabel, presetRouting, rd32,
 } from './protocol.js';
+import { algInfo } from './algdb.js';
 
 const HOTONE_VID = 0x84ef;
 const hex2 = (b) => b.toString(16).padStart(2, '0');
@@ -179,7 +180,11 @@ const bytesf = (p, name, off, len, fmt = (b) => (b === 0xff ? '–' : `${b}`)) =
   F(name, off, len, Array.from(p.subarray(off, off + len), fmt).join(' '));
 const floatsf = (p, name, off, n) => F(name, off, 4 * n, f32s(p, off, n).map(fmtF).join(' '));
 const slotNo = (b) => (b === 0xff ? '–' : `${b + 1}`);
-const algName = (c) => (c === 0xffffffff ? 'empty' : `${SPECIAL_ALGS[c] ?? MODULES[c >>> 24] ?? '?'} 0x${hex32(c)}`);
+const algName = (c) => {
+  if (c === 0xffffffff) return 'empty';
+  const a = algInfo(c);
+  return a ? `${a.name} (${a.module}) 0x${hex32(c)}` : `${SPECIAL_ALGS[c] ?? MODULES[c >>> 24] ?? '?'} 0x${hex32(c)}`;
+};
 
 /** Sections 2, 3, 6, 7, 8 – names and sizes from the Hotone app (HTModelPreset.get…Data), see FORMAT.md 3. */
 function sectionFields(p, tag, d, len, base) {

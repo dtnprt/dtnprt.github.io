@@ -185,6 +185,8 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .fx { position: relative; width: 62px; height: 62px; flex: none; border: 2px solid #555; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #ddd; background: #161616; }
 .fx .fx-label { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: var(--panel); padding: 0 4px; font-size: 12px; font-weight: 700; color: #eee; white-space: nowrap; }
 .fx .fx-icon { font-size: 13px; font-weight: 600; opacity: .8; }
+.fx .fx-name { position: absolute; top: calc(100% + 3px); left: 50%; transform: translateX(-50%); max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted); }
+.fx.off .fx-name { color: #666; }
 .fx.empty { border-color: #444; color: #777; font-size: 26px; font-weight: 300; background: none; }
 .fx.off { border-color: #555 !important; color: #666; }
 .fx.off .fx-label { color: #777; }

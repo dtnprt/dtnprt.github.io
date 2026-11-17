@@ -18,6 +18,7 @@
     import { buildBackup, loadBackup } from '../js/backup.js';
     import { decodePrst, encodePrst } from '../js/prst.js';
     import { Assembler, describe, parseTraceText } from '../js/sniffer.js';
+    import { algInfo, algParam, algsOfCategory, formatValue, setAlgDb } from '../js/algdb.js';
 
     const out = document.getElementById('out');
     let pass = 0, fail = 0;
@@ -252,6 +253,18 @@
         ...presets.map((p, i) => ({ name: v1.presets[i].file, data: p.raw }))]);
       const back1 = await loadBackup(new Uint8Array(await v1zip.arrayBuffer()));
       check('version 1 backup (.raw) still loads', back1.presets.every((p, i) => hex(p.raw) === hex(presets[i].raw)));
+
+      // effect database (data/algorithms.json); expected values from captures/wine-edit-2026-11-17.txt
+      setAlgDb(await (await fetch('../data/algorithms.json')).json());
+      const rector = algInfo(0x07000069), amb = algInfo(0x0b00002e);
+      check('algdb: AMP 0x07000069 = Rector Dual M, param 0 = Gain', rector?.name === 'Rector Dual M' && algParam(0x07000069, 0)?.name === 'Gain');
+      check('algdb: DLY 0x0b00002e defaults = values the pedal stored after the algorithm change',
+        amb?.params.slice(0, 6).map((q) => q.def).join() === '30,500,50,50,100,50');
+      check('algdb: formatValue with unit', formatValue(algParam(0x0b00002e, 1), 500) === '500 ms');
+      const sel = [0, 1, 2, 3].flatMap((c) => algsOfCategory(c)).flatMap((x) => algInfo(x.code).params).find((q) => q.options);
+      check('algdb: selector shows option names', !!sel && formatValue(sel, sel.min) === sel.options[0] &&
+        formatValue(sel, sel.max) === sel.options[sel.options.length - 1], sel ? `${sel.name}: ${sel.options}` : 'no selector');
+      check('algdb: categories', algsOfCategory(10).length > 20 && algsOfCategory(10).every((x) => algInfo(x.code).category === 10));
     } catch (e) {
       check('exception', false, e.stack);
     }
