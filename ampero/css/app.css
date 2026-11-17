@@ -224,7 +224,7 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .modules li:hover { color: #fff; background: #2a2a2a; }
 .modules li.active { color: var(--accent); background: #2a2416; }
 .params-body { display: flex; gap: 22px; align-items: flex-start; }
-.params-body .params-grid { flex: 1; min-width: 0; }
+.params-body .param-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 10px 14px 14px; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
 .browser { display: flex; gap: 10px; align-items: flex-start; flex: none; }
 .b-list { list-style: none; margin: 0; padding: 4px; min-width: 120px; max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
 .b-list li { padding: 4px 9px; cursor: pointer; border-radius: 3px; white-space: nowrap; }
@@ -261,6 +261,7 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .block-ctl .sw.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
 .fx:not(.empty) { cursor: pointer; }
 .dirty-tag { color: var(--accent); font-size: 12px; }
+#edSave { padding: 3px 14px; font-size: 13px; }
 /* themed range sliders */
 input[type=range] { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; accent-color: var(--accent); cursor: pointer; }
 input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat, #3a3a3a; }

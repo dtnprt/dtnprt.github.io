@@ -1096,8 +1096,11 @@ function renderParams(raw, chain) {
     const live = canTalk();
     for (const p of alg.params) grid.append(paramControl(raw, c.slot, p, scene, live));
   }
-  body.append(grid);
-  box.replaceChildren(head, body);
+  // block type + parameters in one framed area, like the lists
+  const panel = el('div', 'param-panel');
+  panel.append(head, grid);
+  body.append(panel);
+  box.replaceChildren(body);
 }
 
 function paramControl(raw, slot, p, scene, live) {
