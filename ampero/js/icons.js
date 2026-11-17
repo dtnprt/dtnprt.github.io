@@ -42,6 +42,10 @@ export const ICONS = {
   RVB: svg('<path d="M3 4v16h18V4"/><circle cx="7" cy="16" r="1.2"/><path d="M10 16a3 3 0 0 0-3-3M13 16a6 6 0 0 0-6-6M16.5 16A9.5 9.5 0 0 0 7 6.5" />'),
   // effects loop: out to an external box and back
   'FX LOOP': svg('<rect x="14" y="6" width="7" height="12" rx="1.2"/><path d="M3 9h9M9.5 6.5L12 9l-2.5 2.5M12 15H3M5.5 12.5L3 15l2.5 2.5"/>'),
+  // effects send: signal leaving to an external box
+  'FX SND': svg('<rect x="15" y="6" width="6" height="12" rx="1.2"/><path d="M3 12h10M10 9l3 3-3 3"/>'),
+  // effects return: signal coming back from an external box
+  'FX RTN': svg('<rect x="3" y="6" width="6" height="12" rx="1.2"/><path d="M11 12h10M14 9l-3 3 3 3"/>'),
   // volume: speaker with a rising wedge
   VOL: svg('<path d="M3 10h3l4-3.5v11L6 14H3z"/><path d="M13 18L21 6v12z"/>'),
 };

@@ -41,7 +41,7 @@ export const categoryNames = () => db?.categories ?? null;
 export function algInfo(code) {
   const a = db?.algs[String(code >>> 0)];
   if (!a) return null;
-  return { code: code >>> 0, name: a.n, module: a.m, category: a.c, params: a.p.map(paramInfo) };
+  return { code: code >>> 0, name: a.n, module: a.m, group: a.g ?? '', category: a.c, params: a.p.map(paramInfo) };
 }
 
 function paramInfo(p) {
@@ -55,11 +55,19 @@ export function algParam(code, id) {
   return algInfo(code)?.params.find((p) => p.id === id) ?? null;
 }
 
-/** Algorithms of one category, sorted by name: [{code, name}]. */
-export function algsOfCategory(category) {
+const byName = (x, y) => x.name.localeCompare(y.name, undefined, { numeric: true, sensitivity: 'base' });
+
+/** Algorithms of one category (optionally one sub-category), sorted naturally by name ("Slot 2" before "Slot 10"). */
+export function algsOfCategory(category, group = null) {
   if (!db) return [];
-  return Object.entries(db.algs).filter(([, a]) => a.c === category)
-    .map(([c, a]) => ({ code: +c, name: a.n })).sort((x, y) => x.name.localeCompare(y.name));
+  return Object.entries(db.algs).filter(([, a]) => a.c === category && (group == null || a.g === group))
+    .map(([c, a]) => ({ code: +c, name: a.n, group: a.g ?? '' })).sort(byName);
+}
+
+/** Sub-categories of a category in database order ("Clean", "Drive", "Hi Gain", …). */
+export function groupsOfCategory(category) {
+  if (!db) return [];
+  return [...new Set(Object.values(db.algs).filter((a) => a.c === category).map((a) => a.g ?? ''))];
 }
 
 const decimals = (step) => {

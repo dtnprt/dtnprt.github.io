@@ -158,11 +158,26 @@ function fillPorts() {
   fill($('outPort'), outputs, output);
 }
 
-async function connect() {
+/** Connect by itself when an Ampero port pair is present (not after the user disconnected on purpose). */
+function autoConnect() {
+  if (state.dev || state.busy || state.manualOff || !state.access) return;
+  const { input, output } = listPorts(state.access);
+  if (!input || !output) {
+    if (!state.dev) $('status').title = 'no Ampero found – plug it in, or choose the ports manually (⚙)';
+    return;
+  }
+  $('inPort').value = input.id;
+  $('outPort').value = output.id;
+  connect(true);
+}
+
+async function connect(auto = false) {
   if (state.dev) {
+    state.manualOff = true; // stays disconnected until "Connect" is pressed again
     state.dev.close();
     return;
   }
+  if (auto !== true) state.manualOff = false;
   const input = state.access.inputs.get($('inPort').value);
   const output = state.access.outputs.get($('outPort').value);
   if (!input || !output) {
@@ -218,6 +233,11 @@ async function connect() {
   }
   // like the Hotone software at start-up: read the preset that is active on the pedal, so the editor shows it
   if (state.dev === dev && state.current >= 0 && !state.presets.has(state.current)) await readIntoView(state.current);
+  // names of the uploaded NAM models / IRs, shown under NAM and user IR blocks
+  if (state.dev === dev && canTalk()) {
+    await readFileLists();
+    renderEditor();
+  }
 }
 
 // ------------------------------------------------------------------ preset cache
@@ -642,8 +662,20 @@ function renderEditor() {
   } catch { /* ignore */ }
   $('edLabel').textContent = i >= 0 ? presetLabel(i) : '–';
   $('edName').textContent = i >= 0 ? listEntries().names[i] ?? info?.name ?? '' : 'No preset';
-  $('edStyle').hidden = !info?.style;
+  const styleSel = $('edStyleSel');
+  const canStyle = i >= 0 && !!info && canTalk();
+  $('edStyle').hidden = canStyle || !info?.style;
   $('edStyle').textContent = info?.style ?? '';
+  styleSel.hidden = !canStyle;
+  if (canStyle) {
+    if (!styleSel.options.length) {
+      styleSel.append(new Option('No style', ''));
+      for (const s of STYLES) styleSel.append(new Option(s, s));
+    }
+    styleSel.value = info.style ?? '';
+    styleSel.disabled = state.dirty === i;
+    styleSel.title = state.dirty === i ? 'save the preset first (setting the style writes the stored preset)' : 'style of this preset';
+  }
   const scene = Math.max(0, state.scene);
   const scenes = $('edScenes').children;
   for (let s = 0; s < 3; s++) {
@@ -692,9 +724,17 @@ function renderEditor() {
   // inputs / outputs: row 1 always has an input; row 2 only without split. Row 1 has an output unless the
   // chain is serial; row 2 only without merge (in serial mode it carries the main output).
   const twoIn = rt && split === null, twoOut = rt && merge === null && !serial;
-  const io = (on, label) => (on ? el('span', 'io', label) : el('span', 'io-gap'));
+  // input / output nodes: black hexagon, white (inputs) or orange (outputs) outline, arrow or number in that color
+  const io = (on, label, out) => {
+    if (!on) return el('span', 'io-gap');
+    const n = el('span', `io${out ? ' out' : ''}`);
+    const inner = label === '→' ? '<path d="M12 20h15M21 14l6 6-6 6"/>' : `<text x="20" y="20">${label}</text>`;
+    n.innerHTML = `<svg viewBox="0 0 40 40"><polygon points="11,3 29,3 38,20 29,37 11,37 2,20"/>${inner}</svg>`;
+    n.title = `${out ? 'output' : 'input'}${label === '→' ? '' : ` ${label}`}`;
+    return n;
+  };
   $('chainLeft').replaceChildren(io(!!rt, twoIn ? '1' : '→'), io(twoIn, '2'));
-  $('chainRight').replaceChildren(io(!!rt && !serial, twoOut ? '1' : '→'), io(!!rt && merge === null, serial ? '→' : '2'));
+  $('chainRight').replaceChildren(io(!!rt && !serial, twoOut ? '1' : '→', true), io(!!rt && merge === null, serial ? '→' : '2', true));
 
   // drag & drop: drop a block on another position = swap the two positions (like the Hotone software)
   const dnd = (b, c) => {
@@ -755,10 +795,19 @@ function renderEditor() {
       };
       dnd(b, c);
     }
-    b.append(el('span', 'fx-label', mod), icon, dot);
-    if (alg) b.append(el('span', 'fx-name', alg.name));
-    b.title = `${alg ? `${alg.name} (${mod})` : mod} – slot ${c.slot + 1}, algorithm 0x${c.code.toString(16).padStart(8, '0')}, ` +
-      `${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1}`;
+    const pos = `${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1}`;
+    b.append(el('span', 'fx-label', mod), icon, dot, el('span', 'fx-pos', pos));
+    const fsOf = fsAssignments(raw, c.slot);
+    if (fsOf.length) {
+      const f = el('span', 'fx-fs');
+      for (const n of fsOf) f.append(el('span', '', `FS${n}`));
+      b.append(f);
+    }
+    const shown = blockName(c.code, alg);
+    if (shown) b.append(el('span', 'fx-name', shown));
+    b.title = `${pos} · ${shown || mod}${alg && shown !== alg.name ? ` (${alg.name})` : ''} (${mod}) – slot ${c.slot + 1}, algorithm ` +
+      `0x${c.code.toString(16).padStart(8, '0')}, ${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1}` +
+      `${fsOf.length ? `, switched by ${fsOf.map((n) => `FS${n}`).join(' + ')}` : ''}`;
     return b;
   };
   const nodes = (target, k) => {
@@ -779,6 +828,35 @@ function renderEditor() {
   requestAnimationFrame(drawRouting);
   renderParams(raw, chain);
   renderFs(raw, chain);
+  fillRanges();
+}
+
+/** Filled part of themed range sliders (Chrome/Brave draw it from the --fill variable). */
+function sliderFill(r) {
+  const min = +r.min || 0, max = +r.max || 100;
+  r.style.setProperty('--fill', `${((+r.value - min) / (max - min || 1)) * 100}%`);
+}
+const fillRanges = () => document.querySelectorAll('input[type=range]').forEach(sliderFill);
+document.addEventListener('input', (e) => {
+  if (e.target.matches?.('input[type=range]')) sliderFill(e.target);
+});
+
+/** Display name of a block: the uploaded model / IR for NAM and user IR slots, else the algorithm name. */
+function blockName(code, alg) {
+  if ((code >>> 24) === 0x10 && state.namNames?.[code & 0xffff]) return state.namNames[code & 0xffff];
+  if ((code >>> 16) === 0x0a10 && state.irNames?.[code & 0xffff]) return state.irNames[code & 0xffff];
+  return alg?.name ?? '';
+}
+
+/** Footswitches (1..3) whose "Ctrl" function switches this slot. */
+function fsAssignments(raw, slot) {
+  if (!raw) return [];
+  try {
+    const fs = presetFs(raw);
+    return [0, 1, 2].filter((f) => isCtrlFunction(fs.click[f]) && presetFsSlots(raw, f)[slot]).map((f) => f + 1);
+  } catch {
+    return [];
+  }
 }
 
 // ------------------------------------------------------------------ footswitches of the preset (tag 3 / tag 8)
@@ -1344,6 +1422,7 @@ function renderGlobals() {
     box.append(card);
   }
   box.append(renderEq(live));
+  fillRanges();
 }
 
 function renderEq(live) {
@@ -2202,7 +2281,7 @@ async function init() {
   initPresetListEvents();
   sniffer = initSniffer({ getAccess: () => state.access, getDevice: () => state.dev, log, download, onLive: setSniffing });
   showTab(['edit', 'backup', 'files', 'global', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
-  $('connectBtn').onclick = connect;
+  $('connectBtn').onclick = () => connect(false);
   $('dumpBtn').onclick = dump;
   $('cancelBtn').onclick = () => state.abort?.abort();
   $('search').oninput = renderList;
@@ -2252,6 +2331,10 @@ async function init() {
     b.ondblclick = () => renameScene(s);
   });
   $('edSave').onclick = savePreset;
+  $('edStyleSel').onchange = () => setStyleSlot(state.current, $('edStyleSel').value);
+  $('portToggle').onclick = () => {
+    $('portSel').hidden = !$('portSel').hidden;
+  };
   $('edTempo').onchange = () => setSceneValue('tempo', +$('edTempo').value);
   $('edVolume').oninput = () => {
     $('edVolumeVal').textContent = $('edVolume').value;
@@ -2272,8 +2355,10 @@ async function init() {
     state.access.onstatechange = () => {
       fillPorts();
       sniffer.fillInputs();
+      autoConnect();
     };
-    log('MIDI ready. Close the Hotone software, then press Connect.');
+    log('MIDI ready. Close the Hotone software – the Ampero is connected automatically when it is found.');
+    autoConnect();
   } catch (e) {
     $('connectBtn').disabled = true;
     log(`MIDI not available: ${e.message}`);
