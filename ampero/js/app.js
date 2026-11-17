@@ -6,6 +6,8 @@ import {
   NAM_SLOTS, UPLOAD_NAME, USER_IRS,
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
+  FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
+  checkBlock, presetBlock, setPresetBlock,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -50,6 +52,8 @@ const state = {
   dirty: -1, // preset index with parameter changes sent to the pedal but not saved
   dragging: false, // a knob is being dragged: do not rebuild the parameter editor
   dragPos: null, // chain position of the block being dragged
+  blockClip: null, // copied block (presetBlock format)
+  restoring: -1, // slot being restored: ignore the pedal's slot push with default values
   irNames: null, // string[50] user IR names from the pedal
   namNames: null, // string[30] NAM slot names from the pedal ('' = empty)
   uploadStatus: new Map(), // 'ir:3' / 'nam:1' -> {cls, text}
@@ -760,6 +764,78 @@ function renderEditor() {
   rowB.append(el('span', 'chain-link'));
   requestAnimationFrame(drawRouting);
   renderParams(raw, chain);
+  renderFs(raw, chain);
+}
+
+// ------------------------------------------------------------------ footswitches of the preset (tag 3 / tag 8)
+
+const FS_CHOICES = [...FS_FUNCTIONS].filter(([c]) => c < 51); // 51..54 = global PATCH FS FUNC
+
+function renderFs(raw, chain) {
+  const box = $('edFs');
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  let fs = null;
+  try {
+    fs = raw ? presetFs(raw) : null;
+  } catch { /* ignore */ }
+  box.hidden = !fs;
+  if (!fs) return;
+  const live = canTalk();
+  box.replaceChildren(el('div', 'fs-title', 'Footswitches of this preset (stomp mode) – "Ctrl" functions switch the blocks selected below'));
+  for (let f = 0; f < 3; f++) {
+    const b = el('div', 'fs-box');
+    const head = el('div', 'fs-head');
+    const sel = el('select');
+    for (const [code, name] of FS_CHOICES) sel.append(new Option(name, String(code)));
+    if (!FS_CHOICES.some(([c]) => c === fs.click[f])) sel.append(new Option(fsFunctionName(fs.click[f]), String(fs.click[f])));
+    sel.value = String(fs.click[f]);
+    sel.disabled = !live;
+    sel.onchange = () => setFsFunction(f, +sel.value);
+    head.append(el('b', '', `FS${f + 1}`), sel);
+    b.append(head);
+    if (fs.hold[f] !== 0xff) b.append(el('span', 'fs-hold', `hold: ${fsFunctionName(fs.hold[f])} (not editable yet)`));
+    if (isCtrlFunction(fs.click[f])) {
+      const on = presetFsSlots(raw, f);
+      const slots = el('div', 'fs-slots');
+      for (const c of chain) {
+        if (c.code === 0xffffffff) continue;
+        const a = algInfo(c.code);
+        const t = el('button', on[c.slot] ? 'on' : '', `${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1} ${a?.name ?? ''}`);
+        t.title = `slot ${c.slot + 1} – click to (un)assign`;
+        t.disabled = !live;
+        t.onclick = () => toggleFsSlot(f, c.slot);
+        slots.append(t);
+      }
+      b.append(slots);
+    }
+    box.append(b);
+  }
+}
+
+async function setFsFunction(f, code) {
+  let click;
+  if (!editPreset((raw) => {
+    const r = setPresetFsClick(raw, f, code);
+    click = presetFs(r).click;
+    return r;
+  })) return;
+  renderEditor();
+  await state.dev.send(FS_SET, Uint8Array.from(click));
+  log(`FS${f + 1}: ${fsFunctionName(code)}`);
+}
+
+async function toggleFsSlot(f, slot) {
+  let on, click;
+  if (!editPreset((raw) => {
+    const r = setPresetFsSlot(raw, f, slot, !presetFsSlots(raw, f)[slot]);
+    on = presetFsSlots(r, f);
+    click = presetFs(r).click;
+    return r;
+  })) return;
+  renderEditor();
+  // like the Hotone editor: the assignment, then the functions again
+  await state.dev.send(FS_SLOTS_SET, fsSlotsPayload(f, on));
+  await state.dev.send(FS_SET, Uint8Array.from(click));
 }
 
 // ------------------------------------------------------------------ parameter editor
@@ -900,6 +976,41 @@ function blockControls(raw, c, empty) {
   };
   cat.disabled = algSel.disabled = !live;
   wrap.append(cat, algSel);
+  const copy = el('button', 'small-btn', 'Copy');
+  copy.title = 'copy this block (algorithm + parameters of all scenes)';
+  copy.hidden = empty;
+  copy.onclick = () => {
+    state.blockClip = presetBlock(raw, c.slot);
+    state.blockClip.name = algInfo(c.code)?.name ?? hex32(c.code);
+    try { localStorage.setItem('ampero.blockClip', JSON.stringify(state.blockClip)); } catch { /* ignore */ }
+    log(`copied block "${state.blockClip.name}"`);
+    renderEditor();
+  };
+  const paste = el('button', 'small-btn', 'Paste');
+  const clip = state.blockClip;
+  paste.title = clip ? `insert "${clip.name}" here (replaces this block)` : 'copy a block first';
+  paste.disabled = !clip || !canTalk();
+  paste.onclick = () => restoreBlock(c.slot, clip);
+  const save = el('button', 'small-btn', 'Save…');
+  save.title = 'save this block as a file';
+  save.hidden = empty;
+  save.onclick = () => {
+    const b = { ...presetBlock(raw, c.slot), name: algInfo(c.code)?.name ?? hex32(c.code) };
+    download(new Blob([JSON.stringify(b, null, 1)], { type: 'application/json' }), `${b.name.replace(/[^\w.-]+/g, '_')}.ampblock`);
+  };
+  const load = el('button', 'small-btn', 'Load…');
+  load.title = 'load a block file into this position';
+  load.disabled = !canTalk();
+  load.onclick = async () => {
+    const f = await pickFile('.ampblock,.json');
+    if (!f) return;
+    try {
+      await restoreBlock(c.slot, checkBlock(JSON.parse(await f.text())));
+    } catch (e) {
+      log(`load block: ${e.message}`);
+    }
+  };
+  wrap.append(copy, paste, save, load);
   if (!empty) {
     const on = c.on[editScene()];
     const t = el('button', `sw${on ? ' on' : ''}`, on ? 'On' : 'Off');
@@ -967,6 +1078,44 @@ async function setBlockAlg(slot, category, code, wasEmpty) {
   log(`slot ${slot + 1}: ${a?.name ?? hex32(code)}`);
 }
 
+/**
+ * Put a saved block into `slot` with confirmed commands only: set the algorithm (the pedal resets the parameters
+ * of all scenes), then per scene select it and send every parameter, and the on/off states; finally select the
+ * scene that was active before.
+ */
+async function restoreBlock(slot, block) {
+  if (!block || !canTalk()) return;
+  const a = algInfo(block.code);
+  const ids = a ? a.params.map((p) => p.id) : Array.from({ length: 25 }, (_, i) => i);
+  const scene = editScene();
+  if (!editPreset((raw) => setPresetBlock(raw, slot, block))) return;
+  state.selSlot = slot;
+  state.restoring = slot;
+  state.busy = true;
+  updateButtons();
+  renderEditor();
+  try {
+    const dev = state.dev;
+    await dev.send(CMD.SET_ALG, setAlgPayload(slot, block.category, block.code, block.on[scene]));
+    await dev.waitQuiet(150, 1500);
+    for (let s = 0; s < 3; s++) {
+      await dev.selectScene(s);
+      for (const id of ids) await dev.send(CMD.PARAM, paramPayload(slot, id, block.params[s][id] ?? 0));
+      await dev.send(CMD.SLOT_ON, slotOnPayload(s, presetOn(state.presets.get(state.current), s)));
+    }
+    await dev.selectScene(scene);
+    log(`slot ${slot + 1}: block "${block.name ?? a?.name ?? hex32(block.code)}" restored`);
+  } catch (e) {
+    log(`restore block: ${e.message}`);
+  } finally {
+    await state.dev?.waitQuiet(150, 1500);
+    state.restoring = -1;
+    state.busy = false;
+    updateButtons();
+    renderEditor();
+  }
+}
+
 async function removeBlock(slot) {
   if (!editPreset((raw) => {
     let r = setPresetAlg(raw, slot, 0xff, EMPTY_ALG, []);
@@ -996,6 +1145,7 @@ function onSlotPush(payload) {
   if (!raw || payload.length < 116) return;
   const v = new DataView(payload.buffer, payload.byteOffset);
   const slot = v.getUint32(0, true), code = v.getUint32(12, true);
+  if (slot === state.restoring) return; // our own restore sends the real values next
   if (slot >= 12 || presetChain(raw).find((x) => x.slot === slot)?.code !== code) return;
   const params = Array.from({ length: 25 }, (_, i) => v.getFloat32(16 + 4 * i, true));
   state.presets.set(state.current, setPresetAlg(raw, slot, v.getUint32(4, true), code, params));
@@ -2025,6 +2175,10 @@ async function init() {
   fillRange();
   for (const b of document.querySelectorAll('.tab')) b.onclick = () => showTab(b.dataset.tab);
   $('irReadBtn').onclick = readFileLists;
+  try {
+    const c = JSON.parse(localStorage.getItem('ampero.blockClip') || 'null');
+    if (c) state.blockClip = checkBlock(c);
+  } catch { /* ignore */ }
   $('aboutLink').onclick = (e) => {
     e.preventDefault();
     showAbout();

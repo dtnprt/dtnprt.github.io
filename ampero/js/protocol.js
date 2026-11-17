@@ -586,6 +586,36 @@ export function idNamePayload(id, name, len) {
   return p;
 }
 
+// ------------------------------------------------------------------ block backup ("ampero-block" files)
+
+/** One block (slot) of a preset: algorithm, its 25 parameters per scene and on/off per scene. */
+export function presetBlock(raw, slot) {
+  const t4 = tagOffset(raw, 4);
+  return {
+    format: 'ampero-block', version: 1,
+    code: rd32(raw, t4 + 2 * SLOTS + 4 * slot), category: raw[t4 + SLOTS + slot],
+    on: [0, 1, 2].map((s) => presetOn(raw, s)[slot]),
+    params: [0, 1, 2].map((s) => Array.from({ length: SLOT_PARAMS }, (_, id) => presetParam(raw, s, slot, id))),
+  };
+}
+
+/** Copy of the preset with `block` in `slot` (what the pedal ends up with after restoreBlock). */
+export function setPresetBlock(raw, slot, block) {
+  let r = setPresetAlg(raw, slot, block.category, block.code, block.params[0]);
+  for (let s = 0; s < 3; s++) {
+    for (let id = 0; id < SLOT_PARAMS; id++) r = setPresetParam(r, s, slot, id, block.params[s][id] ?? 0);
+    r = setPresetOn(r, s, slot, block.on[s]);
+  }
+  return r;
+}
+
+/** Validate a parsed block file; throws on a bad one. */
+export function checkBlock(b) {
+  if (b?.format !== 'ampero-block' || !Number.isInteger(b.code) || !Array.isArray(b.params) || b.params.length !== 3 ||
+      b.params.some((p) => !Array.isArray(p)) || !Array.isArray(b.on)) throw new Error('not an Ampero block file');
+  return b;
+}
+
 /** Payload of CMD.SAVE: u32 preset, char name[17]. */
 export function savePayload(index, name) {
   const p = new Uint8Array(4 + NAME_LEN);
@@ -613,6 +643,38 @@ export const FS_FUNCTIONS = new Map([
 ]);
 
 export const fsFunctionName = (code) => FS_FUNCTIONS.get(code) ?? `function ${code}`;
+
+/** "Ctrl n" functions: the footswitch switches the slots assigned to it (tag 8 ctrlTargetSlot). */
+export const isCtrlFunction = (code) => code === 12 || (code >= 32 && code <= 37);
+
+export const FS_SET = 0x01030001; // u8 click[3] (confirmed: windows/wireshark.pcapng)
+export const FS_SLOTS_SET = 0x01070001; // u8 fs, u8 slot_on[12] (confirmed)
+
+/** Footswitches of a preset: {click: [3], hold: [3]} (tag 3). */
+export function presetFs(raw) {
+  const o = tagOffset(raw, 3);
+  return { click: Array.from(raw.subarray(o, o + 3)), hold: Array.from(raw.subarray(o + 3, o + 6)) };
+}
+
+export function setPresetFsClick(raw, fs, code) {
+  const out = raw.slice();
+  out[tagOffset(raw, 3) + fs] = code;
+  return out;
+}
+
+/** Slots switched by footswitch fs (tag 8: u8 led[3], u8 slot_on[3][12]). */
+export function presetFsSlots(raw, fs) {
+  const o = tagOffset(raw, 8) + 3 + 12 * fs;
+  return Array.from(raw.subarray(o, o + 12), (b) => b === 1);
+}
+
+export function setPresetFsSlot(raw, fs, slot, on) {
+  const out = raw.slice();
+  out[tagOffset(raw, 8) + 3 + 12 * fs + slot] = on ? 1 : 0;
+  return out;
+}
+
+export const fsSlotsPayload = (fs, on) => Uint8Array.of(fs, ...on.map((x) => (x ? 1 : 0)));
 
 /** Functions offered for the external CTRL footswitches (HTBaseDefine.kFSTapList, in the app's order). */
 export const CTRL_FS_FUNCTIONS = [42, 43, 47, 44, 45, 17, 49, 18, 50, 48, 15, 16, 13, 38, 39, 27, 28, 29, 30, 31, 41,

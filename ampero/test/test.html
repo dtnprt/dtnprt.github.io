@@ -20,7 +20,7 @@
     import { Assembler, describe, parseTraceText } from '../js/sniffer.js';
     import { algInfo, algParam, algsOfCategory, formatValue, setAlgDb } from '../js/algdb.js';
     import { paramPayload, presetParam, savePayload, setPresetParam } from '../js/protocol.js';
-    import { irPayload, namPayload } from '../js/protocol.js';
+    import { irPayload, namPayload, presetBlock, presetFs, setPresetBlock } from '../js/protocol.js';
     import { namToNamb } from '../js/nam2namb.js';
     import { wavToIr } from '../js/irwav.js';
 
@@ -299,6 +299,11 @@
       let worst = 0;
       for (let i = 100; i < 2000; i++) worst = Math.max(worst, Math.abs(ir.samples[i] - 4000000 * Math.sin(2 * Math.PI * 1000 * i / 44100)));
       check('WAV 48 kHz -> 44.1 kHz resampling keeps a 1 kHz sine (error < 0.1 %)', ir.info.rate === 48000 && worst < 4000, `max error ${worst}`);
+      // block backup: copy slot 4 of a preset into slot 9 of the same preset -> identical block
+      const blk = presetBlock(pr, 4), moved = setPresetBlock(pr, 9, blk);
+      check('block backup: presetBlock / setPresetBlock roundtrip', JSON.stringify(presetBlock(moved, 9).params) === JSON.stringify(blk.params) &&
+        presetBlock(moved, 9).code === blk.code && JSON.stringify(presetBlock(moved, 4)) === JSON.stringify(blk));
+      check('footswitches: tag 3 click codes', presetFs(pr).click.length === 3);
       check('algdb: categories', algsOfCategory(10).length > 20 && algsOfCategory(10).every((x) => algInfo(x.code).category === 10));
     } catch (e) {
       check('exception', false, e.stack);

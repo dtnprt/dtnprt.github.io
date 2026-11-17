@@ -234,9 +234,20 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .fx .fx-state { cursor: pointer; }
 .block-ctl { display: inline-flex; gap: 6px; align-items: center; margin-left: 12px; }
 .block-ctl select { max-width: 220px; }
+.block-ctl .small-btn[hidden] { display: none; }
 .block-ctl .sw.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
 .fx:not(.empty) { cursor: pointer; }
 .dirty-tag { color: var(--accent); font-size: 12px; }
+/* footswitches of the preset */
+.editor-fs { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: flex-start; }
+.editor-fs .fs-title { width: 100%; color: var(--muted); font-size: 12px; }
+.fs-box { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+.fs-box .fs-head { display: flex; align-items: center; gap: 8px; }
+.fs-box .fs-head b { width: 34px; }
+.fs-box .fs-hold { color: var(--muted); font-size: 12px; }
+.fs-slots { display: flex; flex-wrap: wrap; gap: 4px; max-width: 420px; }
+.fs-slots button { font-size: 11px; padding: 2px 6px; }
+.fs-slots button.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
 .about-link { margin-right: 12px; white-space: nowrap; text-decoration: none; }
 .about-link:hover { color: var(--accent); }
 .about-dialog { width: min(680px, 92vw); }

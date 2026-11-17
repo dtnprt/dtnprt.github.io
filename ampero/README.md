@@ -21,8 +21,10 @@ exklusiv), *Connect*.
   schreiben), *Export Patch* (`.prst`/`.raw`), *Rename…*, *Style ▸*. Schreiben = `0x01000001` + Zurücklesen;
   Lesen/Schreiben lädt den Slot am Gerät, danach wird das vorher aktive Preset wieder gewählt.
   Editor: Klick auf einen Effekt zeigt seine Parameter (aktuelle Szene) als Knöpfe / Auswahl / Schalter; Änderungen
-  gehen live ans Gerät (`0x01040003`, gedrosselt), **Save** speichert das Preset (`0x05000000`). Algorithmus,
-  Reihenfolge und an/aus lassen sich noch nicht ändern.
+  gehen live ans Gerät (`0x01040003`, gedrosselt), **Save** speichert das Preset (`0x05000000`).
+  Blöcke: Modul/Algorithmus wählen, einfügen, entfernen, an/aus, per Drag & Drop tauschen; **Copy/Paste** und
+  **Save…/Load…** (`.ampblock`, JSON: Algorithmus + Parameter aller drei Szenen + an/aus) sichern und
+  wiederherstellen einen Block. Footswitches des Presets: Funktion FS1–3 und die Blöcke der Ctrl-Funktionen.
 * **`?sim`** an der URL (z. B. `http://localhost:8000/ampero/?sim`) ersetzt Web MIDI durch ein simuliertes Gerät
   (`test/sim.js`, Presets aus einem echten Mitschnitt) – zum Ausprobieren ohne Pedal.
 * **Backup & Restore** – siehe unten.

@@ -134,6 +134,18 @@ export async function install() {
       case CMD.NAM_DELETE:
         namNames[rd32(payload, 0)] = '';
         return undefined;
+      case 0x01030001: { // footswitch functions
+        let r = preset(current);
+        const o = (() => { let k = 0; for (let t = 0; ; t++) { const len = rd32(r, k + 4); if (rd32(r, k) === 3) return k + 8; k += 8 + len; } })();
+        r = r.slice(); r.set(payload.subarray(0, 3), o); presets.set(current, r);
+        return emit(CMD.PRESET_CHANGED, u32le(1));
+      }
+      case 0x01070001: { // footswitch -> slots
+        let r = preset(current);
+        const o = (() => { let k = 0; for (;;) { const len = rd32(r, k + 4); if (rd32(r, k) === 8) return k + 8; k += 8 + len; } })();
+        r = r.slice(); r.set(payload.subarray(1, 13), o + 3 + 12 * payload[0]); presets.set(current, r);
+        return emit(CMD.PRESET_CHANGED, u32le(1));
+      }
       case CMD.USER_IR_NAMES:
         return emit(cmd, concat(...irNames.map((n) => str(n, 32))));
       case CMD.NAM_LIST:
@@ -192,5 +204,6 @@ export async function install() {
     onstatechange: null };
   Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => access });
   window.simParamPayload = paramPayload; // handy in the console
+  window.simPreset = () => preset(current); // the simulated pedal's current preset (tests)
   console.info('[sim] simulated Ampero installed – presets', [...presets.keys()].join(', '));
 }
