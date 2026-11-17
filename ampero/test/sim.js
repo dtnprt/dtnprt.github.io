@@ -76,12 +76,12 @@ export async function install() {
       case CMD.PARAM: {
         const v = new DataView(payload.buffer, payload.byteOffset);
         const [slot, id, value] = [v.getUint16(0, true), v.getUint16(2, true), v.getFloat32(4, true)];
-        presets.set(current, setPresetParam(preset(current), scene, slot, id, value));
+        if (scene < 3) presets.set(current, setPresetParam(preset(current), scene, slot, id, value)); // 4/5: not in the format
         console.info(`[sim] param slot ${slot} id ${id} = ${value} (scene ${scene + 1})`);
         return emit(CMD.PRESET_CHANGED, u32le(1));
       }
       case CMD.SLOT_ON:
-        for (let s = 0; s < 12; s++) presets.set(current, setPresetOn(preset(current), payload[0], s, payload[1 + s]));
+        if (payload[0] < 3) for (let s = 0; s < 12; s++) presets.set(current, setPresetOn(preset(current), payload[0], s, payload[1 + s]));
         console.info(`[sim] scene ${payload[0] + 1} on ${Array.from(payload.subarray(1, 13)).join('')}`);
         return emit(CMD.PRESET_CHANGED, u32le(1));
       case CMD.REORDER:

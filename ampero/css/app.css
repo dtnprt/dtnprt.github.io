@@ -261,6 +261,8 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .block-ctl .sw.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
 .fx:not(.empty) { cursor: pointer; }
 .dirty-tag { color: var(--accent); font-size: 12px; }
+.scene.xs { border-style: dashed; }
+.xs-note { color: var(--accent); font-size: 12px; }
 #edSave { padding: 3px 14px; font-size: 13px; }
 /* themed range sliders */
 input[type=range] { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; accent-color: var(--accent); cursor: pointer; }

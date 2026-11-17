@@ -36,6 +36,9 @@ exklusiv), *Connect*.
     Teilmodell. Auch fertige `.namb`-Dateien. Gesendet als `0x08000000`; das Gerät quittiert mit `0x06000000`.
   Die Payloads sind byte-identisch zu einem Mitschnitt der Hotone-Software (nur das IR-Resampling unterscheidet
   sich minimal: Korrelation 0,99998).
+* **Experimentell: Szene 4 und 5** (Global Settings → Web editor): Der Stomp schaltet per Footswitch-Funktion
+  „Scene 4/5“ auch dorthin, obwohl seine Presets nur 3 Szenen enthalten. Der Editor bietet die Szenen dann an; ihre Werte
+  sind nicht lesbar (Anzeige: Szene 1, bis etwas geändert wird) und werden vermutlich nicht gespeichert.
 * **Global Settings** – **Mockup**.
 * **Sniffer** – Mitschnitte ansehen: live (nur zuhören; verbunden = eigener Verkehr beider Richtungen, sonst nur
   was das Gerät sendet), App-Traces (`.txt`) und Wireshark/USBPcap-`.pcapng` (beide Richtungen, auch

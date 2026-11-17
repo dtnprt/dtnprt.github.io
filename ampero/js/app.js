@@ -419,6 +419,7 @@ function setCurrent(index, scene) {
   const changed = index !== state.current;
   if (changed) {
     // the pedal drops unsaved changes when another preset is loaded: our edited copy is out of date too
+    xsStore.delete(state.current);
     if (state.dirty >= 0 && state.dirty === state.current) {
       state.presets.delete(state.dirty);
       log(`${presetLabel(state.dirty)}: unsaved changes discarded (other preset selected)`);
@@ -688,14 +689,20 @@ function renderEditor() {
   }
   const scene = Math.max(0, state.scene);
   const scenes = $('edScenes').children;
-  for (let s = 0; s < 3; s++) {
-    scenes[s].textContent = info?.scenes[s] || `Scene ${s + 1}`;
+  for (let s = 0; s < 5; s++) {
+    scenes[s].hidden = s >= sceneCount() && s !== scene;
+    let name = `Scene ${s + 1}`;
+    try {
+      name = s < XS ? info?.scenes[s] || name : raw ? sceneMeta(raw, s).name : name;
+    } catch { /* ignore */ }
+    scenes[s].textContent = name;
     scenes[s].classList.toggle('on', s === scene);
-    scenes[s].title = raw ? 'click: select · double-click: rename' : '';
+    scenes[s].title = s >= XS ? 'experimental: not part of the Stomp\'s preset format – values are not readable and probably not saved'
+      : raw ? 'click: select · double-click: rename' : '';
   }
   let sv = null;
   try {
-    sv = raw ? presetScene(raw, scene) : null;
+    sv = raw ? sceneMeta(raw, scene) : null;
   } catch { /* ignore */ }
   const live = !!sv && canTalk();
   $('edTempo').disabled = $('edVolume').disabled = !live;
@@ -786,7 +793,8 @@ function renderEditor() {
     const alg = algInfo(c.code);
     // module from the effect database: the highest byte of the code is ambiguous (0x06 = FX LOOP/SND/RTN, VOL, …)
     const mod = alg?.module ?? MODULES[c.code >>> 24] ?? '?';
-    const b = el('div', `fx m-${mod.replace(/ /g, '-')}${c.on[scene] ? '' : ' off'}`);
+    const on = raw ? sceneOn(raw, scene)[c.slot] : c.on[scene];
+    const b = el('div', `fx m-${mod.replace(/ /g, '-')}${on ? '' : ' off'}`);
     const icon = el('span', 'fx-icon');
     icon.innerHTML = moduleIcon(mod) || moduleIcon(/^FX /.test(mod) ? 'FX LOOP' : '') || mod.slice(0, 3);
     if (c.slot === state.selSlot) b.classList.add('sel');
@@ -797,7 +805,7 @@ function renderEditor() {
     };
     b.oncontextmenu = (ev) => blockMenu(ev, raw, c);
     const dot = el('span', 'fx-state');
-    dot.title = `${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1} – click to switch`;
+    dot.title = `${on ? 'on' : 'off'} in scene ${scene + 1} – click to switch`;
     dot.onclick = (e) => {
       e.stopPropagation();
       toggleOn(c.slot);
@@ -825,7 +833,7 @@ function renderEditor() {
     const shown = blockName(c.code, alg);
     if (shown) b.append(el('span', 'fx-name', shown));
     b.title = `${pos} · ${shown || mod}${alg && shown !== alg.name ? ` (${alg.name})` : ''} (${mod}) – slot ${c.slot + 1}, algorithm ` +
-      `0x${c.code.toString(16).padStart(8, '0')}, ${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1}` +
+      `0x${c.code.toString(16).padStart(8, '0')}, ${on ? 'on' : 'off'} in scene ${scene + 1}` +
       `${fsOf.length ? `, switched by ${fsOf.map((n) => `FS${n}`).join(' + ')}` : ''}`;
     return b;
   };
@@ -1094,6 +1102,52 @@ function editScene() {
   return Math.max(0, state.scene);
 }
 
+// ------------------------------------------------------------------ experimental scenes 4 and 5
+//
+// The Stomp's preset format has 3 scenes (tag 5). Its firmware nevertheless switches to scene 4 / 5 (footswitch
+// function "Scene 4/5"), and the live commands act on the active scene. With the experimental option the editor
+// offers scenes 4 and 5: their values cannot be read from the pedal, so the editor remembers what it sent (per
+// preset, for this session) and shows scene 1's values until then. Whether the pedal stores them is unknown.
+
+const XS = 3; // first extra scene (0-based)
+const xsStore = new Map(); // preset index -> {params: Map "s/slot/id" -> value, on: Map "s/slot" -> bool, meta: []}
+
+function xsOf(i) {
+  if (!xsStore.has(i)) xsStore.set(i, { params: new Map(), on: new Map(), meta: [] });
+  return xsStore.get(i);
+}
+
+const sceneCount = () => (state.experimental ? 5 : 3);
+
+/** Scene-specific edits are possible (not when the pedal is in scene 4/5 while the option is off). */
+function sceneEditable() {
+  if (editScene() < XS || state.experimental) return true;
+  log(`the pedal is in scene ${editScene() + 1} – enable "experimental scenes 4 and 5" (Global Settings) to edit it`);
+  return false;
+}
+
+function sceneParam(raw, s, slot, id) {
+  if (s < XS) return presetParam(raw, s, slot, id);
+  return xsOf(state.current).params.get(`${s}/${slot}/${id}`) ?? presetParam(raw, 0, slot, id);
+}
+
+function sceneOn(raw, s) {
+  if (s < XS) return presetOn(raw, s);
+  const base = presetOn(raw, 0), m = xsOf(state.current).on;
+  return base.map((v, slot) => m.get(`${s}/${slot}`) ?? v);
+}
+
+function sceneMeta(raw, s) {
+  if (s < XS) return presetScene(raw, s);
+  const s1 = presetScene(raw, 0);
+  return { name: `Scene ${s + 1}`, volume: s1.volume, tempo: s1.tempo, ...xsOf(state.current).meta[s] };
+}
+
+function setXsMeta(s, values) {
+  const m = xsOf(state.current).meta;
+  m[s] = { ...m[s], ...values };
+}
+
 function renderParams(raw, chain) {
   if (state.dragging) return;
   const box = $('edParams');
@@ -1138,7 +1192,7 @@ function paramControl(raw, slot, p, scene, live) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
   const wrap = el('div', `pk${live ? '' : ' disabled'}`);
   wrap.title = live ? '' : 'connect the pedal (and stop the sniffer / resume) to edit';
-  let value = presetParam(raw, scene, slot, p.id);
+  let value = sceneParam(raw, scene, slot, p.id);
   const label = el('span', 'name', p.name);
   const set = (v, update) => {
     v = clampValue(p, v);
@@ -1212,7 +1266,7 @@ function blockControls(raw, c, empty) {
   const wrap = el('span', 'block-ctl');
   // Copy / Paste / Save / Load / Delete: in the block's context menu (right-click)
   if (!empty) {
-    const on = c.on[editScene()];
+    const on = sceneOn(raw, editScene())[c.slot];
     const t = el('button', `small-btn sw${on ? ' on' : ''}`, on ? 'On' : 'Off');
     t.title = `on/off in scene ${editScene() + 1} – right-click the block for copy, paste, save, load, delete`;
     t.disabled = !canTalk();
@@ -1287,10 +1341,15 @@ function editPreset(fn) {
 
 async function toggleOn(slot) {
   const scene = editScene();
+  if (!sceneEditable()) return;
   let on;
   if (!editPreset((raw) => {
-    on = presetOn(raw, scene);
+    on = sceneOn(raw, scene);
     on[slot] = !on[slot];
+    if (scene >= XS) {
+      xsOf(state.current).on.set(`${scene}/${slot}`, on[slot]);
+      return raw;
+    }
     return setPresetOn(raw, scene, slot, on[slot]);
   })) return;
   renderEditor();
@@ -1304,7 +1363,7 @@ async function setBlockAlg(slot, category, code, wasEmpty) {
   const scene = editScene();
   let on = true;
   if (!editPreset((raw) => {
-    if (!wasEmpty) on = presetOn(raw, scene)[slot];
+    if (!wasEmpty) on = sceneOn(raw, scene)[slot];
     let r = setPresetAlg(raw, slot, category, code, params);
     if (wasEmpty) for (let s = 0; s < 3; s++) r = setPresetOn(r, s, slot, true);
     return r;
@@ -1333,7 +1392,7 @@ async function restoreBlock(slot, block) {
   renderEditor();
   try {
     const dev = state.dev;
-    await dev.send(CMD.SET_ALG, setAlgPayload(slot, block.category, block.code, block.on[scene]));
+    await dev.send(CMD.SET_ALG, setAlgPayload(slot, block.category, block.code, block.on[Math.min(scene, 2)]));
     await dev.waitQuiet(150, 1500);
     for (let s = 0; s < 3; s++) {
       await dev.selectScene(s);
@@ -1394,7 +1453,12 @@ function onSlotPush(payload) {
 async function setSceneValue(what, value) {
   const scene = editScene();
   const v = what === 'tempo' ? Math.max(40, Math.min(300, Math.round(value) || 120)) : Math.max(0, Math.min(100, Math.round(value)));
-  if (!editPreset((raw) => setPresetScene(raw, scene, { [what]: v }))) return;
+  if (!sceneEditable()) return;
+  if (!editPreset((raw) => {
+    if (scene < XS) return setPresetScene(raw, scene, { [what]: v });
+    setXsMeta(scene, { [what]: v });
+    return raw;
+  })) return;
   markDirty();
   await state.dev.send(what === 'tempo' ? CMD.SCENE_TEMPO : CMD.SCENE_VOLUME, sceneValuePayload(scene, v));
   log(`scene ${scene + 1}: ${what} ${v}`);
@@ -1403,12 +1467,16 @@ async function setSceneValue(what, value) {
 async function renameScene(s) {
   const raw = state.presets.get(state.current);
   if (!raw || !canTalk()) return;
-  const old = presetScene(raw, s).name || `Scene ${s + 1}`;
+  const old = sceneMeta(raw, s).name || `Scene ${s + 1}`;
   const name = await promptText({ title: `Rename scene ${s + 1}`, text: `At most ${SCENE_NAME_LEN - 1} characters.`, value: old,
     maxLength: SCENE_NAME_LEN - 1, ok: 'Rename', validate: (t) => (!t.trim() ? 'enter a name'
       : /^[\x20-\x7e]*$/.test(t) ? '' : 'only plain ASCII characters') });
   if (name == null || name === old) return;
-  if (!editPreset((r) => setPresetScene(r, s, { name }))) return;
+  if (!editPreset((r) => {
+    if (s < XS) return setPresetScene(r, s, { name });
+    setXsMeta(s, { name });
+    return r;
+  })) return;
   renderEditor();
   await state.dev.send(CMD.SCENE_NAME, sceneNamePayload(s, name));
   log(`scene ${s + 1} renamed to "${name}"`);
@@ -1420,8 +1488,10 @@ const pendingParams = new Map(); // "slot/id" -> {slot, id, value, timer, sent}
 function changeParam(slot, id, value) {
   const i = state.current;
   const raw = state.presets.get(i);
-  if (!raw || !canTalk()) return;
-  state.presets.set(i, setPresetParam(raw, editScene(), slot, id, value));
+  if (!raw || !canTalk() || !sceneEditable()) return;
+  const scene = editScene();
+  if (scene < XS) state.presets.set(i, setPresetParam(raw, scene, slot, id, value));
+  else xsOf(i).params.set(`${scene}/${slot}/${id}`, value);
   if (state.dirty !== i) {
     state.dirty = i;
     markDirty(); // only the head - rebuilding the panel would take the focus / drag from the control
@@ -1567,7 +1637,30 @@ function renderGlobals() {
     box.append(card);
   }
   box.append(renderEq(live));
+  box.append(webEditorCard());
   fillRanges();
+}
+
+/** Options of the web editor itself (stored in this browser). */
+function webEditorCard() {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const card = el('div', 'card');
+  card.append(el('h2', '', 'Web editor'));
+  const row = el('label', 'gs-row');
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = !!state.experimental;
+  cb.onchange = () => {
+    state.experimental = cb.checked;
+    try { localStorage.setItem('ampero.scenes45', cb.checked ? '1' : '0'); } catch { /* ignore */ }
+    log(`experimental scenes 4 and 5 ${cb.checked ? 'on' : 'off'}`);
+    renderEditor();
+  };
+  row.append(cb, el('span', '', 'Experimental: scenes 4 and 5'));
+  card.append(row, el('p', 'muted small', 'The Stomp\'s presets have 3 scenes, but the pedal also switches to scene 4 / 5 '
+    + '(footswitch function "Scene 4/5"). With this option the editor offers these scenes too. Their values cannot be read '
+    + 'from the pedal (the editor shows scene 1 until you change something) and are probably not saved with the preset.'));
+  return card;
 }
 
 function renderEq(live) {
@@ -2008,7 +2101,7 @@ function drawRouting() {
 async function chooseScene(s) {
   if (canTalk()) {
     await state.dev.selectScene(s);
-    log(`scene ${s + 1}`);
+    log(`scene ${s + 1}${s >= XS ? ' (experimental: values are not readable and probably not saved with the preset)' : ''}`);
   }
   state.scene = s;
   renderCurrent();
@@ -2618,6 +2711,9 @@ async function init() {
     b.onclick = () => chooseScene(s);
     b.ondblclick = () => renameScene(s);
   });
+  try {
+    state.experimental = localStorage.getItem('ampero.scenes45') === '1';
+  } catch { /* ignore */ }
   $('edSave').onclick = savePreset;
   $('edStyleSel').onchange = () => setStyleSlot(state.current, $('edStyleSel').value);
   $('portToggle').onclick = () => {
