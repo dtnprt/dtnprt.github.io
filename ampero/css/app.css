@@ -217,7 +217,19 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .fx.m-FX-LOOP, .fx.m-FX-SND, .fx.m-FX-RTN { border-color: #ff8c2a; }
 .fx.m-Split-Mixer { border-color: #9aa0a6; }
 .editor-params { display: flex; gap: 24px; min-height: 220px; }
-.mock-modules ul { list-style: none; margin: 6px 0 0; padding: 0; columns: 2; color: #777; }
+.mock-modules ul { list-style: none; margin: 6px 0 0; padding: 0; columns: 2; color: #999; }
+.ed-left { width: 250px; flex: none; display: flex; flex-direction: column; gap: 16px; }
+.modules .hint { font-size: 11px; }
+.modules li { cursor: pointer; border-radius: 3px; padding-left: 3px; }
+.modules li:hover { color: #fff; background: #2a2a2a; }
+.modules li.active { color: var(--accent); background: #2a2416; }
+.browser { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.b-list { list-style: none; margin: 0; padding: 4px; min-width: 150px; max-height: 330px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
+.b-list li { padding: 4px 9px; cursor: pointer; border-radius: 3px; white-space: nowrap; }
+.b-list li:hover { background: #2a2a2a; }
+.b-list li.on { background: var(--accent-dim); color: #fff; }
+.b-list.algs { min-width: 240px; }
+.b-list .sub { color: var(--muted); font-size: 11px; margin-left: 6px; }
 .mock-modules li { padding: 3px 0; }
 .mock-knobs { flex: 1; display: flex; gap: 30px; align-items: center; justify-content: center; }
 /* parameter editor */
@@ -262,9 +274,11 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .port-sel[hidden] { display: none; }
 .style-sel { font-size: 12px; }
 /* footswitches of the preset */
-.editor-fs { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: flex-start; }
+.editor-fs { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.editor-fs[hidden] { display: none; }
 .editor-fs .fs-title { width: 100%; color: var(--muted); font-size: 12px; }
-.fs-box { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+.fs-box { display: flex; flex-direction: column; gap: 5px; }
+.fs-box select { flex: 1; min-width: 0; }
 .fs-box .fs-head { display: flex; align-items: center; gap: 8px; }
 .fs-box .fs-head b { width: 34px; }
 .fs-box .fs-hold { color: var(--muted); font-size: 12px; }

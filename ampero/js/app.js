@@ -19,7 +19,7 @@ import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
 import { diffProbes, probe } from './probe.js';
 import { commandGroup } from './sniffer.js';
-import { algDbLoaded, algInfo, algsOfCategory, categoryNames, clampValue, formatValue, loadAlgDb } from './algdb.js';
+import { algDbLoaded, algInfo, algsOfCategory, categoryNames, clampValue, formatValue, groupsOfCategory, loadAlgDb } from './algdb.js';
 
 const $ = (id) => document.getElementById(id);
 let sniffer = null;
@@ -53,6 +53,7 @@ const state = {
   dragging: false, // a knob is being dragged: do not rebuild the parameter editor
   dragPos: null, // chain position of the block being dragged
   blockClip: null, // copied block (presetBlock format)
+  browse: null, // module browser: {cat, group} (lists of sub-categories and algorithms for the selected block)
   restoring: -1, // slot being restored: ignore the pedal's slot push with default values
   irNames: null, // string[50] user IR names from the pedal
   namNames: null, // string[30] NAM slot names from the pedal ('' = empty)
@@ -416,6 +417,7 @@ function setCurrent(index, scene) {
     }
     state.dirty = -1;
     state.selSlot = -1;
+    state.browse = null;
   }
   state.current = index;
   state.scene = scene;
@@ -760,8 +762,10 @@ function renderEditor() {
         e.title = `empty position ${c.pos + 1} – click to insert a block, or drop one here`;
         e.onclick = () => {
           state.selSlot = c.slot;
+          state.browse = null;
           renderEditor();
         };
+        e.oncontextmenu = (ev) => blockMenu(ev, raw, c);
         dnd(e, c);
       }
       return e;
@@ -775,8 +779,10 @@ function renderEditor() {
     if (c.slot === state.selSlot) b.classList.add('sel');
     b.onclick = () => {
       state.selSlot = c.slot;
+      state.browse = null;
       renderEditor();
     };
+    b.oncontextmenu = (ev) => blockMenu(ev, raw, c);
     const dot = el('span', 'fx-state');
     dot.title = `${c.on[scene] ? 'on' : 'off'} in scene ${scene + 1} – click to switch`;
     dot.onclick = (e) => {
@@ -827,8 +833,78 @@ function renderEditor() {
   rowB.append(el('span', 'chain-link'));
   requestAnimationFrame(drawRouting);
   renderParams(raw, chain);
+  renderLegend(raw, chain);
   renderFs(raw, chain);
   fillRanges();
+}
+
+// ------------------------------------------------------------------ module legend + browser (like the Hotone editor)
+
+/** Modules of the legend, in the order of the effect database (categories that have algorithms). */
+function legendModules() {
+  return (categoryNames() ?? []).map((name, i) => ({ name, i })).filter((m) => algsOfCategory(m.i).length);
+}
+
+function renderLegend(raw, chain) {
+  const ul = $('edModuleList');
+  const c = chain.find((x) => x.slot === state.selSlot);
+  const cur = state.browse?.cat ?? (c && c.code !== 0xffffffff ? algInfo(c.code)?.category : -1);
+  ul.replaceChildren();
+  for (const m of legendModules()) {
+    const li = document.createElement('li');
+    li.className = m.i === cur ? 'active' : '';
+    li.innerHTML = `<span class="mi m-${m.name.replace(/ /g, '-')}">${moduleIcon(m.name) || moduleIcon(/^FX /.test(m.name) ? 'FX LOOP' : '')}</span>`;
+    li.append(m.name);
+    li.title = c ? `choose a ${m.name} algorithm for ${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1}` : 'select a block or an empty position in the chain first';
+    li.onclick = () => {
+      if (!c || !raw) {
+        log('select a block or an empty position in the chain first');
+        return;
+      }
+      const a = c.code !== 0xffffffff ? algInfo(c.code) : null;
+      state.browse = { cat: m.i, group: a?.category === m.i ? a.group : null };
+      renderEditor();
+    };
+    ul.append(li);
+  }
+}
+
+/** Lists of sub-categories and algorithms of the browsed module; a click sets the algorithm of the block. */
+function moduleBrowser(c, empty) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const { cat } = state.browse;
+  const groups = groupsOfCategory(cat);
+  const group = groups.includes(state.browse.group) ? state.browse.group : groups[0];
+  const wrap = el('div', 'browser');
+  const gl = el('ul', 'b-list groups');
+  for (const g of groups) {
+    const li = el('li', g === group ? 'on' : '', g || '–');
+    li.onclick = () => {
+      state.browse = { cat, group: g };
+      renderEditor();
+    };
+    gl.append(li);
+  }
+  const al = el('ul', 'b-list algs');
+  const live = canTalk();
+  for (const a of algsOfCategory(cat, group)) {
+    const li = el('li', !empty && a.code === c.code ? 'on' : '', blockName(a.code, a) || a.name);
+    if (blockName(a.code, a) !== a.name) li.append(el('span', 'sub', a.name));
+    li.title = live ? 'click to use this algorithm (resets the block\'s parameters)' : 'connect the pedal to change the block';
+    li.onclick = () => {
+      if (!live) return;
+      state.browse = null;
+      setBlockAlg(c.slot, cat, a.code, empty);
+    };
+    al.append(li);
+  }
+  const close = el('button', 'small-btn', empty ? 'Cancel' : 'Back to parameters');
+  close.onclick = () => {
+    state.browse = null;
+    renderEditor();
+  };
+  wrap.append(gl, al, close);
+  return wrap;
 }
 
 /** Filled part of themed range sliders (Chrome/Brave draw it from the --fill variable). */
@@ -959,9 +1035,13 @@ function renderParams(raw, chain) {
   head.append(el('span', 'p-title', empty ? 'Empty position' : alg ? alg.name : hex32(c.code)),
     el('span', 'muted small', `${empty ? `position ${c.pos + 1}` : `${alg?.module ?? MODULES[c.code >>> 24] ?? '?'} · slot ${c.slot + 1} · scene ${scene + 1}`}`));
   head.append(blockControls(raw, c, empty));
+  if (state.browse) {
+    box.replaceChildren(head, moduleBrowser(c, empty));
+    return;
+  }
   const grid = el('div', 'params-grid');
   if (empty) {
-    grid.append(el('div', 'muted', 'Choose a module and an algorithm to insert a block here.'));
+    grid.append(el('div', 'muted', 'Choose a module on the left to insert a block here.'));
   } else if (!alg) {
     grid.append(el('div', 'muted', 'Unknown algorithm – effect database not loaded?'));
   } else {
@@ -1047,37 +1127,10 @@ function paramControl(raw, slot, p, scene, live) {
 function blockControls(raw, c, empty) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
   const wrap = el('span', 'block-ctl');
-  const live = canTalk() && algDbLoaded();
-  const cat = el('select');
-  const cur = empty ? -1 : algInfo(c.code)?.category ?? -1;
-  if (empty) cat.append(new Option('Module…', '-1'));
-  for (const [i, name] of (categoryNames() ?? []).entries()) {
-    if (algsOfCategory(i).length) cat.append(new Option(name, String(i)));
-  }
-  cat.value = String(cur);
-  const algSel = el('select');
-  const fillAlgs = (ci) => {
-    algSel.replaceChildren(new Option(ci < 0 ? '–' : 'Algorithm…', ''));
-    for (const a of ci < 0 ? [] : algsOfCategory(ci)) algSel.append(new Option(algLabel(a), String(a.code)));
-    algSel.value = !empty && ci === cur ? String(c.code) : '';
-  };
-  fillAlgs(cur);
-  cat.onchange = () => fillAlgs(+cat.value);
-  algSel.onchange = () => {
-    if (algSel.value !== '') setBlockAlg(c.slot, +cat.value, +algSel.value, empty);
-  };
-  cat.disabled = algSel.disabled = !live;
-  wrap.append(cat, algSel);
   const copy = el('button', 'small-btn', 'Copy');
-  copy.title = 'copy this block (algorithm + parameters of all scenes)';
+  copy.title = 'copy this block (algorithm + parameters of all scenes) – also in the block\'s context menu';
   copy.hidden = empty;
-  copy.onclick = () => {
-    state.blockClip = presetBlock(raw, c.slot);
-    state.blockClip.name = algInfo(c.code)?.name ?? hex32(c.code);
-    try { localStorage.setItem('ampero.blockClip', JSON.stringify(state.blockClip)); } catch { /* ignore */ }
-    log(`copied block "${state.blockClip.name}"`);
-    renderEditor();
-  };
+  copy.onclick = () => copyBlock(raw, c);
   const paste = el('button', 'small-btn', 'Paste');
   const clip = state.blockClip;
   paste.title = clip ? `insert "${clip.name}" here (replaces this block)` : 'copy a block first';
@@ -1086,22 +1139,11 @@ function blockControls(raw, c, empty) {
   const save = el('button', 'small-btn', 'Save…');
   save.title = 'save this block as a file';
   save.hidden = empty;
-  save.onclick = () => {
-    const b = { ...presetBlock(raw, c.slot), name: algInfo(c.code)?.name ?? hex32(c.code) };
-    download(new Blob([JSON.stringify(b, null, 1)], { type: 'application/json' }), `${b.name.replace(/[^\w.-]+/g, '_')}.ampblock`);
-  };
+  save.onclick = () => saveBlockFile(raw, c);
   const load = el('button', 'small-btn', 'Load…');
   load.title = 'load a block file into this position';
   load.disabled = !canTalk();
-  load.onclick = async () => {
-    const f = await pickFile('.ampblock,.json');
-    if (!f) return;
-    try {
-      await restoreBlock(c.slot, checkBlock(JSON.parse(await f.text())));
-    } catch (e) {
-      log(`load block: ${e.message}`);
-    }
-  };
+  load.onclick = () => loadBlockFile(c);
   wrap.append(copy, paste, save, load);
   if (!empty) {
     const on = c.on[editScene()];
@@ -1116,6 +1158,47 @@ function blockControls(raw, c, empty) {
     wrap.append(t, rm);
   }
   return wrap;
+}
+
+function copyBlock(raw, c) {
+  state.blockClip = presetBlock(raw, c.slot);
+  state.blockClip.name = blockName(c.code, algInfo(c.code)) || hex32(c.code);
+  try { localStorage.setItem('ampero.blockClip', JSON.stringify(state.blockClip)); } catch { /* ignore */ }
+  log(`copied block "${state.blockClip.name}"`);
+  renderEditor();
+}
+
+function saveBlockFile(raw, c) {
+  const b = { ...presetBlock(raw, c.slot), name: blockName(c.code, algInfo(c.code)) || hex32(c.code) };
+  download(new Blob([JSON.stringify(b, null, 1)], { type: 'application/json' }), `${b.name.replace(/[^\w.-]+/g, '_')}.ampblock`);
+}
+
+async function loadBlockFile(c) {
+  const f = await pickFile('.ampblock,.json');
+  if (!f) return;
+  try {
+    await restoreBlock(c.slot, checkBlock(JSON.parse(await f.text())));
+  } catch (e) {
+    log(`load block: ${e.message}`);
+  }
+}
+
+/** Right-click menu of a block / an empty position. */
+function blockMenu(e, raw, c) {
+  e.preventDefault();
+  e.stopPropagation();
+  state.selSlot = c.slot;
+  renderEditor();
+  const empty = c.code === 0xffffffff, live = canTalk(), clip = state.blockClip;
+  contextMenu(e.clientX, e.clientY, [
+    { label: 'Copy', action: () => copyBlock(raw, c), disabled: empty },
+    { label: clip ? `Paste "${clip.name}"` : 'Paste', action: () => restoreBlock(c.slot, clip), disabled: !clip || !live },
+    '-',
+    { label: 'Save as file…', action: () => saveBlockFile(raw, c), disabled: empty },
+    { label: 'Load from file…', action: () => loadBlockFile(c), disabled: !live },
+    '-',
+    { label: 'Delete', action: () => removeBlock(c.slot), disabled: empty || !live },
+  ]);
 }
 
 /** Option label: NAM / user IR slots show the name of the uploaded model / IR. */
@@ -2322,10 +2405,6 @@ async function init() {
     poll();
   });
   setInterval(poll, CURRENT_POLL_MS);
-  for (const li of document.querySelectorAll('.mock-modules li')) {
-    const mod = li.textContent.trim();
-    li.innerHTML = `<span class="mi m-${mod.replace(' ', '-')}">${moduleIcon(mod)}</span>${mod}`;
-  }
   [...$('edScenes').children].forEach((b, s) => {
     b.onclick = () => chooseScene(s);
     b.ondblclick = () => renameScene(s);
