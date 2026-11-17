@@ -9,10 +9,10 @@
 export const GLOBAL_GROUPS = [
   {
     id: 'io', title: 'Input / Output', get: 0x00010000, params: [
-      { addr: 0x00010001, name: 'Input Mode (L)', options: ['Electric Guitar', 'Acoustic Guitar', 'Line'], guess: true },
-      { addr: 0x00010002, name: 'Input Mode (R)', options: ['Electric Guitar', 'Acoustic Guitar', 'Line'], guess: true },
+      { addr: 0x00010001, name: 'Input Mode (L)', options: ['Electric Guitar', 'Acoustic Guitar', 'Line'] },
+      { addr: 0x00010002, name: 'Input Mode (R)', options: ['Electric Guitar', 'Acoustic Guitar', 'Line'] },
       { addr: 0x0001000e, name: 'Output Level', options: ['Instrument', 'Line'] },
-      { addr: 0x00010009, name: 'Bypass Mode', options: ['True Bypass', 'DSP Bypass'], guess: true },
+      { addr: 0x00010009, name: 'Bypass Mode', options: ['True Bypass', 'DSP Bypass'] },
       { addr: 0x0001000f, name: 'Output Source', options: ['Normal', 'USB Only', 'Dry'] },
       { addr: 0x00010008, name: 'FX Send Source', options: ['Normal', 'USB Only', 'Dry'] },
       { addr: 0x00010010, name: 'No Cab Mode (L)', options: ['OFF', 'CAB Only', 'IR Only', 'CAB+IR'] },
@@ -31,19 +31,26 @@ export const GLOBAL_GROUPS = [
     ],
   },
   {
-    id: 'controls', title: 'Controls', note: 'PATCH FS FUNC (0x00070005) and EXP/CTRL Function (0x00070001) are not '
-      + 'decoded yet.', params: [
-      { addr: 0x00080004, name: 'Bank Select Mode', options: ['Initial', 'Wait'], guess: true },
+    id: 'controls', title: 'Controls', params: [
+      // group 0x0007 answers with its own layout: [0] EXP/CTRL function, [1..3] ?, [5] global tempo, [7] PATCH FS FUNC,
+      // [8..9] u16 global BPM; PATCH FS FUNC is set as u32 0x33 + option
+      { addr: 0x00070005, name: 'PATCH FS FUNC', options: ['Patch', 'Patch/FX Slot 1', 'Patch/Scene 2', 'Patch/Bypass'],
+        getByte: 7, base: 0x33, u32: true },
+      { addr: 0x00080004, name: 'Bank Select Mode', options: ['Initial', 'Wait'] },
       { addr: 0x00080001, name: 'Auto Cab Match', switch: true },
+      // set: 4 bytes, the option in byte 2 (the editor sent 00 00 01 00 for "Single FS") – byte order not confirmed
+      { addr: 0x00070001, name: 'EXP/CTRL Function', options: ['EXP 1/2', 'Single FS', 'Dual FS'], getByte: 0,
+        encode: (v) => [0, 0, v, 0], guess: true },
       { addr: 0x00070006, name: 'Global Tempo', switch: true },
     ],
   },
   {
     id: 'midi', title: 'MIDI', get: 0x00060000, params: [
-      { addr: 0x00060001, name: 'MIDI In Source', options: null, max: 4, guess: true }, // options unknown ("DIN Only" …)
+      { addr: 0x00060001, name: 'MIDI In Source', options: ['DIN Only', 'USB Only', 'Mixed'] },
       { addr: 0x00060002, name: 'Input Channel (DIN)', channel: true },
       { addr: 0x00060003, name: 'Input Channel (USB)', channel: true },
-      { addr: 0x00060008, name: 'Clock Source', options: null, max: 4, guess: true }, // options unknown ("Mixed" …)
+      // position in the get answer not confirmed (byte 7 or 8)
+      { addr: 0x00060008, name: 'Clock Source', options: ['Internal', 'DIN Only', 'USB Only', 'External', 'Mixed'], guess: true },
       { addr: 0x00060006, name: 'Clock Out (DIN)', switch: true },
       { addr: 0x00060007, name: 'Clock Out (USB)', switch: true },
     ],
@@ -53,7 +60,7 @@ export const GLOBAL_GROUPS = [
       { addr: 0x00080002, name: 'Patch Mode', options: ['Mode 1', 'Mode 2'] },
       { addr: 0x0008000d, name: 'Stomp Mode', options: ['Footswitch', 'Effect Chain'] },
       { addr: 0x00080006, name: 'Color', colors: ['#f5b041', '#ff4d4d', '#4d7cff', '#a05cff', '#4dd2ff', '#7dff4d', '#ff9a3d'] },
-      { addr: 0x00080007, name: 'Display Time', options: ['1 Min', '3 Min', '5 Min', '10 Min', '15 Min', '30 Min', '60 Min', 'Always On'], guess: true },
+      { addr: 0x00080007, name: 'Display Time', options: ['Always On', '1 Min', '5 Min', '10 Min', '20 Min', '30 Min', '40 Min', '50 Min', '60 Min'] },
     ],
   },
 ];
@@ -61,16 +68,26 @@ export const GLOBAL_GROUPS = [
 /** Group of a parameter address and the get command that reads it. */
 export const groupOf = (addr) => addr & 0xffff0000;
 
-/** Value of parameter `addr` from the answer of its group's get command (byte n-1, signed for levels). */
+/** Byte of parameter p in its group's get answer (n-1, unless the group has its own layout). */
+export const paramByte = (p) => p.getByte ?? (p.addr & 0xffff) - 1;
+
+/** Value of parameter `addr` from the answer of its group's get command (signed for levels). */
 export function paramValue(p, answer) {
-  const i = (p.addr & 0xffff) - 1;
+  const i = paramByte(p);
   if (!answer || i >= answer.length) return null;
   const b = answer[i];
-  return p.level ? (b << 24) >> 24 : b;
+  return p.level ? (b << 24) >> 24 : b - (p.base ?? 0);
 }
 
-/** Set command payload: one byte (two's complement for negative levels). */
-export const paramPayload = (value) => Uint8Array.of(value & 0xff);
+/** Raw byte value as it appears in the get answer. */
+export const rawByte = (p, value) => (value + (p.base ?? 0)) & 0xff;
+
+/** Set command payload: one byte (two's complement for negative levels), u32 or a parameter-specific layout. */
+export function paramPayload(p, value) {
+  if (p.encode) return Uint8Array.from(p.encode(value));
+  if (p.u32) return u32((p.base ?? 0) + value);
+  return Uint8Array.of(value & 0xff);
+}
 
 // ------------------------------------------------------------------ Global EQ (group 0x0003)
 //

@@ -130,8 +130,8 @@ Backup-Roundtrip.
 
 ## Rechtliches / Disclaimer
 
-Dieses Projekt ist **inoffiziell** und unabhängig. Es steht in keiner Verbindung zu Hotone Audio, wird von Hotone weder
-autorisiert noch unterstützt und ist kein Hotone-Produkt. **Hotone** und **Ampero** sind Marken von Hotone Audio;
+Dieses Projekt ist **inoffiziell** und unabhängig. Es steht in keiner Verbindung zu Changsha Hotone Audio Co., Ltd. („Hotone“), wird von Hotone weder
+autorisiert noch unterstützt und ist kein Hotone-Produkt. **Hotone** und **Ampero** sind Marken von Changsha Hotone Audio Co., Ltd.;
 andere Namen (z. B. *Neural Amp Modeler*, *TONE3000*) sind Marken ihrer jeweiligen Inhaber und werden nur zur
 Beschreibung der Kompatibilität genannt.
 

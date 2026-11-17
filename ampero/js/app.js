@@ -9,7 +9,7 @@ import {
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
-import { EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramPayload as globalPayload, paramValue, parseEq, u32 as u32b } from './globals.js';
+import { EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramByte, paramPayload as globalPayload, paramValue, parseEq, rawByte, u32 as u32b } from './globals.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
 import { closeMenu, confirmSlots, contextMenu, promptText, showAbout } from './ui.js';
@@ -1088,9 +1088,9 @@ async function readGlobals() {
 async function setGlobal(p, value) {
   if (!canTalk()) return;
   const ans = state.globals?.get(groupOf(p.addr));
-  const i = (p.addr & 0xffff) - 1;
-  if (ans && i < ans.length) ans[i] = value & 0xff;
-  await state.dev.send(p.addr, globalPayload(value));
+  const i = paramByte(p);
+  if (ans && i < ans.length) ans[i] = rawByte(p, value);
+  await state.dev.send(p.addr, globalPayload(p, value));
   log(`${p.name}: ${describeGlobal(p, value)}`);
 }
 
