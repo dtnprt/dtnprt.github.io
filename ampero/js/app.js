@@ -1585,8 +1585,18 @@ function renderEq(live) {
     log('Global EQ reset');
     renderGlobals();
   };
-  head.append(el('span', '', 'EQ'), sw, el('span', 'muted small', 'Volume'), vol, volVal, reset);
+  const view = el('button', 'small-btn', state.eqTable ? 'Graph' : 'Table');
+  view.title = 'switch between the graphic view and the table of values';
+  view.onclick = () => {
+    state.eqTable = !state.eqTable;
+    renderGlobals();
+  };
+  head.append(el('span', '', 'EQ'), sw, el('span', 'muted small', 'Volume'), vol, volVal, reset, view);
   card.append(head);
+  if (!state.eqTable) {
+    card.append(eqGraph(eq, live));
+    return card;
+  }
   const t = el('table', 'eq-table');
   t.innerHTML = '<thead><tr><th>Band</th><th>On</th><th>Freq (Hz)</th><th>Q</th><th>Gain (dB)</th></tr></thead>';
   const tb = t.createTBody();
@@ -1608,6 +1618,143 @@ function renderEq(live) {
   }
   card.append(t, el('p', 'muted small', 'Values as in the Hotone software (frequency, Q, gain per band). Ranges of Q and gain are not confirmed.'));
   return card;
+}
+
+// ------------------------------------------------------------------ graphic global EQ
+
+const EQ_COLORS = ['#e05a6d', '#e07a3a', '#b5d33a', '#3ad16b', '#3acfc7', '#4d6bff', '#a05cff', '#d64dc8'];
+const EQ_FS = 44100;
+
+/** |H(f)| in dB of one band (RBJ audio EQ cookbook biquads). kind: hp, ls, pk, hs, lp. */
+function bandDb(kind, f0, q, gain, f) {
+  const A = 10 ** (gain / 40), w0 = 2 * Math.PI * Math.min(f0, EQ_FS / 2.05) / EQ_FS, cw = Math.cos(w0), sw = Math.sin(w0);
+  const al = sw / (2 * Math.max(q, 0.05));
+  let b0, b1, b2, a0, a1, a2;
+  if (kind === 'hp') [b0, b1, b2, a0, a1, a2] = [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2, 1 + al, -2 * cw, 1 - al];
+  else if (kind === 'lp') [b0, b1, b2, a0, a1, a2] = [(1 - cw) / 2, 1 - cw, (1 - cw) / 2, 1 + al, -2 * cw, 1 - al];
+  else if (kind === 'pk') [b0, b1, b2, a0, a1, a2] = [1 + al * A, -2 * cw, 1 - al * A, 1 + al / A, -2 * cw, 1 - al / A];
+  else {
+    const s = 2 * Math.sqrt(A) * al, sg = kind === 'ls' ? 1 : -1;
+    b0 = A * ((A + 1) - sg * (A - 1) * cw + s); b1 = sg * 2 * A * ((A - 1) - sg * (A + 1) * cw); b2 = A * ((A + 1) - sg * (A - 1) * cw - s);
+    a0 = (A + 1) + sg * (A - 1) * cw + s; a1 = -sg * 2 * ((A - 1) + sg * (A + 1) * cw); a2 = (A + 1) + sg * (A - 1) * cw - s;
+  }
+  const w = 2 * Math.PI * f / EQ_FS;
+  const re = (c0, c1, c2) => c0 + c1 * Math.cos(w) + c2 * Math.cos(2 * w), im = (c1, c2) => -(c1 * Math.sin(w) + c2 * Math.sin(2 * w));
+  const num = re(b0, b1, b2) ** 2 + im(b1, b2) ** 2, den = re(a0, a1, a2) ** 2 + im(a1, a2) ** 2;
+  return 10 * Math.log10(num / den);
+}
+
+const EQ_KINDS = ['hp', 'ls', 'pk', 'pk', 'pk', 'pk', 'hs', 'lp'];
+
+function eqGraph(eq, live) {
+  const NS = 'http://www.w3.org/2000/svg', W = 900, H = 260, L = 34, R = 26, T = 10, B = 24, DB = 25;
+  const fx = (f) => L + (Math.log10(f / 20) / 3) * (W - L - R), fy = (db) => T + ((DB - db) / (2 * DB)) * (H - T - B);
+  const xf = (x) => 20 * 10 ** (((x - L) / (W - L - R)) * 3), yd = (y) => DB - ((y - T) / (H - T - B)) * 2 * DB;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.classList.add('eq-graph');
+  const add = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text != null) e.textContent = text;
+    svg.append(e);
+    return e;
+  };
+  for (const db of [-25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25]) {
+    add('line', { x1: L, x2: W - R, y1: fy(db), y2: fy(db), class: db === 0 ? 'g0' : 'g' });
+    add('text', { x: L - 6, y: fy(db) + 4, class: 'gl', 'text-anchor': 'end' }, db);
+  }
+  for (const f of [20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 20000]) {
+    add('line', { x1: fx(f), x2: fx(f), y1: T, y2: H - B, class: 'g' });
+  }
+  for (const [f, t] of [[20, '20'], [50, '50'], [100, '100'], [200, '200'], [500, '500'], [1000, '1.0k'], [2000, '2.0k'], [5000, '5.0k'], [10000, '10.0k'], [20000, '20.0k']]) {
+    add('text', { x: fx(f), y: H - 6, class: 'gl', 'text-anchor': 'middle' }, t);
+  }
+  if (!eq) return svg;
+  const v = eq.values;
+  const curve = add('path', { class: 'eq-curve' });
+  const draw = () => {
+    let d = '';
+    for (let x = L; x <= W - R; x += 3) {
+      const f = xf(x);
+      let db = 0;
+      EQ_BANDS.forEach((b, k) => {
+        if (v[b.on] >= 0.5) db += bandDb(EQ_KINDS[k], v[b.freq], v[b.q], b.gain != null ? v[b.gain] : 0, f);
+      });
+      d += `${d ? 'L' : 'M'}${x.toFixed(1)},${fy(Math.max(-DB, Math.min(DB, db))).toFixed(1)}`;
+    }
+    curve.setAttribute('d', d);
+  };
+  draw();
+  EQ_BANDS.forEach((b, k) => {
+    const on = v[b.on] >= 0.5;
+    const g = add('circle', { r: 7, class: `eq-pt${on ? '' : ' off'}`, stroke: EQ_COLORS[k] });
+    const place = () => {
+      g.setAttribute('cx', fx(Math.min(20000, Math.max(20, v[b.freq]))));
+      g.setAttribute('cy', fy(b.gain != null ? v[b.gain] : 0));
+    };
+    place();
+    const tip = () => `${b.name}: ${Math.round(v[b.freq])} Hz, Q ${v[b.q].toFixed(2)}${b.gain != null ? `, ${v[b.gain].toFixed(1)} dB` : ''}` +
+      `${on ? '' : ' (off – double-click to switch on)'}\ndrag: frequency${b.gain != null ? ' / gain' : ''} · wheel: Q · double-click: on/off`;
+    const title = document.createElementNS(NS, 'title');
+    title.textContent = tip();
+    g.append(title);
+    if (!live) return;
+    const send = throttle((i, x) => setEq(i, x), 80);
+    g.onpointerdown = (e) => {
+      g.setPointerCapture(e.pointerId);
+      const rect = svg.getBoundingClientRect(), sx = W / rect.width, sy = H / rect.height;
+      g.onpointermove = (m) => {
+        const x = (m.clientX - rect.left) * sx, y = (m.clientY - rect.top) * sy;
+        v[b.freq] = Math.round(Math.min(20000, Math.max(20, xf(x))));
+        send(b.freq, v[b.freq]);
+        if (b.gain != null) {
+          v[b.gain] = Math.round(Math.max(-15, Math.min(15, yd(y))) * 10) / 10;
+          send(b.gain, v[b.gain]);
+        }
+        place();
+        draw();
+        title.textContent = tip();
+      };
+      g.onpointerup = g.onpointercancel = () => {
+        g.onpointermove = g.onpointerup = g.onpointercancel = null;
+      };
+    };
+    g.onwheel = (e) => {
+      e.preventDefault();
+      v[b.q] = Math.round(Math.max(0.1, Math.min(10, v[b.q] * (e.deltaY < 0 ? 1.1 : 1 / 1.1))) * 100) / 100;
+      send(b.q, v[b.q]);
+      draw();
+      title.textContent = tip();
+    };
+    g.ondblclick = () => {
+      v[b.on] = on ? 0 : 1;
+      setEq(b.on, v[b.on]);
+      renderGlobals();
+    };
+  });
+  return svg;
+}
+
+/** Call fn(key, value) at most every ms milliseconds per key, always with the latest value. */
+function throttle(fn, ms) {
+  const last = new Map();
+  return (key, value) => {
+    const s = last.get(key) ?? { t: 0, v: null, timer: 0 };
+    s.v = value;
+    last.set(key, s);
+    const now = performance.now();
+    if (now - s.t >= ms) {
+      s.t = now;
+      fn(key, value);
+    } else if (!s.timer) {
+      s.timer = setTimeout(() => {
+        s.timer = 0;
+        s.t = performance.now();
+        fn(key, s.v);
+      }, ms - (now - s.t));
+    }
+  };
 }
 
 async function setEq(index, value) {
