@@ -295,9 +295,49 @@ function presetSummary(p) {
 
 const presetFields = (p) => [slotf(p, 'slot', 0), F('preset (TLV)', 4, p.length - 4, `${p.length - 4} B`, tlvFields(p, 4))];
 
-/** Known commands: name + decoder (payload, entry) -> fields. */
+/**
+ * Declarative payload decoder: [[name, type, n?], …] -> fields (+ "unknown" for trailing bytes).
+ * Types: u8 u16 i16 u32 f32, str (n bytes), bytes (n bytes, or the rest), f32s (rest as floats),
+ * preset (u32 preset slot), scene (u8/u16/u32 by n, shown 1-based), cmd (u32 command code).
+ * Fields that do not fit into the payload are left out (requests are often shorter than answers).
+ */
+const SIZES = { u8: 1, u16: 2, i16: 2, u32: 4, f32: 4, preset: 4, cmd: 4 };
+function struct(spec) {
+  return (p) => {
+    const out = [];
+    let o = 0;
+    for (const [name, type, n] of spec) {
+      const size = type === 'str' || type === 'bytes' ? (n ?? p.length - o) : type === 'f32s' ? p.length - o
+        : type === 'scene' ? (n ?? 1) : SIZES[type];
+      if (size <= 0 || o + size > p.length) break;
+      let v;
+      if (type === 'u8') v = `${p[o]}`;
+      else if (type === 'u16') v = `${u16(p, o)}`;
+      else if (type === 'i16') v = `${i16(p, o)}`;
+      else if (type === 'u32') v = `${rd32(p, o)}`;
+      else if (type === 'f32') v = fmtF(f32(p, o));
+      else if (type === 'str') v = `"${cString(p, o, size)}"`;
+      else if (type === 'bytes') v = hexBytes(p.subarray(o, o + size), 16);
+      else if (type === 'f32s') v = f32s(p, o, Math.floor(size / 4)).slice(0, 12).map(fmtF).join(' ') + (size > 48 ? ' …' : '');
+      else if (type === 'preset') v = rd32(p, o) < PRESET_COUNT ? `${rd32(p, o)} = ${presetLabel(rd32(p, o))}` : `${rd32(p, o)}`;
+      else if (type === 'scene') v = `${(size === 1 ? p[o] : size === 2 ? u16(p, o) : rd32(p, o)) + 1}`;
+      else if (type === 'cmd') v = `0x${hex32(rd32(p, o))}${KNOWN[rd32(p, o)] ? ` (${KNOWN[rd32(p, o)].name})` : ''}`;
+      out.push(F(name, o, size, v));
+      o += size;
+    }
+    return [...out, ...rest(p, o)];
+  };
+}
+
+/**
+ * Known commands: name + decoder (payload, entry) -> fields.
+ * Names in brackets are the functions of the Hotone app that send the command (decompiled Android app,
+ * HTModelPreset.dart and views/main/Global/*); payload layouts are taken from their field maps. "(app)" marks the
+ * ones not confirmed by a capture yet; confirmed with the Hotone editor under Wine (captures/wine-edit-2026-11-17.txt
+ * in the ampero repo): 01040001/2/3, 01090004, 01090007, 03000001, 05000000.
+ */
 export const KNOWN = {
-  [CMD.CONNECT]: { name: 'connect' },
+  [CMD.CONNECT]: { name: 'connect / screen lock query [requestScrrenIsLock]' },
   [CMD.CURRENT_PRESET]: { name: 'current preset (get / select)', fields: (p) => (p.length >= 4 ? [slotf(p, 'preset', 0)] : []) },
   [CMD.PRESET_DUMP]: { name: 'preset dump', summary: presetSummary, fields: (p) => (p.length > 8 ? presetFields(p) : p.length >= 4 ? [slotf(p, 'slot', 0)] : []) },
   [CMD.PRESET_WRITE]: { name: 'write preset into slot', summary: presetSummary, fields: presetFields },
@@ -323,39 +363,123 @@ export const KNOWN = {
   [CMD.NAME_EDIT]: { name: 'name editor (0 open / 1 closed?)', fields: (p) => [u32f(p, 'value', 0)] },
   0x01030000: { name: 'footswitch functions (get)', fields: (p) => (p.length >= 8 ? sectionFields(p, 3, 0, p.length, 0) : [F('click[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3, 'rest')]) },
   0x01030001: { name: 'footswitch functions (set)', fields: (p) => [F('click[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3)] },
-  0x01070001: { name: 'footswitch → slots (set)', fields: (p) => [F('footswitch', 0, 1, `${p[0] + 1}`), F('ctrlTargetSlot[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
-  0x01090001: { name: 'patch volume', fields: (p) => [F('u16 ?', 0, 2, `${u16(p, 0)}`), F('volume', 2, 2, `${u16(p, 2)}`), ...rest(p, 4)] },
-  0x01090002: { name: 'patch tempo (BPM)', fields: (p) => [F('u16 ?', 0, 2, `${u16(p, 0)}`), F('tempo', 2, 2, `${u16(p, 2)}`), ...rest(p, 4)] },
-  0x01090004: { name: 'slot on/off states', fields: (p) => [F('scene', 0, 1, `${p[0] + 1}`), F('on[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
-  0x01040004: { name: 'slot state', fields: (p) => [u32f(p, 'slot', 0, (v) => `${v + 1}`), u32f(p, 'category', 4), u32f(p, 'on', 8), u32f(p, 'model', 12, (v) => `0x${hex32(v)}`), ...rest(p, 16)] },
-  0x02000003: { name: 'select chain template', fields: (p) => [u32f(p, 'template', 0, (v) => `${v} = ${CHAIN_MODES[v]?.name ?? '?'}`), ...rest(p, 4)] },
-  0x02000004: { name: 'user chain templates (list)', fields: (p) => [F('templates', 0, p.length, '',
+  0x01070001: { name: 'ctrl: footswitch → slots (set) [setCtrlSetting]', fields: (p) => [F('footswitch', 0, 1, `${p[0] + 1}`), F('ctrlTargetSlot[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
+  0x01090001: { name: 'scene volume [setVol]', fields: struct([['scene', 'scene', 2], ['volume', 'u16']]) },
+  0x01090002: { name: 'scene tempo (BPM) [setBpmWithInt]', fields: struct([['scene', 'scene', 2], ['tempo', 'u16']]) },
+  0x01090004: { name: 'slot on/off states [setCurretAlgStateWithScene]', fields: (p) => [F('scene', 0, 1, `${p[0] + 1}`), F('on[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
+  // pushed by the pedal after an algorithm change (debug: captures/wine-edit-2026-11-17.txt): new slot contents
+  0x01040004: { name: 'slot state (pushed after algorithm change)', fields: (p) => {
+    const f = struct([['slot', 'u32'], ['category', 'u32'], ['on', 'u32'], ['model (alg code)', 'u32'], ['params', 'f32s']])(p);
+    if (p.length >= 16) f[1].value += ` = ${CATEGORIES[rd32(p, 4)] ?? '?'}`, f[3].value = algName(rd32(p, 12));
+    return f;
+  } },
+  0x02000003: { name: 'select chain template [setEffectData]', fields: (p) => [u32f(p, 'template', 0, (v) => `${v} = ${CHAIN_MODES[v]?.name ?? '?'}`), ...rest(p, 4)] },
+  0x02000004: { name: 'user chain templates (list) [getUserTemplateList]', fields: (p) => [F('templates', 0, p.length, '',
     Array.from({ length: Math.floor(p.length / 12) }, (_, i) => strf(p, `template ${i + 1}`, 12 * i, 12)))] },
   0x02000000: { name: 'chain template data', fields: (p) => [u32f(p, 'template', 0, (v) => `${v} = ${CHAIN_MODES[v]?.name ?? '?'}`), ...rest(p, 4, 'data')] },
-  0x05000000: { name: 'save current preset into slot', fields: (p) => [slotf(p, 'slot', 0), strf(p, 'name', 4, 17), ...rest(p, 21)] },
-  0x010a0003: { name: 'slot time / DSP load (?)' },
-  0x0300000a: { name: 'algorithm times (?)' },
-  0x08000003: { name: 'clone / NAM names (?)' },
-  0x07000003: { name: 'name list (?)' },
-  0x00070000: { name: 'global settings (?)' },
+  0x05000000: { name: 'save current preset into slot [savePreset]', fields: (p) => [slotf(p, 'slot', 0), strf(p, 'name', 4, 17), ...rest(p, 21)] },
+  0x010a0003: { name: 'slot time / DSP load [getSlotTimeData]', fields: struct([['slot', 'u32'], ['time (answer)', 'f32']]) },
+  0x0300000a: { name: 'algorithm times [requestAlgTimes]' },
+  0x08000003: { name: 'NAM list [getNamList]' },
+  0x07000003: { name: 'tone catch (clone) list [getToneCatchList]' },
+  0x00070000: { name: 'control settings (get)' },
+
+  // ---- from the Hotone app (decompiled Android app); layouts from its field maps, not all confirmed
+  // global settings
+  0x00010000: { name: 'input / output settings (get)' },
+  0x00020000: { name: 'USB audio settings (get)' },
+  0x00030000: { name: 'global EQ (get)' },
+  0x00030001: { name: 'global EQ on/off [setEQSwitch] (app)', fields: struct([['value', 'u32']]) },
+  0x00030002: { name: 'global EQ value [setEQValue] (app)', fields: struct([['index', 'u32'], ['value', 'f32']]) },
+  0x00030003: { name: 'global EQ output [setOutPut] (app)', fields: struct([['value', 'u32']]) },
+  0x00030004: { name: 'global EQ reset (app)' },
+  0x00060000: { name: 'MIDI settings (get)' },
+  0x00070005: { name: 'control setting (app)', fields: struct([['value', 'u32']]) },
+  0x00070006: { name: 'global control value [setGlobalControlValue] (app)' },
+  0x00070007: { name: 'global tempo [setBpmWithInt] (app)', fields: struct([['bpm', 'u32']]) },
+  0x00080000: { name: 'display / control settings (get)' },
+  0x000a0000: { name: 'drum machine (get)' },
+  0x000a0001: { name: 'drum sync [setDrumSync] (app)', fields: struct([['sync', 'u32']]) },
+  0x000a0002: { name: 'drum volume [setDrumVolume] (app)', fields: struct([['volume', 'u32']]) },
+  0x000a0003: { name: 'drum BPM [setDrumBMP] (app)', fields: struct([['bpm', 'u32']]) },
+  0x000a0004: { name: 'drum style [setDrumStyle] (app)', fields: struct([['style', 'u32']]) },
+  0x000a0005: { name: 'drum play state [setDrumState] (app)', fields: struct([['state', 'u32']]) },
+  // preset: info, quick knobs, effect slots
+  0x01010000: { name: 'preset info [addPatchRemark] (app)', fields: struct([['preset', 'preset'], ['version', 'u32'],
+    ['name', 'str', 17], ['author', 'str', 20], ['info', 'str', 50], ['style', 'str', 10]]) },
+  0x01010001: { name: 'rename preset [presetRename] (app)', fields: struct([['preset', 'preset'], ['name', 'str', 17]]) },
+  0x01010003: { name: 'preset style [patchBindStyle] (app)', fields: struct([['preset', 'preset'], ['style', 'str', 10]]) },
+  0x01020001: { name: 'quick knob [setQKnobTarget/Param] (app)', fields: struct([['knob', 'u8'], ['target slot', 'u8'],
+    ['mode', 'u8'], ['effect (alg code)', 'u32'], ['param', 'u8']]) },
+  0x01040001: { name: 'reorder effect chain [effectChainReorder]', fields: struct([['sequence[12]', 'bytes', 12]]) },
+  0x01040002: { name: 'set / delete slot algorithm [setCurretAlgWithMsg]', fields: (p) => {
+    const f = struct([['slot', 'u8'], ['category', 'u8'], ['model (alg code)', 'u32'], ['on', 'u8']])(p);
+    if (p.length >= 6) f[1].value += ` = ${CATEGORIES[p[1]] ?? '?'}`, f[2].value = algName(rd32(p, 2));
+    return f;
+  } },
+  0x01040003: { name: 'effect parameter [algKnobChangeValue]', fields: struct([['slot', 'u16'], ['param (Widget.ID)', 'u16'], ['value', 'f32']]) },
+  // preset: routing (Temp section)
+  0x01050001: { name: 'routing: input source [setInputSource] (app)', fields: struct([['chain', 'u16'], ['source', 'u16']]) },
+  0x01050002: { name: 'routing: output source [setOutputSource] (app)', fields: struct([['chain', 'u16'], ['source', 'u16']]) },
+  0x01050003: { name: 'routing: input parameter [setInputSourceParam] (app)', fields: struct([['chain', 'u16'], ['param', 'u16'], ['value', 'f32']]) },
+  0x01050004: { name: 'routing: output parameter [setOutputSourceParam] (app)', fields: struct([['chain', 'u16'], ['param', 'u16'], ['value', 'f32']]) },
+  0x01050005: { name: 'routing: split position [setSplitNodeAddr] (app)', fields: struct([['position', 'u32']]) },
+  0x01050006: { name: 'routing: mixer position [setMixNodeAddr] (app)', fields: struct([['position', 'u32']]) },
+  0x01050007: { name: 'routing: split mode [setSplitMode] (app)', fields: struct([['mode', 'u32']]) },
+  0x01050009: { name: 'routing: split parameter [setSplitNodeParam] (app)', fields: struct([['param', 'u32'], ['value', 'f32']]) },
+  0x0105000a: { name: 'routing: mixer parameter [setMixNodeParam] (app)', fields: struct([['param', 'u32'], ['value', 'f32']]) },
+  // preset: expression pedal, ctrl, scenes, MIDI
+  0x01060002: { name: 'expression target [setExpTarget/CtrlParam] (app)', fields: struct([['exp', 'u8'], ['target #', 'u8'],
+    ['target slot', 'u8'], ['mode', 'u8'], ['effect (alg code)', 'u32'], ['param', 'u8']]) },
+  0x01060003: { name: 'expression range [setExpRange] (app)', fields: struct([['exp', 'u16'], ['target #', 'u16'], ['min', 'f32'],
+    ['max', 'f32'], ['curve', 'f32'], ['autoOff', 'f32'], ['offTime', 'f32']]) },
+  0x01070000: { name: 'ctrl settings (get)' },
+  0x01090005: { name: 'slot parameters [_restoreSlotParams] (app)', fields: struct([['slot', 'u16'], ['algID', 'u16'], ['params', 'f32s']]) },
+  0x01090007: { name: 'scene name [setSceneName]', fields: struct([['scene', 'scene', 4], ['name', 'str', 8]]) },
+  0x010a0002: { name: 'slot data [parseSlotData] (app)', fields: (p) => {
+    const f = struct([['slot', 'u16'], ['category', 'u8'], ['state', 'u8'], ['alg', 'u32'], ['params', 'f32s']])(p);
+    if (p.length >= 8) f[1].value += ` = ${CATEGORIES[p[2]] ?? '?'}`, f[3].value = algName(rd32(p, 4));
+    return f;
+  } },
+  0x010b0001: { name: 'footswitch MIDI [setFSMidiParam] (app)', fields: struct([['fs', 'u32'], ['id', 'u32'], ['data', 'bytes']]) },
+  0x010b0002: { name: 'patch MIDI [setPatchMidiParam] (app)', fields: struct([['id', 'u32'], ['data', 'bytes']]) },
+  // chain templates, IRs, system, clone / NAM
+  0x02000002: { name: 'save user chain template [setUserTmplate] (app)', fields: struct([['template', 'u32'], ['name', 'str', 12]]) },
+  0x04000000: { name: 'import user IR [beginImportIR] (app)', fields: struct([['IR', 'u32'], ['name', 'str', 32], ['data', 'bytes', 8192], ['checksum', 'u16']]) },
+  0x04000001: { name: 'delete user IR [deleteUserIr] (app)', fields: struct([['IR', 'u32']]) },
+  0x04000002: { name: 'rename user IR [renameUserIr] (app)', fields: struct([['IR', 'u32'], ['name', 'str', 32]]) },
+  0x05000001: { name: 'delete preset [deletePreset] (app)', fields: struct([['preset', 'preset']]) },
+  0x05000004: { name: 'move preset [onReorder] (app)', fields: struct([['to', 'preset'], ['from', 'preset']]) },
+  0x05000006: { name: 'factory reset (app)', fields: struct([['type', 'u32'], ['value', 'u32']]) },
+  0x05000007: { name: 'device name (app)', fields: struct([['name', 'str', 17]]) },
+  0x05000016: { name: 'cancel listener [cancelListener]' },
+  0x07000000: { name: 'tone catch (clone) import / export (app)', fields: struct([['id / refresh', 'u32'], ['data', 'bytes']]) },
+  0x07000001: { name: 'delete tone catch (clone) (app)', fields: struct([['id', 'u32']]) },
+  0x07000002: { name: 'rename tone catch (clone) (app)', fields: struct([['id', 'u32'], ['name', 'str', 16]]) },
+  0x08000000: { name: 'import NAM model [importNam] (app)', fields: struct([['refresh', 'u32'], ['data', 'bytes']]) },
+  0x08000001: { name: 'delete NAM model [deleteNam] (app)', fields: struct([['id', 'u32']]) },
+  0x08000002: { name: 'rename NAM model [renameNam] (app)', fields: struct([['id', 'u32'], ['name', 'str', 16]]) },
 };
 
 /**
  * Command groups of the firmware: table in the ARM image (V2.5.0, section 0 at 0xe429c), one u32 per group:
  * high 16 bits = group, low 16 bits = number of commands (codes group·0000 … group·(count-1)).
- * Names: what is known about the group from captures; 01xx follow the preset's TLV tags.
+ * Names: from captures and from the Hotone app's functions that send them (decompiled Android app).
  */
 export const COMMAND_GROUPS = [
-  [0x0000, 1, 'global ?'], [0x0001, 19, 'global settings (pushed at power-on)'], [0x0002, 10, 'global ?'],
-  [0x0003, 5, 'global ?'], [0x0004, 3, 'global ?'], [0x0005, 7, 'global ?'], [0x0006, 12, 'global ?'],
-  [0x0007, 8, 'global settings (00070000)'], [0x0008, 14, 'global / system (0008000a, name editor 00080003)'],
-  [0x0009, 1, 'current preset'], [0x000a, 7, 'global ?'],
-  [0x0100, 2, 'preset (dump / write)'], [0x0101, 5, 'preset info (tag 1: name, style)'], [0x0102, 2, 'preset quick knobs (tag 2)?'],
-  [0x0103, 2, 'preset footswitches (tag 3)'], [0x0104, 5, 'preset slots (tag 4)'], [0x0105, 12, 'preset scenes (tag 5)'],
-  [0x0106, 5, 'preset routing (tag 6)'], [0x0107, 2, 'preset tag 7 / FS → slots'], [0x0108, 2, 'preset list'],
-  [0x0109, 9, 'scene parameters (volume, tempo, slot on/off)'], [0x010a, 4, 'slot times / DSP load'], [0x010b, 3, 'preset ?'],
+  [0x0000, 1, 'global ?'], [0x0001, 19, 'global input / output settings (pushed at power-on)'],
+  [0x0002, 10, 'USB audio settings'], [0x0003, 5, 'global EQ'], [0x0004, 3, 'global ?'], [0x0005, 7, 'global ?'],
+  [0x0006, 12, 'MIDI settings'], [0x0007, 8, 'control settings, global tempo'],
+  [0x0008, 14, 'display / system (0008000a, name editor 00080003)'],
+  [0x0009, 1, 'current preset'], [0x000a, 7, 'drum machine'],
+  [0x0100, 2, 'preset (dump / write)'], [0x0101, 5, 'preset info (name, author, style)'], [0x0102, 2, 'quick knobs'],
+  [0x0103, 2, 'footswitches'], [0x0104, 5, 'effect slots (algorithm, parameter, order)'], [0x0105, 12, 'routing (split / mixer)'],
+  [0x0106, 5, 'expression pedal'], [0x0107, 2, 'ctrl: footswitch → slots'], [0x0108, 2, 'preset list'],
+  [0x0109, 9, 'scenes (volume, tempo, slot on/off, slot parameters, name)'], [0x010a, 4, 'slot data / times'],
+  [0x010b, 3, 'preset MIDI'],
   [0x0200, 5, 'chain templates'], [0x0300, 11, 'runtime state (scene, changed, firmware, meters)'],
-  [0x0400, 4, 'user IRs'], [0x0500, 28, 'system (save, connect, …)'], [0x0700, 4, 'name list ?'], [0x0800, 4, 'clone / NAM'],
+  [0x0400, 4, 'user IRs'], [0x0500, 28, 'system (save, delete, move, connect, …)'], [0x0700, 4, 'tone catch (clone)'],
+  [0x0800, 4, 'NAM models'],
 ];
 
 /** Group of a command code from the firmware table, or null. */

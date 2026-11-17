@@ -290,3 +290,12 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .sn-table tr.changed td { color: var(--accent); }
 .sn-table td .chg { background: #7a4b16; color: #fff; border-radius: 2px; }
 .sn-table tr.noanswer td { color: #666; }
+
+/* Ko-fi "Tip Me" button: bottom right, just above the log panel (--kofi-bottom is set from the panel's height in
+   index.html). !important because the widget injects its own stylesheet (bottom-left) after ours. */
+.floatingchat-container-wrap, .floatingchat-container-wrap-mobi {
+  left: auto !important; right: 8px !important; bottom: var(--kofi-bottom, 56px) !important;
+}
+.floating-chat-kofi-popup-iframe, .floating-chat-kofi-popup-iframe-mobi {
+  left: auto !important; right: 16px !important; bottom: calc(var(--kofi-bottom, 56px) + 60px) !important;
+}

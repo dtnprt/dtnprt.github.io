@@ -326,6 +326,10 @@
       'floating-chat.donateButton.background-color': '#f45d22',
       'floating-chat.donateButton.text-color': '#fff'
     });
+    // keep the button above the log panel (taller when expanded)
+    const logPanel = document.getElementById('logPanel');
+    new ResizeObserver(() => document.documentElement.style.setProperty('--kofi-bottom',
+      `${logPanel.offsetHeight + 12}px`)).observe(logPanel);
   </script>
 </body>
 </html>
