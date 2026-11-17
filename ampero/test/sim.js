@@ -39,6 +39,8 @@ export async function install() {
     return b;
   };
   const userTemplates = ['My Chain', '', '', ''];
+  const userTemplateData = [];
+  const tag6 = (r) => { let k = 0; for (;;) { const len = rd32(r, k + 4); if (rd32(r, k) === 6) return k + 8; k += 8 + len; } };
   const sum = (b, from, to) => b.subarray(from, to).reduce((s, x) => s + x, 0) & 0xffff;
   const handle = ({ cmd, kind, payload }) => {
     log.push({ t: performance.now(), cmd, kind, payload });
@@ -150,12 +152,23 @@ export async function install() {
       }
       case TEMPLATE.LIST:
         return emit(cmd, concat(...userTemplates.map((n) => (n ? str(n, 12) : new Uint8Array(12).fill(0xff)))));
-      case TEMPLATE.SAVE:
-        userTemplates[rd32(payload, 0) - TEMPLATE.USER_BASE] = new TextDecoder().decode(payload.subarray(4, 16)).replace(/\0.*$/s, '');
+      case TEMPLATE.SAVE: {
+        const n = rd32(payload, 0) - TEMPLATE.USER_BASE;
+        userTemplates[n] = new TextDecoder().decode(payload.subarray(4, 16)).replace(/\0.*$/s, '');
+        const r = preset(current), o = tag6(r);
+        userTemplateData[n] = r.slice(o, o + 540);
         return undefined;
+      }
       case TEMPLATE.SELECT: {
-        const m = CHAIN_MODES[rd32(payload, 0)];
+        const id = rd32(payload, 0), m = CHAIN_MODES[id];
         if (m) presets.set(current, applyTemplate(preset(current), m));
+        const td = userTemplateData[id - TEMPLATE.USER_BASE];
+        if (td) { // like the pedal (assumed): apply and report the template data
+          const r = preset(current).slice();
+          r.set(td, tag6(r));
+          presets.set(current, r);
+          emit(TEMPLATE.DATA, concat(u32le(id), new Uint8Array(12), td));
+        }
         return emit(CMD.PRESET_CHANGED, u32le(1));
       }
       case CMD.USER_IR_NAMES:

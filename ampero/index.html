@@ -59,10 +59,6 @@
 
     <!-- ===================================================== Edit (mockup) -->
     <section class="content page" id="page-edit" hidden>
-      <div class="mockup-note">Work in progress – click a block to edit it (parameters of the current scene, module /
-        algorithm, on/off), an empty position to insert one, drag a block onto another position to swap them,
-        right-click a block for copy, paste, save, load and delete.
-        Changes go to the pedal live; <b>Save</b> stores the preset.</div>
       <div class="card editor-head">
         <div class="preset-title">
           <span id="edLabel" class="cur-lbl">–</span>
@@ -266,6 +262,7 @@
       <button id="logToggle" class="small-btn" title="show / hide the log">Log ▴</button>
       <span id="logLast" class="muted small"></span>
       <span class="spacer"></span>
+      <span id="editHint" class="muted small edit-hint">Click a block to edit · right-click: copy, paste, save, load, delete · drag to swap · Save stores the preset</span>
       <a href="#" id="aboutLink" class="muted small about-link" title="disclaimer and legal notes">Unofficial – not affiliated with Hotone · Disclaimer</a>
       <button id="traceBtn" class="small-btn" disabled title="raw MIDI frames of this connection – send this file when something goes wrong">Save trace</button>
     </div>

@@ -289,6 +289,7 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fs-slots { display: flex; flex-wrap: wrap; gap: 4px; max-width: 420px; }
 .fs-slots button { font-size: 11px; padding: 2px 6px; }
 .fs-slots button.on { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
+.edit-hint { margin-right: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .about-link { margin-right: 12px; white-space: nowrap; text-decoration: none; }
 .about-link:hover { color: var(--accent); }
 .about-dialog { width: min(680px, 92vw); }

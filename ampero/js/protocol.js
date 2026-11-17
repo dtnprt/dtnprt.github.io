@@ -381,7 +381,19 @@ export function presetRouting(raw) {
 // Chain templates: 0x02000003 u32 id selects one (0..4 = CHAIN_MODES, 5 + n = user template n, confirmed for 0..4),
 // 0x02000004 lists the user templates (char name[12] each), 0x02000002 u32 5 + n, char name[12] saves the current
 // routing as user template n (from the Hotone app, not confirmed).
-export const TEMPLATE = { SELECT: 0x02000003, SAVE: 0x02000002, LIST: 0x02000004, USER_BASE: 5 };
+export const TEMPLATE = { SELECT: 0x02000003, SAVE: 0x02000002, LIST: 0x02000004, DATA: 0x02000000, USER_BASE: 5 };
+const TEMP_LEN = 540; // routing section (tag 6)
+
+/**
+ * Copy of the preset with the routing of a template data record (0x02000000: u32 template, 12 bytes, then the
+ * routing section like tag 6 – Hotone app: HTModelPreset.readTempDataSingle). Returns null for an unexpected record.
+ */
+export function applyTemplateData(raw, p) {
+  if (p.length < 16 + TEMP_LEN) return null;
+  const out = raw.slice();
+  out.set(p.subarray(16, 16 + TEMP_LEN), tagOffset(raw, 6));
+  return out;
+}
 
 export function parseTemplateList(p) {
   return Array.from({ length: Math.floor(p.length / 12) }, (_, i) => (p[12 * i] === 0xff ? '' : cString(p, 12 * i, 12)));

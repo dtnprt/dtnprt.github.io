@@ -8,7 +8,7 @@ import {
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
   FS_FUNCTIONS, FS_SET, FS_SLOTS_SET, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush,
-  TEMPLATE, applyTemplate, templateSavePayload, CHAIN_MODES,
+  TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -129,6 +129,7 @@ function showTab(tab) {
   for (const b of document.querySelectorAll('.tab')) b.classList.toggle('active', b.dataset.tab === tab);
   for (const p of document.querySelectorAll('.page')) p.hidden = p.id !== `page-${tab}`;
   document.querySelector('.layout').classList.toggle('no-sidebar', tab !== 'edit');
+  $('editHint').hidden = tab !== 'edit';
   if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
   closeMenu();
   if (tab === 'edit') {
@@ -307,6 +308,10 @@ function onPushedDump(payload) {
 function onNotify({ cmd, payload }) {
   if (cmd === CMD.SLOT_PUSH) {
     onSlotPush(payload);
+    return;
+  }
+  if (cmd === TEMPLATE.DATA) {
+    applyTemplateRecord(payload);
     return;
   }
   // the pedal changed the routing of the current preset by itself (e.g. after a block was inserted)
@@ -870,8 +875,34 @@ async function templateMenu(e) {
 async function selectTemplate(id, mode, name) {
   if (!editPreset((raw) => (mode ? applyTemplate(raw, mode) : raw))) return;
   renderEditor();
+  state.templateData = false;
   await state.dev.send(TEMPLATE.SELECT, u32Payload(id));
   log(`chain template: ${mode ? mode.name : `user "${name}"`}`);
+  if (mode) return;
+  // a user template's routing is only known to the pedal: take it from the template data it reports
+  // (0x02000000); if it does not report it by itself, ask for it (assumption: get with u32 template)
+  await state.dev.waitQuiet(300, 1500);
+  if (state.templateData) return;
+  try {
+    const p = await state.dev.request(TEMPLATE.DATA, u32Payload(id), { timeout: 2000 });
+    applyTemplateRecord(p);
+  } catch (e) {
+    log(`routing of the user template not received (${e.message}) – it is shown after saving the preset`);
+  }
+}
+
+/** A template data record: take its routing into our copy of the current preset. */
+function applyTemplateRecord(p) {
+  state.templateData = true;
+  const raw = state.presets.get(state.current);
+  const next = raw && applyTemplateData(raw, p);
+  if (!next) {
+    log(`template data (${p.length} bytes) not understood`);
+    return;
+  }
+  state.presets.set(state.current, next);
+  log(`routing from the template: ${presetRouting(next).name}`);
+  renderEditor();
 }
 
 async function saveTemplate(users) {
