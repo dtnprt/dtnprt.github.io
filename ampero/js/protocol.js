@@ -594,6 +594,30 @@ export function savePayload(index, name) {
   return p;
 }
 
+// ------------------------------------------------------------------ footswitch functions
+
+/**
+ * Footswitch function codes (preset tag 3 click/hold, CTRL footswitches, PATCH FS FUNC), from the Hotone app's
+ * HTBaseDefine.kFSMapFunc. 0xFF = Off. "Ctrl n" switches the slots assigned to it (tag 8 / 0x01070001).
+ */
+export const FS_FUNCTIONS = new Map([
+  [0xff, 'Off'],
+  ...['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6'].map((s, i) => [i, `${s} On/Off`]),
+  [12, 'Ctrl 1'], [13, 'Tap Tempo'], [15, 'Bank +'], [16, 'Bank -'], [17, 'Looper'], [18, 'Tuner'], [19, 'Bypass'],
+  [20, 'Mode Change'], [21, 'Ctrl Temp Change'],
+  ...[1, 2, 3, 4, 5].map((n) => [21 + n, `Patch ${n}`]), ...[1, 2, 3, 4, 5].map((n) => [26 + n, `Scene ${n}`]),
+  ...[2, 3, 4, 5, 6, 7].map((n) => [30 + n, `Ctrl ${n}`]),
+  [38, 'Patch +'], [39, 'Patch -'], [40, 'UI Open'], [41, 'EXP 1/2'], [42, 'Looper Rec/Play'], [43, 'Looper Stop'],
+  [44, 'Looper 1/2 SPD'], [45, 'Looper Rev'], [46, 'Loop FX'], [47, 'Looper Undo/Redo'], [48, 'Drum Play/Stop'],
+  [49, 'Looper Exit'], [50, 'Drum'], [51, 'Patch'], [52, 'Patch/FX Slot 1'], [53, 'Patch/Scene 2'], [54, 'Patch/Bypass'],
+]);
+
+export const fsFunctionName = (code) => FS_FUNCTIONS.get(code) ?? `function ${code}`;
+
+/** Functions offered for the external CTRL footswitches (HTBaseDefine.kFSTapList, in the app's order). */
+export const CTRL_FS_FUNCTIONS = [42, 43, 47, 44, 45, 17, 49, 18, 50, 48, 15, 16, 13, 38, 39, 27, 28, 29, 30, 31, 41,
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
 // ------------------------------------------------------------------ user IRs / NAM models
 
 export const USER_IRS = 50; // user IR slots ("User IR 1" … "User IR 50", algorithm 0x0A100000 + slot)

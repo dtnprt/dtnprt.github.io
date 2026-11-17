@@ -6,6 +6,10 @@
 // address as cmd and the value as payload (1 byte, signed for levels). The pedal does not answer set commands.
 // Options marked `guess: true` are not confirmed (order taken from the Hotone app for the Stage or from labels).
 
+import { CTRL_FS_FUNCTIONS, fsFunctionName } from './protocol.js';
+
+const CTRL_CHOICES = CTRL_FS_FUNCTIONS.map((c) => [c, fsFunctionName(c)]);
+
 export const GLOBAL_GROUPS = [
   {
     id: 'io', title: 'Input / Output', get: 0x00010000, params: [
@@ -41,6 +45,9 @@ export const GLOBAL_GROUPS = [
       // set: 4 bytes, the option in byte 2 (the editor sent 00 00 01 00 for "Single FS") – byte order not confirmed
       { addr: 0x00070001, name: 'EXP/CTRL Function', options: ['EXP 1/2', 'Single FS', 'Dual FS'], getByte: 0,
         encode: (v) => [0, 0, v, 0], guess: true },
+      // function of the external footswitch(es) when EXP/CTRL Function = Single FS / Dual FS (values = FS function codes)
+      { addr: 0x00070002, name: 'CTRL 1 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0] },
+      { addr: 0x00070003, name: 'CTRL 2 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0], guess: true },
       { addr: 0x00070006, name: 'Global Tempo', switch: true },
     ],
   },

@@ -1099,6 +1099,7 @@ function describeGlobal(p, v) {
   if (p.level) return v <= p.level[0] ? 'Mute' : `${v} dB`;
   if (p.channel) return v >= 16 ? 'Omni' : `${v + 1}`;
   if (p.colors) return `color ${v + 1}`;
+  if (p.choices) return p.choices.find(([val]) => val === v)?.[1] ?? `value ${v}`;
   return p.options?.[v] ?? `value ${v}`;
 }
 
@@ -1154,6 +1155,16 @@ function renderGlobals() {
         row.append(c);
       } else {
         const s = el('select');
+        if (p.choices) { // explicit [value, label] pairs
+          for (const [val, lab] of p.choices) s.append(new Option(lab, String(val)));
+          if (v != null && !p.choices.some(([val]) => val === v)) s.append(new Option(`value ${v}`, String(v)));
+          s.value = v == null ? '' : String(v);
+          s.disabled = !live;
+          s.onchange = () => setGlobal(p, +s.value);
+          row.append(s);
+          card.append(row);
+          continue;
+        }
         const opts = p.channel ? [...Array.from({ length: 16 }, (_, k) => `Channel ${k + 1}`), 'Omni']
           : p.options ?? Array.from({ length: (p.max ?? 0) + 1 }, (_, k) => `value ${k}`);
         opts.forEach((o, k) => s.append(new Option(p.guess && p.options ? `${o} [${k}]` : o, String(k))));

@@ -2,7 +2,7 @@
 // transfers of both directions and describe them as fields with byte ranges (for the hex view).
 
 import {
-  CATEGORIES, CHAIN_MODES, CMD, MODULES, PRESET_COUNT, SPECIAL_ALGS, TLV_SECTIONS, cString, decodeStream, parseFrame,
+  CATEGORIES, CHAIN_MODES, CMD, MODULES, PRESET_COUNT, SPECIAL_ALGS, TLV_SECTIONS, cString, decodeStream, fsFunctionName, parseFrame,
   presetChainMode, presetInfo, presetLabel, presetRouting, rd32,
 } from './protocol.js';
 import { algInfo } from './algdb.js';
@@ -192,8 +192,9 @@ function sectionFields(p, tag, d, len, base) {
     return [bytesf(p, 'obj[3] (target slot per knob)', d, 3, slotNo), bytesf(p, 'param[3] (parameter index)', d + 3, 3)];
   }
   if (tag === 3 && len >= 8) {
-    const h = (b) => (b === 0xff ? '–' : hex2(b));
-    return [bytesf(p, 'click[3] (FS1–3 function)', d, 3, h), bytesf(p, 'hold[3] (function when held)', d + 3, 3, h),
+    const h = (b) => (b === 0xff ? '–' : `${fsFunctionName(b)} (${hex2(b)})`);
+    const fsList = (o, n) => Array.from(p.subarray(o, o + n), h).join(' · ');
+    return [F('click[3] (FS1–3 function)', d, 3, fsList(d, 3)), F('hold[3] (function when held)', d + 3, 3, fsList(d + 3, 3)),
       bytesf(p, 'comb[2] (combinations)', d + 6, 2, h), ...(len > 8 ? [F('rest', d + 8, len - 8, hexBytes(p.subarray(d + 8, d + len)))] : [])];
   }
   if (tag === 6 && len >= 540) {
@@ -367,7 +368,7 @@ export const KNOWN = {
   [CMD.PRESET_SAVED]: { name: 'preset saved on the pedal' },
   [CMD.NAME_EDIT]: { name: 'name editor (0 open / 1 closed?)', fields: (p) => [u32f(p, 'value', 0)] },
   0x01030000: { name: 'footswitch functions (get)', fields: (p) => (p.length >= 8 ? sectionFields(p, 3, 0, p.length, 0) : [F('click[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3, 'rest')]) },
-  0x01030001: { name: 'footswitch functions (set)', fields: (p) => [F('click[3]', 0, 3, hexBytes(p.subarray(0, 3))), ...rest(p, 3)] },
+  0x01030001: { name: 'footswitch functions (set)', fields: (p) => [F('click[3]', 0, Math.min(3, p.length), Array.from(p.subarray(0, 3), (b) => fsFunctionName(b)).join(' · ')), ...rest(p, 3)] },
   0x01070001: { name: 'ctrl: footswitch → slots (set) [setCtrlSetting]', fields: (p) => [F('footswitch', 0, 1, `${p[0] + 1}`), F('ctrlTargetSlot[12]', 1, 12, hexBytes(p.subarray(1, 13))), ...rest(p, 13)] },
   0x01090001: { name: 'scene volume [setVol]', fields: struct([['scene', 'scene', 2], ['volume', 'u16']]) },
   0x01090002: { name: 'scene tempo (BPM) [setBpmWithInt]', fields: struct([['scene', 'scene', 2], ['tempo', 'u16']]) },
