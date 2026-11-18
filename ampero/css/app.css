@@ -41,6 +41,7 @@ select, input[type=search] { background: var(--panel2); border: 1px solid var(--
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .conn { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .conn select { max-width: 180px; }
+.conn #portToggle { align-self: stretch; min-width: 34px; padding: 0 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; }
 .status { font-size: 12px; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
 .status.off { background: #3a1d1d; color: #f08080; }
 .status.busy { background: #3a311b; color: var(--accent); }
