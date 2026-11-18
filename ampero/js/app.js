@@ -394,11 +394,13 @@ function onNotify({ cmd, payload }) {
   }
 }
 
+let pedalKnobTimer = 0;
+
 /** Apply an edit the pedal reports (made on the pedal) to the cached current preset. */
 function applyPedalEdit(cmd, p) {
   const raw = state.presets.get(state.current);
   if (!raw) return;
-  let next = null;
+  let next = null, quiet = false;
   try {
     if (cmd === FS_SLOTS_SET && p.length >= 13 && p[0] < 3) {
       next = raw;
@@ -413,10 +415,34 @@ function applyPedalEdit(cmd, p) {
       if (presetOn(next, p[0]).join() === presetOn(raw, p[0]).join()) return;
     } else if (cmd === CMD.REORDER && p.length >= 12) {
       next = setPresetSeq(raw, Array.from(p.subarray(0, 12)));
+    } else if (cmd === CMD.PARAM && p.length >= 8) {
+      // a knob turned on the pedal (quick knob / value knob): u16 slot, u16 param, f32 value of the current scene
+      const d = new DataView(p.buffer, p.byteOffset, p.length);
+      const scene = state.scene >= 0 ? state.scene : editScene();
+      next = setPresetParam(raw, scene, d.getUint16(0, true), d.getUint16(2, true), d.getFloat32(4, true));
+      quiet = true;
+    } else if ((cmd === CMD.SCENE_VOLUME || cmd === CMD.SCENE_TEMPO) && p.length >= 4) {
+      // patch volume / tempo changed on the pedal (e.g. with a quick knob): u16 scene, u16 value
+      const d = new DataView(p.buffer, p.byteOffset, p.length);
+      const scene = d.getUint16(0, true);
+      if (scene < presetSceneCount(raw)) {
+        next = setPresetScene(raw, scene, { [cmd === CMD.SCENE_TEMPO ? 'tempo' : 'volume']: d.getUint16(2, true) });
+        quiet = true;
+      }
     }
   } catch { /* ignore */ }
   if (!next) return;
   state.presets.set(state.current, next);
+  // knob turns arrive in bursts: re-render at most every 60 ms, do not log each step
+  if (quiet) {
+    if (!pedalKnobTimer) {
+      pedalKnobTimer = setTimeout(() => {
+        pedalKnobTimer = 0;
+        if (!state.dragging) renderEditor();
+      }, 60);
+    }
+    return;
+  }
   log(`changed on the pedal: ${hex32(cmd)} ${Array.from(p.subarray(0, 13), (b) => b.toString(16).padStart(2, '0')).join(' ')}`);
   if (!state.dragging) renderEditor();
 }
