@@ -2804,6 +2804,13 @@ async function init() {
     poll();
   });
   setInterval(poll, CURRENT_POLL_MS);
+  // reload / close: release the MIDI ports cleanly (a hard reload with open ports left Firefox's Web MIDI without
+  // any device until the browser was restarted)
+  window.addEventListener('pagehide', () => {
+    try {
+      state.dev?.close();
+    } catch { /* ignore */ }
+  });
   [...$('edScenes').children].forEach((b, s) => {
     b.onclick = () => chooseScene(s);
     b.ondblclick = () => renameScene(s);
