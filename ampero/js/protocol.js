@@ -751,7 +751,7 @@ export function presetFs(raw) {
 // Set 0x01020001: u8 knob, u8 obj, u8 category, u32 alg, then u8 param when the target is chosen (8 bytes, param 0,
 // FF for a function) or u16 param when only the parameter changes (9 bytes) – exactly what the Hotone editor sent
 // (captures/wine-quick-knobs-2026-11-18.txt, export data/A98-1-MIDI-Test 2.prst, screenshots data/quick1..4.png).
-// OFF and Patch Tempo were not in the capture (OFF = FF like the EXP targets, Tempo = 0x0D like there).
+// OFF (FF) tested on the pedal; Patch Tempo was not in the capture (0x0D like for the EXP targets).
 export const QKNOB = { SET: 0x01020001, VOLUME: 0x0c, TEMPO: 0x0d, OFF: 0xff, COUNT: 3 };
 
 export function presetQuickKnobs(raw) {

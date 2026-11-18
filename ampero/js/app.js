@@ -1363,7 +1363,7 @@ async function setQuickKnob(knob, obj, param, wide) {
   if (await inScene1(what, (dev) => dev.send(QKNOB.SET, payload))) {
     const name = obj === QKNOB.OFF ? 'OFF' : obj === QKNOB.VOLUME ? 'Patch Volume' : obj === QKNOB.TEMPO ? 'Patch Tempo'
       : `${posName(obj)} ${a.name} · ${a.params.find((x) => x.id === param)?.name ?? param}`;
-    log(`${what}: ${name}${obj === QKNOB.OFF || obj === QKNOB.TEMPO ? ' (not confirmed by a capture yet)' : ''}`);
+    log(`${what}: ${name}${obj === QKNOB.TEMPO ? ' (not confirmed by a capture yet)' : ''}`);
   }
 }
 
