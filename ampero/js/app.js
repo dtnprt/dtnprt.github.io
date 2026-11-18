@@ -2668,7 +2668,12 @@ function renderDrum() {
     await setGlobal(drumParam(addr), value);
     renderDrum();
   };
-  const play = el('button', `drum-play${d.play ? ' on' : ''}`, d.play ? '■' : '▶');
+  // drawn as SVG (the ▶ / ■ glyphs sit off-centre depending on the font); the triangle is shifted right
+  // by a little so it looks centred (its visual centre is left of its box centre)
+  const play = el('button', `drum-play${d.play ? ' on' : ''}`);
+  play.innerHTML = d.play
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5v11a.8.8 0 0 0 1.2.7l8.6-5.5a.8.8 0 0 0 0-1.4L10.2 5.8A.8.8 0 0 0 9 6.5z" fill="currentColor"/></svg>';
   play.title = d.play ? 'stop' : 'start';
   play.disabled = !live;
   play.onclick = () => set(DRUM.PLAY, d.play ? 0 : 1);
