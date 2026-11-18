@@ -2007,7 +2007,7 @@ function renderGlobals() {
   box.replaceChildren();
   $('globalInfo').textContent = state.globals ? '' : state.dev ? 'not read yet' : 'connect the pedal to read the settings';
   const live = canTalk() && !!state.globals;
-  // EXP/CTRL Function decides what the CTRL 1 / CTRL 2 rows switch (labels)
+  // EXP/CTRL Function decides which EXT FS rows are shown
   const modeParam = GLOBAL_GROUPS.flatMap((g) => g.params).find((p) => p.addr === 0x00070001);
   const ctrlMode = paramValue(modeParam, state.globals?.get(groupOf(modeParam.addr)));
   for (const g of GLOBAL_GROUPS) {
@@ -2016,7 +2016,8 @@ function renderGlobals() {
     for (const p of g.params) {
       const v = paramValue(p, state.globals?.get(groupOf(p.addr)));
       const row = el('div', 'gs-row');
-      const label = el('span', '', p.label ? p.label(ctrlMode) : p.name);
+      if (p.mode != null && ctrlMode != null && p.mode !== ctrlMode) continue; // EXT FS rows of the other modes
+      const label = el('span', '', ctrlMode == null && p.mode != null ? `${p.name} (${p.mode === 1 ? 'Single' : 'Dual'} FS)` : p.name);
       if (p.guess) {
         const q = el('span', 'gs-guess', ' ?');
         q.title = 'option names not confirmed yet – the raw value is shown in brackets';
@@ -2075,7 +2076,7 @@ function renderGlobals() {
         s.disabled = !live;
         s.onchange = async () => {
           await setGlobal(p, +s.value);
-          if (p === modeParam) renderGlobals(); // the CTRL row labels follow EXP/CTRL Function
+          if (p === modeParam) renderGlobals(); // the EXT FS rows follow EXP/CTRL Function
         };
         row.append(s);
       }

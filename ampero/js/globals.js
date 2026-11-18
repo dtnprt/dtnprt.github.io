@@ -45,13 +45,13 @@ export const GLOBAL_GROUPS = [
       // set: 4 bytes, the option in byte 2 (the editor sent 00 00 01 00 for "Single FS")
       { addr: 0x00070001, name: 'EXP/CTRL Function', options: ['EXP 1/2', 'Single FS', 'Dual FS'], getByte: 0,
         encode: (v) => [0, 0, v, 0] },
-      // function of the external footswitch(es) (values = FS function codes). Tested on the pedal: Single FS ->
-      // CTRL 1 is EXT FS1; Dual FS -> CTRL 2 is EXT FS1, and CTRL 1 does NOT change EXT FS2 (its address is unknown).
-      // name(mode): label by EXP/CTRL Function (0 EXP 1/2, 1 Single FS, 2 Dual FS)
-      { addr: 0x00070002, name: 'CTRL 1 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0],
-        label: (mode) => (mode === 1 ? 'EXT FS1 (CTRL 1)' : 'CTRL 1 Function') },
-      { addr: 0x00070003, name: 'CTRL 2 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0],
-        label: (mode) => (mode === 2 ? 'EXT FS1 (CTRL 2)' : 'CTRL 2 Function') },
+      // function of the external footswitch(es) (values = FS function codes), captures/wine-ext-fs2-2026-11-18.txt
+      // + get read back from the pedal: Single FS has its own EXT FS1 (0x00070002, get byte 1); Dual FS sets
+      // 0x00070003 with byte 0 = switch (0 EXT FS1, 1 EXT FS2), get bytes 2 / 3. mode: only shown in that
+      // EXP/CTRL Function (1 Single FS, 2 Dual FS), like the Hotone editor.
+      { addr: 0x00070002, name: 'EXT FS1', mode: 1, choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0] },
+      { addr: 0x00070003, name: 'EXT FS1', mode: 2, choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0] },
+      { addr: 0x00070003, name: 'EXT FS2', mode: 2, choices: CTRL_CHOICES, encode: (v) => [1, 0, v, 0], getByte: 3 },
       { addr: 0x00070006, name: 'Global Tempo', switch: true },
     ],
   },
