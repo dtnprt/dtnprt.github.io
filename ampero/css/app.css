@@ -311,12 +311,14 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .qk-cell.off .qk-label { color: #3d6f99; }
 .qk-cell.off .qk-bar { border-color: #4a5a24; }
 .qk-plate { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; padding: 10px 12px 2px; }
-.qk-knob { width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 0; background: none; }
+.qk-knob { display: block; width: 38px; height: 38px; border-radius: 50%; cursor: ns-resize; touch-action: none; outline: none; }
+.qk-knob.off, .qk-knob.disabled { cursor: default; opacity: .5; }
+.qk-knob:focus-visible .qk-cap { box-shadow: 0 0 0 2px var(--accent); }
 .qk-knob .qk-cap { display: block; width: 100%; height: 100%; border-radius: 50%; border: 1px solid #3a3a3a;
   background: radial-gradient(circle at 42% 38%, #3a3a3a 0, #141414 55%, transparent 56%),
     repeating-conic-gradient(#0c0c0c 0 6deg, #2c2c2c 6deg 12deg);
   box-shadow: 0 3px 5px rgba(0, 0, 0, .45), inset 0 0 0 1px #000; }
-.qk-knob:hover:not(:disabled) .qk-cap { box-shadow: 0 0 0 2px var(--accent), 0 3px 5px rgba(0, 0, 0, .45); }
+.qk-knob:hover:not(.off):not(.disabled) .qk-cap { box-shadow: 0 0 0 2px var(--accent), 0 3px 5px rgba(0, 0, 0, .45); }
 .qk-badge { margin-left: 5px; padding: 0 4px; border-radius: 3px; background: var(--accent-dim); color: #fff; font-size: 10px; font-weight: 600; vertical-align: 1px; }
 .qk-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .qk-row .qk-n { width: 48px; flex: none; color: var(--muted); font-size: 12px; }

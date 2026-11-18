@@ -1346,7 +1346,7 @@ function quickKnobItems(chain, k, q) {
 function quickKnobBox(raw, chain) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
   const box = el('div', 'qk-box');
-  box.append(el('div', 'muted small', 'Quick knobs – click to assign, or right-click a parameter of a block'));
+  box.append(el('div', 'muted small', 'Quick knobs – turn a knob to change its value; click the display field to assign it (or right-click a block parameter)'));
   let knobs;
   try {
     knobs = presetQuickKnobs(raw);
@@ -1371,19 +1371,104 @@ function quickKnobBox(raw, chain) {
     fill.style.width = `${v.at == null ? 0 : 100 * Math.min(1, Math.max(0, v.at))}%`;
     bar.append(fill);
     cell.append(el('span', 'qk-val', v.value || ' '), bar, el('span', 'qk-label', v.label));
-    const knob = el('button', 'qk-knob');
-    knob.append(el('span', 'qk-cap'));
-    for (const b of [cell, knob]) {
-      b.title = tip;
-      b.disabled = !live;
-      b.onclick = open(b);
-    }
+    cell.title = tip;
+    cell.disabled = !live;
+    cell.onclick = open(cell);
+    const knob = el('span', 'qk-knob');
+    const cap = el('span', 'qk-cap');
+    knob.append(cap);
+    quickKnobControl(raw, chain, q, knob, cap, cell);
     screen.append(cell);
     plate.append(knob);
   });
   pedal.append(screen, plate);
   box.append(pedal);
   return box;
+}
+
+/** The knob does what the pedal's knob does: it turns the assigned value (block parameter of the shown scene,
+ * scene volume or tempo). Drag up/down (Shift = fine), mouse wheel, arrow keys. Updates the display field live. */
+function quickKnobControl(raw, chain, q, knob, cap, cell) {
+  const scene = editScene();
+  let p = null, value = null, apply = null, fmt = (v) => `${v}`;
+  if (q.obj === QKNOB.VOLUME || q.obj === QKNOB.TEMPO) {
+    const tempo = q.obj === QKNOB.TEMPO;
+    p = tempo ? { min: 40, max: 300, step: 1 } : { min: 0, max: 100, step: 1 };
+    value = sceneMeta(raw, scene)[tempo ? 'tempo' : 'volume'];
+    apply = (v) => setSceneValue(tempo ? 'tempo' : 'volume', v);
+  } else if (q.obj < 12) {
+    const c = chain.find((x) => x.pos === q.obj);
+    const a = c && c.code !== 0xffffffff ? algInfo(c.code) : null;
+    p = a?.params.find((x) => x.id === q.param) ?? null;
+    if (p) {
+      value = sceneParam(raw, scene, c.slot, p.id);
+      apply = (v) => changeParam(c.slot, p.id, v); // throttled there
+      fmt = (v) => formatValue(p, v);
+    }
+  }
+  const live = !!p && canTalk() && sceneEditable();
+  knob.classList.toggle('off', !p);
+  if (!p) {
+    knob.title = 'no target – click the display field above to assign one';
+    return;
+  }
+  const range = p.max - p.min;
+  const clamp = (v) => (p.type != null ? clampValue(p, v) : Math.max(p.min, Math.min(p.max, Math.round(v))));
+  const show = () => {
+    const f = range > 0 ? (value - p.min) / range : 0;
+    cap.style.transform = `rotate(${-135 + 270 * f}deg)`; // the knurling turns with the value
+    cell.querySelector('.qk-val').textContent = fmt(value);
+    cell.querySelector('.qk-fill').style.width = `${100 * f}%`;
+  };
+  // block parameters are throttled in changeParam; scene volume / tempo here (one send per 80 ms, the last one wins)
+  let timer = 0, sent = value;
+  const send = () => {
+    if (p.type != null) return apply(value);
+    if (timer) return;
+    const go = () => {
+      timer = 0;
+      if (value === sent) return;
+      sent = value;
+      apply(value);
+      timer = setTimeout(go, 80);
+    };
+    go();
+  };
+  const set = (v) => {
+    v = clamp(v);
+    if (v === value) return;
+    value = v;
+    show();
+    send();
+  };
+  show();
+  knob.tabIndex = live ? 0 : -1;
+  knob.classList.toggle('disabled', !live);
+  knob.title = live ? 'turn: drag up/down (Shift = fine), mouse wheel, arrow keys' : 'connect the pedal to turn the knob';
+  if (!live) return;
+  knob.onpointerdown = (e) => {
+    knob.setPointerCapture(e.pointerId);
+    state.dragging = true;
+    const y0 = e.clientY, v0 = value;
+    knob.onpointermove = (m) => set(v0 + ((y0 - m.clientY) / (m.shiftKey ? 1000 : 200)) * range);
+    knob.onpointerup = knob.onpointercancel = () => {
+      knob.onpointermove = knob.onpointerup = knob.onpointercancel = null;
+      state.dragging = false;
+      renderEditor(); // the block's parameter panel / scene fields show the new value
+    };
+  };
+  const nudge = (dir, big) => set(value + dir * (big ? Math.max(p.step, range / 20) : p.step));
+  knob.onwheel = (e) => {
+    e.preventDefault();
+    nudge(e.deltaY < 0 ? 1 : -1, e.shiftKey);
+  };
+  knob.onkeydown = (e) => {
+    const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+    if (d) {
+      e.preventDefault();
+      nudge(d, e.shiftKey);
+    }
+  };
 }
 
 /** Quick knobs (1-based numbers) that point at parameter id of the block at chain position pos. */
