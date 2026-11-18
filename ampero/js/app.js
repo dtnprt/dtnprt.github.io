@@ -1814,8 +1814,10 @@ function renderParams(raw, chain) {
       if (name) for (const k of on) name.append(Object.assign(document.createElement('span'), { className: 'qk-badge', textContent: `Q${k}` }));
       ctl.oncontextmenu = (e) => {
         e.preventDefault();
-        contextMenu(e.clientX, e.clientY, [0, 1, 2].map((k) => ({ label: `Quick knob ${k + 1}`, checked: on.includes(k + 1),
-          disabled: !live, action: () => setQuickKnob(k, c.pos, p.id, false) })));
+        // a knob that already has this parameter: the entry takes it off again (knob -> OFF)
+        contextMenu(e.clientX, e.clientY, [0, 1, 2].map((k) => (on.includes(k + 1)
+          ? { label: `Remove from quick knob ${k + 1}`, checked: true, disabled: !live, action: () => setQuickKnob(k, QKNOB.OFF, 0, false) }
+          : { label: `Quick knob ${k + 1}`, disabled: !live, action: () => setQuickKnob(k, c.pos, p.id, false) })));
       };
       grid.append(ctl);
     }
