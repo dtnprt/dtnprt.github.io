@@ -20,7 +20,7 @@ import { wavToIr } from './irwav.js';
 import { EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramByte, paramPayload as globalPayload, paramValue, parseEq, rawByte, u32 as u32b } from './globals.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
-import { closeMenu, confirmSlots, contextMenu, promptText, showAbout } from './ui.js';
+import { closeMenu, confirmSlots, contextMenu, promptText, showAbout, showInfo } from './ui.js';
 import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
 import { editorVersion } from './version.js';
@@ -3583,6 +3583,21 @@ async function init() {
     e.preventDefault();
     showAbout();
   };
+  const openInfo = (e) => {
+    e?.preventDefault();
+    $('portSel').hidden = true;
+    $('infoPedal').textContent = state.dev
+      ? `${state.model || 'Ampero'} · firmware ${state.dev.firmware || '?'}`
+      : 'not connected';
+    showInfo();
+  };
+  $('infoLink').onclick = openInfo;
+  $('infoBtn').onclick = openInfo;
+  $('infoDisclaimer').onclick = (e) => {
+    e.preventDefault();
+    $('infoClose').click();
+    showAbout();
+  };
   $('globalReadBtn').onclick = readGlobals;
   $('namReadBtn').onclick = readFileLists;
   initPresetListEvents();
@@ -3591,11 +3606,13 @@ async function init() {
   $('connectBtn').onclick = () => connect(false);
   $('offConnect').onclick = () => (state.dev ? null : connect(false));
   editorVersion().then((v) => {
-    const a = $('version');
-    a.textContent = v.text;
-    a.title = v.title;
-    if (v.url) a.href = v.url;
-    else a.removeAttribute('href');
+    for (const a of [$('version'), $('infoVersion')]) {
+      a.textContent = v.text;
+      a.title = v.title;
+      if (v.url) a.href = v.url;
+      else a.removeAttribute('href');
+    }
+    $('infoVersion').after(Object.assign(document.createElement('span'), { className: 'muted small', textContent: ` ${v.title}` }));
   });
   $('dumpBtn').onclick = dump;
   $('cancelBtn').onclick = () => state.abort?.abort();

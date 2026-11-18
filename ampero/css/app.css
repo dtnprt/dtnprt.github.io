@@ -542,3 +542,12 @@ body.offline #editHint { display: none; }
 @media (prefers-reduced-motion: reduce) { .spinner, .status.connecting::before { animation-duration: 2.4s; } }
 .version { margin-right: 12px; white-space: nowrap; text-decoration: none; font-variant-numeric: tabular-nums; }
 a.version[href]:hover { color: var(--accent); }
+
+/* about dialog */
+.info-table { border-collapse: collapse; margin: 4px 0 12px; }
+.info-table th { text-align: left; font-weight: 400; color: var(--muted); padding: 4px 14px 4px 0; vertical-align: top; white-space: nowrap; }
+.info-table td { padding: 4px 0; color: #ccc; }
+.about-text h4 { margin: 6px 0 6px; font-size: 14px; }
+.info-list { margin: 0 0 10px; padding-left: 18px; color: #ccc; line-height: 1.45; }
+.info-list li { margin-bottom: 4px; }
+.about-text a { color: var(--accent); }

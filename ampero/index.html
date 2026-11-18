@@ -23,6 +23,7 @@
         <label>MIDI output <select id="outPort"></select></label>
         <p class="muted small">Normally the Ampero is found and connected automatically.</p>
         <hr>
+        <button id="infoBtn" class="gear-tool">About <span class="muted small">– version, source, licenses</span></button>
         <button id="snifferBtn" class="gear-tool">Sniffer <span class="muted small">– MIDI traffic analyzer</span></button>
       </div>
       <button id="connectBtn" class="primary">Connect</button>
@@ -279,6 +280,7 @@
       <span class="spacer"></span>
       <span id="editHint" class="muted small edit-hint">Click a block to edit · right-click: copy, paste, save, load, delete · drag to swap · Save stores the preset</span>
       <a id="version" class="muted small version" target="_blank" rel="noopener"></a>
+      <a href="#" id="infoLink" class="muted small about-link" title="version, source code and licenses">About</a>
       <a href="#" id="aboutLink" class="muted small about-link" title="disclaimer and legal notes">Unofficial – not affiliated with Hotone · Disclaimer</a>
       <button id="traceBtn" class="small-btn" disabled title="raw MIDI frames of this connection – send this file when something goes wrong">Save trace</button>
     </div>
@@ -309,6 +311,40 @@
           Copyright (c) 2026 TONE3000.</p>
       </div>
       <div class="dlg-buttons"><button id="aboutClose" class="primary">Close</button></div>
+    </div>
+  </div>
+
+  <!-- about: version, source code, licenses -->
+  <div id="infoDialog" class="overlay" hidden>
+    <div class="dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <h3 id="infoTitle">About</h3>
+      <div class="about-text">
+        <p><b>Ampero II web editor</b> – an unofficial editor for the Hotone Ampero II Stomp that runs in the browser
+          and talks to the pedal over USB-MIDI (Web MIDI). No installation, nothing is sent to a server.</p>
+        <table class="info-table">
+          <tr><th>Version</th><td><a id="infoVersion" target="_blank" rel="noopener">…</a></td></tr>
+          <tr><th>Pedal</th><td id="infoPedal">not connected</td></tr>
+          <tr><th>Editor source</th><td><a href="https://github.com/dtnprt/dtnprt.github.io/tree/main/ampero" target="_blank"
+            rel="noopener">github.com/dtnprt/dtnprt.github.io</a> <span class="muted">(ampero/)</span></td></tr>
+          <tr><th>Protocol &amp; tools</th><td><a href="https://github.com/dtnprt/ampero2-com-re" target="_blank"
+            rel="noopener">github.com/dtnprt/ampero2-com-re</a> <span class="muted">– format documentation, Python tools,
+            Arduino and C# code</span></td></tr>
+          <tr><th>Support</th><td><a href="https://ko-fi.com/datenpirat" target="_blank" rel="noopener">ko-fi.com/datenpirat</a></td></tr>
+        </table>
+        <h4>Licenses</h4>
+        <ul class="info-list">
+          <li>The editor's own code: <b>MIT License</b>, Copyright (c) 2026 dtnprt –
+            <a href="LICENSE" target="_blank" rel="noopener">LICENSE</a>.</li>
+          <li><code>js/nam2namb.js</code> is based on <a href="https://github.com/tone-3000/nam-binary-loader" target="_blank"
+            rel="noopener">nam-binary-loader</a>, MIT License, Copyright (c) 2026 TONE3000.</li>
+          <li><code>data/algorithms.json</code> (effect names, parameters, value tables) is derived from data shipped with
+            Hotone's editor software. It belongs to Hotone and is <b>not</b> covered by the MIT license.</li>
+          <li>The "Tip Me" button is Ko-fi's widget, loaded from ko-fi.com under Ko-fi's terms.</li>
+        </ul>
+        <p class="muted small">Hotone and Ampero are trademarks of Changsha Hotone Audio Co., Ltd. This project is not
+          affiliated with Hotone – see the <a href="#" id="infoDisclaimer">disclaimer</a>.</p>
+      </div>
+      <div class="dlg-buttons"><button id="infoClose" class="primary">Close</button></div>
     </div>
   </div>
 

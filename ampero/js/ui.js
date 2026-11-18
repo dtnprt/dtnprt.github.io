@@ -85,6 +85,13 @@ export function showAbout() {
   return p;
 }
 
+/** About: version, source code, licenses (filled by the caller). */
+export function showInfo() {
+  const p = modal($('infoDialog'), $('infoClose'), null);
+  $('infoClose').onclick = () => modal.close(null);
+  return p;
+}
+
 // ------------------------------------------------------------------ context menu
 
 let openMenu = null;
