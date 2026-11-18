@@ -68,6 +68,8 @@ td.warn { color: var(--accent); }
 
 .content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+/* cards in a scrolling page never shrink: a shrunk card cut off the 2-column module legend (its min height is underestimated) */
+.content > .card { flex-shrink: 0; }
 .row h2 { margin: 0 !important; }
 .card h2 { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
 .card p { margin: 0 0 12px; }
