@@ -3599,6 +3599,11 @@ async function init() {
   $('portToggle').onclick = () => {
     $('portSel').hidden = !$('portSel').hidden;
   };
+  // sub-category / algorithm lists as high as the module legend next to them (no jumping layout)
+  const legend = document.querySelector('.ed-left .modules');
+  if (legend && window.ResizeObserver) {
+    new ResizeObserver(() => document.documentElement.style.setProperty('--legend-h', `${legend.offsetHeight}px`)).observe(legend);
+  }
   $('edTempo').onchange = () => setSceneValue('tempo', +$('edTempo').value);
   $('edVolume').oninput = () => {
     $('edVolumeVal').textContent = $('edVolume').value;

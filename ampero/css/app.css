@@ -232,7 +232,8 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .params-body { display: flex; gap: 22px; align-items: flex-start; }
 .params-body .param-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 10px 14px 14px; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
 .browser { display: flex; gap: 10px; align-items: flex-start; flex: none; }
-.b-list { list-style: none; margin: 0; padding: 4px; min-width: 120px; max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
+/* the lists end where the module legend on the left ends (--legend-h, measured in app.js) */
+.b-list { list-style: none; margin: 0; padding: 4px; min-width: 120px; max-height: var(--legend-h, 300px); overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
 .b-list li { padding: 4px 9px; cursor: pointer; border-radius: 3px; white-space: nowrap; }
 .b-list li:hover { background: #2a2a2a; }
 .b-list li.on { background: var(--accent-dim); color: #fff; }
