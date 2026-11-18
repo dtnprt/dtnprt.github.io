@@ -28,6 +28,7 @@ let sniffer = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = {
+  selFs: 0, // footswitch shown in the footswitch panel (its positions are marked in the chain)
   fsFollow: false, // footswitch assignments move with a dragged block (option in the footswitch panel)
   access: null,
   dev: null,
@@ -815,7 +816,7 @@ function renderEditor() {
   };
   const box = (c) => {
     if (!c || c.code === 0xffffffff) {
-      const e = el('div', `fx empty${c && c.slot === state.selSlot ? ' sel' : ''}`, '+');
+      const e = el('div', `fx empty${c && c.slot === state.selSlot ? ' sel' : ''}${c && fsMarked(raw, c.pos) ? ' fs-mark' : ''}`, '+');
       if (c && raw) {
         e.title = `empty position ${c.pos + 1} – click to insert a block, or drop one here`;
         e.onclick = () => {
@@ -836,6 +837,7 @@ function renderEditor() {
     const icon = el('span', 'fx-icon');
     icon.innerHTML = moduleIcon(mod) || moduleIcon(/^FX /.test(mod) ? 'FX LOOP' : '') || mod.slice(0, 3);
     if (c.slot === state.selSlot) b.classList.add('sel');
+    if (fsMarked(raw, c.pos)) b.classList.add('fs-mark');
     b.onclick = () => {
       state.selSlot = c.slot;
       state.browse = null;
@@ -1047,6 +1049,15 @@ function blockName(code, alg) {
 }
 
 /** Footswitches (1..3) whose "Ctrl" function switches this slot. */
+/** True if the footswitch selected in the footswitch panel switches blocks and position pos is one of them. */
+function fsMarked(raw, pos) {
+  try {
+    return !!raw && isCtrlFunction(presetFs(raw).click[state.selFs]) && presetFsSlots(raw, state.selFs)[pos];
+  } catch {
+    return false;
+  }
+}
+
 /** Footswitches (1..3) that switch chain position pos (the assignment is per position, not per slot). */
 function fsAssignments(raw, pos) {
   if (!raw) return [];
@@ -1116,47 +1127,82 @@ function renderFs(raw, chain) {
   follow.append(cb, ' footswitches move with the block');
   follow.title = 'off (like the pedal and the Hotone editor): a footswitch switches a position – a moved block leaves its ' +
     'footswitch behind. On: when you drag a block, its footswitch assignment is moved to the new position.';
-  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), el('div', 'fs-title', '"Effect slots": the footswitch switches the blocks selected below'), follow);
+  // like the scenes: one button per footswitch (its function at a glance), the selected one's settings below;
+  // with "Effect slots" the positions it switches are marked in the chain above
+  const sf = state.selFs;
+  const posName = (p) => `${p < 6 ? 'A' : 'B'}${(p % 6) + 1}`;
+  const summary = (f) => {
+    if (!isCtrlFunction(fs.click[f])) return fsFunctionName(fs.click[f]);
+    const on = presetFsSlots(raw, f);
+    const list = chain.filter((c) => on[c.pos]).sort((x, y) => x.pos - y.pos)
+      .map((c) => `${posName(c.pos)} ${c.code === 0xffffffff ? '–' : algInfo(c.code)?.module ?? ''}`);
+    return list.length ? list.join(', ') : 'Effect slots: none';
+  };
+  const picks = el('div', 'fs-picks');
   for (let f = 0; f < 3; f++) {
-    const b = el('div', 'fs-box');
-    const head = el('div', 'fs-head');
-    const sel = el('select');
-    if (isStage()) {
-      fillFsSelect(sel, fsChoices(raw), fs.click[f]);
-    } else {
-      // like the Hotone editor for the Stomp: "Effect slots" (= Ctrl n of this footswitch) or a fixed function
-      sel.append(new Option('Effect slots (blocks below)', String(STOMP_FS_CTRL[f])));
-      for (const c of STOMP_FS_FIXED) sel.append(new Option(fsFunctionName(c).replace(/^Off$/, 'OFF'), String(c)));
-      if (![...sel.options].some((o) => +o.value === fs.click[f])) {
-        sel.append(new Option(`${fsFunctionName(fs.click[f])} (not offered for the Stomp)`, String(fs.click[f])));
-      }
-      sel.value = String(fs.click[f]);
-    }
-    sel.disabled = !live;
-    sel.onchange = () => setFsFunction(f, +sel.value);
-    head.append(el('b', '', `FS${f + 1}`), sel);
-    b.append(head);
-    if (fs.hold[f] !== 0xff) b.append(el('span', 'fs-hold', `hold: ${fsFunctionName(fs.hold[f])} (not editable yet)`));
-    if (isCtrlFunction(fs.click[f])) {
-      const on = presetFsSlots(raw, f);
-      const slots = el('div', 'fs-slots');
-      // the assignment belongs to the chain position: moving a block leaves it at the old position (like the pedal
-      // and the Hotone editor) – assigned empty positions are listed too, so they can be removed
-      for (const c of [...chain].sort((x, y) => x.pos - y.pos)) {
-        const empty = c.code === 0xffffffff;
-        if (empty && !on[c.pos]) continue;
-        const a = empty ? null : algInfo(c.code);
-        const t = el('button', on[c.pos] ? 'on' : '', `${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1} ${empty ? '(empty)' : a?.name ?? ''}`);
-        t.title = `position ${c.pos + 1} – click to (un)assign`;
-        t.disabled = !live;
-        t.onclick = () => toggleFsSlot(f, c.pos);
-        slots.append(t);
-      }
-      b.append(slots);
-    }
-    b.append(midiRows(raw, 'fs', f));
-    box.append(b);
+    const b = el('button', `scene fs-pick${f === sf ? ' on' : ''}`);
+    b.append(el('b', '', `FS${f + 1}`), el('span', '', summary(f)));
+    b.title = summary(f);
+    b.onclick = () => {
+      state.selFs = f;
+      renderEditor();
+    };
+    picks.append(b);
   }
+  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), picks);
+
+  const f = sf;
+  const b = el('div', 'fs-box');
+  const sel = el('select');
+  if (isStage()) {
+    fillFsSelect(sel, fsChoices(raw), fs.click[f]);
+  } else {
+    // like the Hotone editor for the Stomp: "Effect slots" (= Ctrl n of this footswitch) or a fixed function
+    sel.append(new Option('Effect slots', String(STOMP_FS_CTRL[f])));
+    for (const c of STOMP_FS_FIXED) sel.append(new Option(fsFunctionName(c).replace(/^Off$/, 'OFF'), String(c)));
+    if (![...sel.options].some((o) => +o.value === fs.click[f])) {
+      sel.append(new Option(`${fsFunctionName(fs.click[f])} (not offered for the Stomp)`, String(fs.click[f])));
+    }
+    sel.value = String(fs.click[f]);
+  }
+  sel.disabled = !live;
+  sel.onchange = () => setFsFunction(f, +sel.value);
+  const head = el('div', 'fs-head');
+  head.append(el('b', '', `FS${f + 1}`), sel);
+  b.append(head);
+  if (fs.hold[f] !== 0xff) b.append(el('span', 'fs-hold', `hold: ${fsFunctionName(fs.hold[f])} (not editable yet)`));
+  if (isCtrlFunction(fs.click[f])) {
+    b.append(el('div', 'fs-title', 'Switches the positions marked in the chain – click to (un)assign:'));
+    // the assignment belongs to the chain position (a moved block leaves it behind, like on the pedal)
+    const on = presetFsSlots(raw, f);
+    const grid = el('div', 'fs-grid');
+    for (const c of [...chain].sort((x, y) => x.pos - y.pos)) {
+      const empty = c.code === 0xffffffff;
+      const a = empty ? null : algInfo(c.code);
+      const t = el('button', `${on[c.pos] ? 'on' : ''}${empty ? ' empty' : ''}`);
+      t.append(el('span', 'fs-pos', posName(c.pos)), el('span', '', empty ? '+' : a?.module ?? '?'));
+      t.title = `${posName(c.pos)} ${empty ? 'empty' : a?.name ?? ''} – click to (un)assign`;
+      t.disabled = !live;
+      t.onclick = () => toggleFsSlot(f, c.pos);
+      grid.append(t);
+    }
+    b.append(grid);
+    // option: when a block is moved, its footswitch assignment moves with it (the pedal itself keeps it at the position)
+    const follow = el('label', 'fs-follow small');
+    const cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = state.fsFollow;
+    cb.onchange = () => {
+      state.fsFollow = cb.checked;
+      try { localStorage.setItem('ampero.fsFollow', cb.checked ? '1' : '0'); } catch { /* ignore */ }
+    };
+    follow.append(cb, ' assignments move with the block');
+    follow.title = 'off (like the pedal and the Hotone editor): a footswitch switches a position – a moved block leaves its ' +
+      'footswitch behind. On: when you drag a block, its footswitch assignments move to the new position.';
+    b.append(follow);
+  }
+  b.append(midiRows(raw, 'fs', f));
+  box.append(b);
   box.append(midiRows(raw, 'patch', 0));
 }
 
