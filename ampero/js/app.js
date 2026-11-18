@@ -3814,6 +3814,8 @@ async function openProbe(file) {
 async function init() {
   fillRange();
   for (const b of document.querySelectorAll('.tab')) b.onclick = () => showTab(b.dataset.tab);
+  // About (next to the gear) toggles: a second click goes back (to the editor / the start screen)
+  $('aboutTab').onclick = () => showTab(state.tab === 'about' ? 'edit' : 'about');
   $('irReadBtn').onclick = readFileLists;
   try {
     const c = JSON.parse(localStorage.getItem('ampero.blockClip') || 'null');

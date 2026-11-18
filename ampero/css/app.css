@@ -531,7 +531,7 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .off-brand small { color: var(--muted); letter-spacing: 1px; font-size: 13px; }
 /* without a pedal: no sidebar, pages, tabs (the sniffer stays reachable from the gear menu) */
 body.offline .layout > .sidebar, body.offline .layout > .page:not(#page-sniffer):not(#page-about) { display: none !important; }
-body.offline .tabs .tab:not([data-tab=about]):not([data-tab=edit]) { visibility: hidden; }
+body.offline .tabs { visibility: hidden; }
 body.offline #editHint { display: none; }
 .spinner { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #333; border-top-color: var(--accent);
   animation: spin .8s linear infinite; }
@@ -595,3 +595,6 @@ a.version[href]:hover { color: var(--accent); }
 .preset-list li.drop-target { box-shadow: inset 0 2px 0 var(--accent); background: #2a2416; }
 .preset-list li.drop-target::after { content: attr(data-drop); margin-left: auto; color: var(--accent); font-size: 12px; }
 .preset-list li.drop-target .menu-btn { display: none; }
+
+/* About: a tab in the connection area, right of the gear */
+.conn .tab-about { font-size: 15px; padding: 6px 8px; align-self: stretch; }
