@@ -2532,7 +2532,7 @@ async function readGlobals() {
   updateButtons();
   try {
     const m = new Map();
-    for (const g of [0x00010000, 0x00020000, 0x00060000, 0x00070000, 0x00080000]) {
+    for (const g of [0x00010000, 0x00020000, 0x00060000, 0x00070000, 0x00080000, 0x000a0000]) {
       m.set(g, await state.dev.request(g, new Uint8Array(0), { timeout: 2000, retries: 1 }));
     }
     state.globals = m;
@@ -2556,6 +2556,7 @@ async function setGlobal(p, value) {
   const ans = state.globals?.get(groupOf(p.addr));
   const i = paramByte(p);
   if (ans && i < ans.length) ans[i] = rawByte(p, value);
+  if (ans && p.u16 && i + 1 < ans.length) ans[i + 1] = (value >> 8) & 0xff;
   await state.dev.send(p.addr, globalPayload(p, value));
   log(`${p.name}: ${describeGlobal(p, value)}`);
 }
@@ -2563,6 +2564,7 @@ async function setGlobal(p, value) {
 function describeGlobal(p, v) {
   if (p.switch) return v ? 'on' : 'off';
   if (p.level) return v <= p.level[0] ? 'Mute' : `${v} dB`;
+  if (p.range) return `${v}${p.unit ?? ''}`;
   if (p.channel) return v >= 16 ? 'Omni' : `${v + 1}`;
   if (p.colors) return `color ${v + 1}`;
   if (p.choices) return p.choices.find(([val]) => val === v)?.[1] ?? `value ${v}`;
@@ -2586,6 +2588,7 @@ function renderGlobals() {
       const row = el('div', 'gs-row');
       if (p.mode != null && ctrlMode != null && p.mode !== ctrlMode) continue; // EXT FS rows of the other modes
       const label = el('span', '', ctrlMode == null && p.mode != null ? `${p.name} (${p.mode === 1 ? 'Single' : 'Dual'} FS)` : p.name);
+      if (p.help) label.title = p.help;
       if (p.guess) {
         const q = el('span', 'gs-guess', ' ?');
         q.title = 'option names not confirmed yet – the raw value is shown in brackets';
@@ -2600,9 +2603,10 @@ function renderGlobals() {
         };
         b.disabled = !live;
         row.append(b);
-      } else if (p.level) {
+      } else if (p.level || p.range) {
+        const [lo, hi] = p.level ?? p.range;
         const r = el('input');
-        Object.assign(r, { type: 'range', min: p.level[0], max: p.level[1], step: 1, value: v ?? 0, disabled: !live });
+        Object.assign(r, { type: 'range', min: lo, max: hi, step: 1, value: v ?? lo, disabled: !live });
         const val = el('span', 'gs-val', v == null ? '' : describeGlobal(p, v));
         r.oninput = () => {
           val.textContent = describeGlobal(p, +r.value);

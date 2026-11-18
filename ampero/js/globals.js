@@ -10,6 +10,24 @@ import { CTRL_FS_FUNCTIONS, fsFunctionName } from './protocol.js';
 
 const CTRL_CHOICES = CTRL_FS_FUNCTIONS.map((c) => [c, fsFunctionName(c)]);
 
+// Drum machine / metronome (group 0x000A, Hotone editor: showDrumAlert / GlobalDataDrum): get 0x000a0000 =
+// [0] sync, [1] volume, [2..3] u16 BPM, [4] rhythm, [5] play state, [6..7] ?. Set: 0x000a0001 sync, 0x000a0002 volume,
+// 0x000a0004 rhythm, 0x000a0005 play – 1 byte each; 0x000a0003 BPM – u16. BPM 40–300, volume 0–100 (editor sliders).
+// Rhythm names: the editor's drumName list (100 entries, shown as "6. Metro 6/4").
+export const DRUM_STYLES = [
+  "Metro 1/4", "Metro 2/4", "Metro 3/4", "Metro 4/4", "Metro 5/4", "Metro 6/4", "Metro 7/4", "Metro 6/8",
+  "Metro 7/8", "Metro 9/8", "Rock n' Roll", "Classic Rock", "Pop Rock", "Slow Rock", "Rock Shuffle", "Rock Ballad",
+  "Punk", "New Wave", "Hard Rock", "Metal", "Classic Funk", "Funk Rock", "Electric Funk", "Soul", "R&B", "Jazz",
+  "Big Band", "Fusion", "Swing", "Dixieland", "Blues", "Country", "Country Folk", "Rockabilly", "Bluegrass",
+  "Bossanova", "Rumba", "Samba", "Cha Cha", "Tango", "Reggae", "Beguine", "Latin Pop", "Latin Rock", "Latin Dance",
+  "Hip Hop", "Trip Hop", "Techno", "Break Beat", "Drum n' Bass", "Waltz", "Polka", "March", "6/8 March",
+  "Army March", "Mazurke", "Musette", "Ska", "New Age", "World", "8Beat1", "8Beat2", "8Beat3", "8Beat4", "8Beat5",
+  "8Beat6", "8Beat7", "8Beat8", "8Beat9", "8Beat10", "16Beat1", "16Beat2", "16Beat3", "16Beat4", "16Beat5",
+  "16Beat6", "16Beat7", "16Beat8", "16Beat9", "16Beat10", "4Beat1", "4Beat2", "4Beat3", "4Beat4", "4Beat5", "4Beat6",
+  "4Beat7", "4Beat8", "4Beat9", "4Beat10", "3/4 Beat1", "3/4 Beat2", "6/8 Beat1", "6/8 Beat2", "5/4 Beat",
+  "6/4 Beat", "7/4 Beat", "9/8 Beat", "10/8 Beat", "11/8 Beat",
+];
+
 export const GLOBAL_GROUPS = [
   {
     id: 'io', title: 'Input / Output', get: 0x00010000, params: [
@@ -66,6 +84,15 @@ export const GLOBAL_GROUPS = [
     ],
   },
   {
+    id: 'drum', title: 'Drum / Metronome', get: 0x000a0000, params: [
+      { addr: 0x000a0005, name: 'Play', switch: true, getByte: 5 },
+      { addr: 0x000a0004, name: 'Rhythm', options: DRUM_STYLES.map((n, i) => `${i + 1}. ${n}`), getByte: 4 },
+      { addr: 0x000a0003, name: 'BPM', range: [40, 300], unit: ' BPM', u16: true, getByte: 2 },
+      { addr: 0x000a0002, name: 'Volume', range: [0, 100] },
+      { addr: 0x000a0001, name: 'Drum Sync', switch: true, help: 'BPM follows the tempo of the current patch / scene' },
+    ],
+  },
+  {
     id: 'display', title: 'Device Display', get: 0x00080000, params: [
       { addr: 0x00080002, name: 'Patch Mode', options: ['Mode 1', 'Mode 2'] },
       { addr: 0x0008000d, name: 'Stomp Mode', options: ['Footswitch', 'Effect Chain'] },
@@ -86,6 +113,7 @@ export function paramValue(p, answer) {
   const i = paramByte(p);
   if (!answer || i >= answer.length) return null;
   const b = answer[i];
+  if (p.u16) return i + 1 < answer.length ? b | (answer[i + 1] << 8) : null;
   return p.level ? (b << 24) >> 24 : b - (p.base ?? 0);
 }
 
@@ -96,6 +124,7 @@ export const rawByte = (p, value) => (value + (p.base ?? 0)) & 0xff;
 export function paramPayload(p, value) {
   if (p.encode) return Uint8Array.from(p.encode(value));
   if (p.u32) return u32((p.base ?? 0) + value);
+  if (p.u16) return Uint8Array.of(value & 0xff, (value >> 8) & 0xff);
   return Uint8Array.of(value & 0xff);
 }
 
