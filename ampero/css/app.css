@@ -307,6 +307,11 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fs-grid button.on { border-color: var(--accent); color: var(--accent); background: rgba(245, 166, 35, .12); }
 .fx.fs-mark { background: #34302a; }
 .fx.empty.fs-mark { border-style: dashed; border-color: var(--accent); }
+.chain.fs-picking .fx { cursor: copy; }
+.chain.fs-picking .fx:hover { box-shadow: 0 0 0 2px #fff; }
+.fs-pick-hint { color: #fff; margin-left: 10px; }
+.fs-box > .small-btn { align-self: flex-start; }
+.fs-box > .small-btn.on { color: var(--accent); border-color: var(--accent); }
 .fs-follow { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
 .midi-box summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .midi-box.patch { border-top: 1px solid #262626; padding-top: 8px; }

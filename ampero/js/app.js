@@ -28,6 +28,7 @@ let sniffer = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = {
+  fsPick: false, // "pick blocks in the chain" mode for the selected footswitch
   selFs: 0, // footswitch shown in the footswitch panel (its positions are marked in the chain)
   fsFollow: false, // footswitch assignments move with a dragged block (option in the footswitch panel)
   access: null,
@@ -779,7 +780,13 @@ function renderEditor() {
       cm.append(btn);
     }
   }
-  $('chain').className = `chain${raw ? '' : ' unknown'}`;
+  $('chain').className = `chain${raw ? '' : ' unknown'}${fsPicking(raw) ? ' fs-picking' : ''}`;
+  if (fsPicking(raw)) {
+    const hint = el('span', 'fs-pick-hint', ` Click blocks to assign them to FS${state.selFs + 1} `);
+    const done = el('button', 'small-btn', 'Done');
+    done.onclick = () => setFsPick(false);
+    cm.append(hint, done);
+  }
   const split = rt?.split ?? null, merge = rt?.merge ?? null, serial = !!rt?.serial;
 
   // inputs / outputs: row 1 always has an input; row 2 only without split. Row 1 has an output unless the
@@ -822,6 +829,7 @@ function renderEditor() {
       if (c && raw) {
         e.title = `empty position ${c.pos + 1} – click to insert a block, or drop one here`;
         e.onclick = () => {
+          if (fsPicking(raw)) return toggleFsSlot(state.selFs, c.pos);
           state.selSlot = c.slot;
           state.browse = null;
           renderEditor();
@@ -841,6 +849,7 @@ function renderEditor() {
     if (c.slot === state.selSlot) b.classList.add('sel');
     if (fsMarked(raw, c.pos)) b.classList.add('fs-mark');
     b.onclick = () => {
+      if (fsPicking(raw)) return toggleFsSlot(state.selFs, c.pos);
       state.selSlot = c.slot;
       state.browse = null;
       renderEditor();
@@ -1048,6 +1057,20 @@ function blockName(code, alg) {
 }
 
 /** Footswitches (1..3) whose "Ctrl" function switches this slot. */
+/** "Pick in chain" mode: clicks on chain positions (un)assign them to the selected footswitch instead of selecting. */
+function fsPicking(raw) {
+  try {
+    return state.fsPick && !!raw && isCtrlFunction(presetFs(raw).click[state.selFs]);
+  } catch {
+    return false;
+  }
+}
+
+function setFsPick(on) {
+  state.fsPick = on;
+  renderEditor();
+}
+
 /** True if the footswitch selected in the footswitch panel switches blocks and position pos is one of them. */
 function fsMarked(raw, pos) {
   try {
@@ -1204,6 +1227,11 @@ function renderFs(raw, chain) {
       grid.append(t);
     }
     b.append(grid);
+    const pick = el('button', `small-btn${state.fsPick ? ' on' : ''}`, state.fsPick ? 'Done picking' : 'Pick blocks in the chain');
+    pick.title = 'while on, a click on a block (or empty position) in the chain assigns it to this footswitch or removes it (Esc ends)';
+    pick.disabled = !live;
+    pick.onclick = () => setFsPick(!state.fsPick);
+    b.append(pick);
     // option: when a block is moved, its footswitch assignment moves with it (the pedal itself keeps it at the position)
     const follow = el('label', 'fs-follow small');
     const cb = el('input');
@@ -1518,6 +1546,14 @@ function blockMenu(e, raw, c) {
     { label: 'Load from file…', action: () => loadBlockFile(c), disabled: !live },
     '-',
     { label: 'Delete', action: () => removeBlock(c.slot), disabled: empty || !live },
+    '-',
+    ...[0, 1, 2].map((f) => {
+      const fs = presetFs(raw);
+      const ctrl = isCtrlFunction(fs.click[f]);
+      const has = ctrl && presetFsSlots(raw, f)[c.pos];
+      return { label: `${has ? 'Remove from' : 'Switch with'} FS${f + 1}`, action: () => toggleFsSlot(f, c.pos), disabled: !ctrl || !live,
+        title: ctrl ? '' : `FS${f + 1} is set to "${fsFunctionName(fs.click[f])}" – choose "Effect slots" for it first` };
+    }),
   ]);
 }
 
@@ -2953,6 +2989,9 @@ async function init() {
   setInterval(poll, CURRENT_POLL_MS);
   // reload / close: release the MIDI ports cleanly (a hard reload with open ports left Firefox's Web MIDI without
   // any device until the browser was restarted)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.fsPick) setFsPick(false);
+  });
   window.addEventListener('pagehide', () => {
     try {
       state.dev?.close();
