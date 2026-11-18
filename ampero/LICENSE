@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2026 dtnprt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+Scope and exceptions
+
+This license covers the original code of the Ampero II web editor in this
+directory. It does NOT cover:
+
+* data/algorithms.json – effect names, parameters and value tables generated
+  from the data of Hotone's editor software (tools/gen_web_algdb.py in
+  https://github.com/dtnprt/ampero2-com-re). It belongs to Hotone and is not
+  licensed under the terms above.
+
+* js/nam2namb.js – based on nam-binary-loader, Copyright (c) 2026 TONE3000,
+  MIT License (https://github.com/tone-3000/nam-binary-loader).
+
+"Hotone" and "Ampero" are trademarks of Changsha Hotone Audio Co., Ltd. This
+editor is unofficial and not affiliated with or endorsed by Hotone. Names of
+products and effect models are used only to describe compatibility.
+
+Protocol and format documentation: https://github.com/dtnprt/ampero2-com-re
