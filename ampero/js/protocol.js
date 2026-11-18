@@ -874,3 +874,63 @@ export function parsePresetList(p) {
   for (let i = 0; i < PRESET_COUNT; i++) names.push(cString(p, 2 * PRESET_COUNT + 17 * i, 17));
   return names;
 }
+
+// ------------------------------------------------------------------ input / output nodes (tag 6)
+//
+// Tag 6 (routing): i16 inputSource[2] @0, i16 outputSource[2] @4, f32 inputSourceParam[2][7][4] @8,
+// f32 outputSourceParam[2][7][4] @232 – parameters per chain and per source (index = source code). Input source
+// parameters: 0 channel (0 L, 1 R, 2 Sum, 3 Stereo), 1 level dB; output: 0 level dB, 1 pan (-50 L … 50 R).
+// Level -61 = Mute … +20 dB. Set: 0x01050001 / 0x01050002 i16 chain, i16 source (the pedal answers with the
+// routing push 0x0105000b); 0x01050003 / 0x01050004 i16 chain, i16 param, f32 value (for the current source).
+// Captures/wine-io-nodes-2026-11-18.txt + screenshots data/input_*.png, output_1.png; codes and ranges from the app.
+export const IO = { IN_SOURCE: 0x01050001, OUT_SOURCE: 0x01050002, IN_PARAM: 0x01050003, OUT_PARAM: 0x01050004 };
+export const IN_SOURCES = new Map([[0, 'Input'], [1, 'FX Return'], [2, 'USB Out 3/4'], [3, 'USB Out 5/6'], [4, 'USB Out 7/8'],
+  [5, 'Chain A'], [6, 'None']]);
+export const OUT_TARGETS = new Map([[0, 'Output'], [1, 'FX Send'], [2, 'Chain B'], [3, 'None'], [4, 'Unbalanced'],
+  [5, 'Balanced & Phones']]);
+/** What the Hotone editor for the Stomp offers (screenshots; B: Chain A / None and None seen in the capture). */
+export const STOMP_IO = { in: [[0, 1, 2], [0, 1, 2, 5, 6]], out: [[0, 1, 2], [0, 1, 3]] };
+export const STAGE_IO = { in: [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4, 5, 6]], out: [[0, 1, 2, 4, 5], [0, 1, 3, 4, 5]] };
+export const IN_CHANNELS = ['L', 'R', 'Sum', 'Stereo'];
+const IO_PARAMS = 4, IO_SOURCES = 7;
+const ioParamOffset = (out, chain, src, p) => (out ? 232 : 8) + 4 * (chain * IO_SOURCES * IO_PARAMS + src * IO_PARAMS + p);
+/** Sources that have parameters (level …): inputs 0–4, outputs 0, 1, 4, 5. */
+export const ioHasParams = (out, src) => (out ? [0, 1, 4, 5].includes(src) : src <= 4);
+
+/** {source, params: [p0, p1]} of input (out = false) or output chain 0/1. */
+export function presetIo(raw, out, chain) {
+  const o = tagOffset(raw, 6), d = new DataView(raw.buffer, raw.byteOffset);
+  const source = d.getInt16(o + (out ? 4 : 0) + 2 * chain, true);
+  const params = source >= 0 && source < IO_SOURCES
+    ? [0, 1].map((p) => d.getFloat32(o + ioParamOffset(out, chain, source, p), true)) : [NaN, NaN];
+  return { source, params };
+}
+
+export function setPresetIoSource(raw, out, chain, source) {
+  const r = raw.slice();
+  new DataView(r.buffer).setInt16(tagOffset(raw, 6) + (out ? 4 : 0) + 2 * chain, source, true);
+  return r;
+}
+
+/** Parameter p of the current source of the node. */
+export function setPresetIoParam(raw, out, chain, p, value) {
+  const { source } = presetIo(raw, out, chain);
+  const r = raw.slice();
+  new DataView(r.buffer).setFloat32(tagOffset(raw, 6) + ioParamOffset(out, chain, source, p), value, true);
+  return r;
+}
+
+export function ioSourcePayload(chain, source) {
+  const p = new Uint8Array(4), d = new DataView(p.buffer);
+  d.setInt16(0, chain, true);
+  d.setInt16(2, source, true);
+  return p;
+}
+
+export function ioParamPayload(chain, param, value) {
+  const p = new Uint8Array(8), d = new DataView(p.buffer);
+  d.setInt16(0, chain, true);
+  d.setInt16(2, param, true);
+  d.setFloat32(4, value, true);
+  return p;
+}

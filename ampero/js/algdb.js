@@ -80,6 +80,8 @@ export function formatValue(p, v) {
   if (!p || typeof v !== 'number' || Number.isNaN(v)) return String(v);
   if (p.options) return p.options[Math.round(v - p.min)] ?? String(v);
   if (p.offAtMin && v <= p.min) return 'Off';
+  if (p.muteAtMin && v <= p.min) return 'Mute';
+  if (p.pan) return v < 0 ? `L${Math.round(-v)}` : v > 0 ? `R${Math.round(v)}` : 'Center';
   if (p.limitAtMax && v >= p.max) return 'Limit';
   const n = v.toFixed(decimals(p.step));
   return p.unit === ':1' ? `${n}:1` : p.unit ? `${n} ${p.unit}` : n;

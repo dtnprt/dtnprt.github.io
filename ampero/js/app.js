@@ -7,6 +7,8 @@ import {
   EMPTY_ALG, presetOn, presetSeq, reorderPayload, setAlgPayload, setPresetAlg, setPresetOn, setPresetSeq, slotOnPayload,
   FACTORY_IRS, SCENE_NAME_LEN, idNamePayload, presetScene, sceneNamePayload, sceneValuePayload, setPresetScene, u32Payload,
   FS_FUNCTIONS, STOMP_FS_FUNCTIONS, STOMP_FS_CTRL, STOMP_FS_FIXED, FS_SET, FS_SLOTS_SET,
+  IO, IN_SOURCES, OUT_TARGETS, STOMP_IO, STAGE_IO, IN_CHANNELS, ioHasParams, presetIo, setPresetIoSource, setPresetIoParam,
+  ioSourcePayload, ioParamPayload,
   MIDI, fsMidiPayload, midiText, midiValid, patchMidiPayload, presetMidi, setPresetMidi, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush, presetSceneCount,
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
@@ -28,6 +30,7 @@ let sniffer = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = {
+  selIo: null, // {out, chain}: input / output node shown in the parameter area (when no block is selected)
   dragCat: null, // module (category) dragged from the legend
   fsPick: false, // "pick blocks in the chain" mode for the selected footswitch
   selFs: 0, // footswitch shown in the footswitch panel (its positions are marked in the chain)
@@ -794,16 +797,25 @@ function renderEditor() {
   // chain is serial; row 2 only without merge (in serial mode it carries the main output).
   const twoIn = rt && split === null, twoOut = rt && merge === null && !serial;
   // input / output nodes: black hexagon, white (inputs) or orange (outputs) outline, arrow or number in that color
-  const io = (on, label, out) => {
+  const io = (on, label, out, chainNo) => {
     if (!on) return el('span', 'io-gap');
-    const n = el('span', `io${out ? ' out' : ''}`);
+    const isSel = state.selSlot < 0 && state.selIo?.out === out && state.selIo?.chain === chainNo;
+    const n = el('span', `io${out ? ' out' : ''}${isSel ? ' sel' : ''}`);
     const inner = label === '→' ? '<path d="M12 20h15M21 14l6 6-6 6"/>' : `<text x="20" y="20">${label}</text>`;
     n.innerHTML = `<svg viewBox="0 0 40 40"><polygon points="11,3 29,3 38,20 29,37 11,37 2,20"/>${inner}</svg>`;
-    n.title = `${out ? 'output' : 'input'}${label === '→' ? '' : ` ${label}`}`;
+    n.title = `${out ? 'output' : 'input'} of chain ${chainNo ? 'B' : 'A'} – click for its settings`;
+    if (raw) {
+      n.onclick = () => {
+        state.selIo = { out, chain: chainNo };
+        state.selSlot = -1;
+        state.browse = null;
+        renderEditor();
+      };
+    }
     return n;
   };
-  $('chainLeft').replaceChildren(io(!!rt, twoIn ? '1' : '→'), io(twoIn, '2'));
-  $('chainRight').replaceChildren(io(!!rt && !serial, twoOut ? '1' : '→', true), io(!!rt && merge === null, serial ? '→' : '2', true));
+  $('chainLeft').replaceChildren(io(!!rt, twoIn ? '1' : '→', false, 0), io(twoIn, '2', false, 1));
+  $('chainRight').replaceChildren(io(!!rt && !serial, twoOut ? '1' : '→', true, 0), io(!!rt && merge === null, serial ? '→' : '2', true, 1));
 
   // drag & drop: drop a block on another position = swap the two positions (like the Hotone software)
   const dnd = (b, c) => {
@@ -1419,6 +1431,10 @@ function renderParams(raw, chain) {
   const box = $('edParams');
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
   const c = chain.find((x) => x.slot === state.selSlot);
+  if (raw && !c && state.selIo) {
+    box.replaceChildren(ioPanel(raw, state.selIo.out, state.selIo.chain));
+    return;
+  }
   if (!raw || !c) {
     box.replaceChildren(el('div', 'params-empty', raw ? 'Click an effect in the chain to edit it, or an empty position to insert one. Drag a block onto another position to swap them; the dot switches it on/off.'
       : 'Read a preset from the pedal to edit it.'));
@@ -1454,18 +1470,81 @@ function renderParams(raw, chain) {
   box.replaceChildren(body);
 }
 
-function paramControl(raw, slot, p, scene, live) {
+// ------------------------------------------------------------------ input / output nodes
+
+/** Settings of an input or output node (chain 0 = A, 1 = B), like the Hotone editor's node panel. */
+function ioPanel(raw, out, chainNo) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const io = presetIo(raw, out, chainNo);
+  const names = out ? OUT_TARGETS : IN_SOURCES;
+  const allowed = (isStage() ? STAGE_IO : STOMP_IO)[out ? 'out' : 'in'][chainNo];
+  // like block changes: only in scene 1 (to be safe – what the pedal allows in other scenes is not known)
+  const scene1 = editScene() === 0;
+  const live = canTalk() && scene1;
+  const wrap = el('div', 'io-panel');
+  const head = el('div', 'params-head');
+  head.append(el('span', 'p-title', `${chainNo ? 'B' : 'A'} ${out ? 'Output' : 'Input'} Node`),
+    el('span', 'muted small', 'for the whole preset (all scenes)'));
+  wrap.append(head);
+  if (!scene1) wrap.append(el('div', 'muted', 'Input / output settings can only be changed in scene 1 – switch to scene 1.'));
+  const grid = el('div', 'params-grid');
+  // source / target
+  const sw = el('div', `pk${live ? '' : ' disabled'}`);
+  const sel = el('select');
+  for (const v of allowed) sel.append(new Option(names.get(v), String(v)));
+  if (!allowed.includes(io.source)) sel.append(new Option(`${names.get(io.source) ?? io.source} (not offered here)`, String(io.source)));
+  sel.value = String(io.source);
+  sel.disabled = !live;
+  sel.onchange = () => setIoSource(out, chainNo, +sel.value);
+  sw.append(sel, el('span', 'name', out ? 'Output To' : 'Source'));
+  grid.append(sw);
+  if (ioHasParams(out, io.source)) {
+    const level = { id: -1, name: out ? (io.source === 1 ? 'Send Level' : 'Output Level') : 'Level', min: -61, max: 20, step: 1,
+      unit: 'dB', muteAtMin: true, type: 0 };
+    if (out) {
+      grid.append(paramControl(raw, -1, level, 0, live, { value: io.params[0], set: (v) => setIoParam(out, chainNo, 0, v) }));
+      const pan = { id: -1, name: 'Pan', min: -50, max: 50, step: 1, pan: true, type: 0 };
+      grid.append(paramControl(raw, -1, pan, 0, live, { value: io.params[1], set: (v) => setIoParam(out, chainNo, 1, v) }));
+    } else {
+      const ch = { id: -1, name: 'Input Channel', min: 0, max: 3, step: 1, options: IN_CHANNELS, type: 2 };
+      grid.append(paramControl(raw, -1, ch, 0, live, { value: io.params[0], set: (v) => setIoParam(out, chainNo, 0, v) }));
+      grid.append(paramControl(raw, -1, level, 0, live, { value: io.params[1], set: (v) => setIoParam(out, chainNo, 1, v) }));
+    }
+  }
+  wrap.append(grid);
+  return wrap;
+}
+
+async function setIoSource(out, chainNo, source) {
+  const allowed = (isStage() ? STAGE_IO : STOMP_IO)[out ? 'out' : 'in'][chainNo];
+  if (!allowed.includes(source) || editScene() !== 0) return;
+  if (!editPreset((raw) => setPresetIoSource(raw, out, chainNo, source))) return;
+  renderEditor();
+  await state.dev.send(out ? IO.OUT_SOURCE : IO.IN_SOURCE, ioSourcePayload(chainNo, source));
+  log(`${chainNo ? 'B' : 'A'} ${out ? 'output to' : 'input source'}: ${(out ? OUT_TARGETS : IN_SOURCES).get(source)}`);
+}
+
+function setIoParam(out, chainNo, p, value) {
+  if (editScene() !== 0) return;
+  if (!editPreset((raw) => setPresetIoParam(raw, out, chainNo, p, value))) return;
+  markDirty();
+  state.dev.send(out ? IO.OUT_PARAM : IO.IN_PARAM, ioParamPayload(chainNo, p, value));
+}
+
+function paramControl(raw, slot, p, scene, live, own = null) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls, textContent: text ?? '' });
   const wrap = el('div', `pk${live ? '' : ' disabled'}`);
   wrap.title = live ? '' : 'connect the pedal (and stop the sniffer / resume) to edit';
-  let value = sceneParam(raw, scene, slot, p.id);
+  // own = {value, set(v)}: a control that is not a block parameter (input / output nodes)
+  let value = own ? own.value : sceneParam(raw, scene, slot, p.id);
   const label = el('span', 'name', p.name);
   const set = (v, update) => {
     v = clampValue(p, v);
     if (v === value) return;
     value = v;
     update();
-    changeParam(slot, p.id, v);
+    if (own) own.set(v);
+    else changeParam(slot, p.id, v);
   };
   if (p.type === 3) { // switch
     const b = el('button', 'sw');

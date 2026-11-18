@@ -180,7 +180,8 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .chain-row { display: flex; align-items: center; min-height: 66px; }
 .chain-link { flex: 1; height: 2px; background: #6b5a35; min-width: 8px; }
 .io { width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center; z-index: 1; color: #e8e8e8; }
-.io.out { color: var(--accent); }
+.io.out { color: #e8e8e8; } /* like the Hotone editor: all nodes white, the selected one orange */
+.io.sel { color: var(--accent); }
 .io svg { width: 40px; height: 40px; overflow: visible; }
 .io svg polygon { fill: #000; stroke: currentColor; stroke-width: 2; }
 .io svg path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -312,6 +313,10 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fs-pick-hint { color: #fff; margin-left: 10px; }
 .fs-box > .small-btn { align-self: flex-start; }
 .fs-box > .small-btn.on { color: var(--accent); border-color: var(--accent); }
+.io.sel svg polygon { stroke-width: 2.6; }
+.io:hover { color: #fff; }
+.io.sel:hover { color: var(--accent); }
+.io { cursor: pointer; }
 .fs-follow { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
 .midi-box summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .midi-box.patch { border-top: 1px solid #262626; padding-top: 8px; }
