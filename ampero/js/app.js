@@ -99,7 +99,7 @@ function setStatus(kind, text) {
 function onlineStatus() {
   if (!state.dev) return setStatus('off', 'offline');
   const extra = state.sniffing ? ' · sniffing' : state.otherHost ? ' · paused' : '';
-  setStatus(state.otherHost || state.sniffing ? 'busy' : 'on', `online · ${state.dev.firmware}${extra}`);
+  setStatus(state.otherHost || state.sniffing ? 'busy' : state.demo ? 'busy' : 'on', `${state.demo ? 'demo' : 'online'} · ${state.dev.firmware}${extra}`);
 }
 
 /** Model from the MIDI port name ("Ampero II Stomp", "MIDIIN2 (Ampero II Stage)", "MP-300" …). */
@@ -127,6 +127,7 @@ function updateOnlineView() {
       : state.midiError ? `Web MIDI is not available: ${state.midiError}` : 'Waiting for MIDI access (the browser may ask for permission)…';
   $('offConnect').disabled = state.busy || !state.access;
   $('offConnect').hidden = !!state.connecting;
+  $('offDemo').hidden = !!state.connecting || state.demo;
   if (!ready && state.tab !== 'sniffer') $('offlineScreen').hidden = false;
   else $('offlineScreen').hidden = true;
 }
@@ -3837,6 +3838,15 @@ async function init() {
   showTab(['edit', 'backup', 'files', 'global', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
   $('connectBtn').onclick = () => connect(false);
   $('offConnect').onclick = () => (state.dev ? null : connect(false));
+  // demo: reload with the simulated pedal ("?demo"); exit: reload without it
+  const reloadWith = (demo) => {
+    const u = new URL(location.href);
+    if (demo) u.searchParams.set('demo', '');
+    else u.searchParams.delete('demo');
+    location.href = u.toString().replace(/demo=(&|#|$)/, 'demo$1');
+  };
+  $('offDemo').onclick = () => reloadWith(true);
+  $('demoExit').onclick = () => reloadWith(false);
   try { state.drumOpen = localStorage.getItem('ampero.drumOpen') === '1'; } catch { /* ignore */ }
   $('drumToggle').onclick = () => setDrumOpen(!state.drumOpen);
   // double-click the current preset (sidebar box or the editor's title) to rename it
@@ -3960,8 +3970,12 @@ async function init() {
     else log('Effect database (data/algorithms.json) not loaded – showing modules only.');
   });
   try {
-    // "?sim": simulated pedal for testing without hardware (test/sim.js)
-    if (new URLSearchParams(location.search).has('sim')) await (await import('../test/sim.js')).install();
+    // "?sim": simulated pedal for testing without hardware (test/sim.js); "?demo": the same for visitors, with a banner
+    const q = new URLSearchParams(location.search);
+    state.demo = q.has('demo');
+    if (q.has('sim') || state.demo) await (await import('../test/sim.js')).install();
+    $('demoBanner').hidden = !state.demo;
+    document.body.classList.toggle('demo', state.demo);
     state.access = await requestMidi();
     fillPorts();
     sniffer.fillInputs();

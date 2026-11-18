@@ -31,6 +31,11 @@
     </div>
   </header>
 
+  <div id="demoBanner" class="demo-banner" hidden>
+    <b>DEMO</b> – a simulated Ampero II Stomp: everything works, but nothing reaches a real pedal and changes are lost on reload.
+    <button id="demoExit" class="small-btn">Exit demo</button>
+  </div>
+
   <div id="otherHostNotice" class="notice warn-banner" hidden>
     <div><b>The Hotone software (or another program) is talking to the pedal.</b><br>
       This app is now quiet – no automatic refresh, no reading or writing – because the Hotone software can crash
@@ -48,6 +53,7 @@
         <p id="offText" class="muted">Connect the pedal with USB and close the Hotone software – the Ampero is connected
           automatically when it is found.</p>
         <button id="offConnect" class="primary">Connect</button>
+        <button id="offDemo" class="demo-btn" title="try the editor with a simulated pedal – nothing is sent to a real Ampero">Try the demo</button>
         <p class="muted small">Needs a browser with Web MIDI (Chrome, Edge, Brave, Firefox with SysEx permission).
           Ports can be chosen by hand with ⚙.</p>
       </div>

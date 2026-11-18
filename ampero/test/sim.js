@@ -31,6 +31,8 @@ export async function install() {
   };
   const preset = (i) => presets.get(i) ?? fallback;
   const globals = new Map(Object.entries(data.globals ?? {}).map(([k, h]) => [+k, unhex(h)]));
+  // drum machine (group 0x000A): sync, volume, u16 BPM, rhythm, play, 2 more bytes – as the real pedal answers
+  if (!globals.has(0x000a0000)) globals.set(0x000a0000, Uint8Array.of(0x00, 0x26, 0x78, 0x00, 0x05, 0x00, 0x01, 0x81));
   const irNames = Array.from({ length: USER_IRS }, (_, i) => `User IR ${i + 1}`);
   const namNames = Array.from({ length: NAM_SLOTS }, (_, i) => (i === 0 ? 'Fortin Cali DI 1' : ''));
   const str = (s, n) => {
@@ -205,7 +207,11 @@ export async function install() {
         if (globals.has(cmd) && !(kind === KIND_SET)) return emit(cmd, globals.get(cmd));
         if (kind === KIND_SET && (cmd >>> 24) === 0 && (cmd & 0xffff)) { // global parameter
           const g = globals.get(cmd & 0xffff0000);
-          if (cmd >>> 16 === 3) { // global EQ
+          if (cmd >>> 16 === 0x000a && g) { // drum: own layout (BPM u16 at 2, rhythm at 4, play at 5)
+            const at = { 1: 0, 2: 1, 3: 2, 4: 4, 5: 5 }[cmd & 0xffff];
+            if (at != null) g[at] = payload[0];
+            if ((cmd & 0xffff) === 3 && payload.length > 1) g[3] = payload[1];
+          } else if (cmd >>> 16 === 3) { // global EQ
             if ((cmd & 0xffff) === 2 && g) new DataView(g.buffer).setFloat32(4 + 4 * rd32(payload, 0), new DataView(payload.buffer, payload.byteOffset).getFloat32(4, true), true);
             if ((cmd & 0xffff) === 1 && g) new DataView(g.buffer).setFloat32(0, rd32(payload, 0), true);
           } else if (g && (cmd & 0xffff) <= g.length) {

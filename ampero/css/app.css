@@ -598,3 +598,13 @@ a.version[href]:hover { color: var(--accent); }
 
 /* online / offline pill in the status bar */
 .log-head #status { margin-right: 12px; font-size: 11px; padding: 2px 8px; }
+
+/* demo mode (simulated pedal) */
+.demo-btn { background: none; border-color: var(--line); color: var(--muted); }
+.demo-btn:hover { color: var(--text); }
+.demo-banner { display: flex; align-items: center; gap: 12px; padding: 6px 18px; font-size: 13px;
+  background: repeating-linear-gradient(-45deg, #2a2140, #2a2140 12px, #251d39 12px, #251d39 24px); color: #d9ccff;
+  border-bottom: 1px solid #4a3a73; }
+.demo-banner[hidden] { display: none; }
+.demo-banner b { letter-spacing: .12em; color: #b9a2ff; }
+.demo-banner .small-btn { margin-left: auto; }
