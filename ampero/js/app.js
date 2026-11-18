@@ -28,6 +28,7 @@ let sniffer = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = {
+  fsFollow: false, // footswitch assignments move with a dragged block (option in the footswitch panel)
   access: null,
   dev: null,
   model: '', // from the MIDI port name
@@ -1103,7 +1104,19 @@ function renderFs(raw, chain) {
   box.hidden = !fs;
   if (!fs) return;
   const live = canTalk();
-  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), el('div', 'fs-title', '"Effect slots": the footswitch switches the blocks selected below'));
+  // option: when a block is moved, its footswitch assignment moves with it (the pedal itself keeps it at the position)
+  const follow = el('label', 'fs-follow small');
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = state.fsFollow;
+  cb.onchange = () => {
+    state.fsFollow = cb.checked;
+    try { localStorage.setItem('ampero.fsFollow', cb.checked ? '1' : '0'); } catch { /* ignore */ }
+  };
+  follow.append(cb, ' footswitches move with the block');
+  follow.title = 'off (like the pedal and the Hotone editor): a footswitch switches a position – a moved block leaves its ' +
+    'footswitch behind. On: when you drag a block, its footswitch assignment is moved to the new position.';
+  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), el('div', 'fs-title', '"Effect slots": the footswitch switches the blocks selected below'), follow);
   for (let f = 0; f < 3; f++) {
     const b = el('div', 'fs-box');
     const head = el('div', 'fs-head');
@@ -1552,14 +1565,32 @@ async function removeBlock(slot) {
 }
 
 async function swapPositions(a, b) {
-  let seq;
+  let seq, moved = [], click;
   if (!editPreset((raw) => {
     seq = presetSeq(raw);
     [seq[a], seq[b]] = [seq[b], seq[a]];
-    return setPresetSeq(raw, seq);
+    let r = setPresetSeq(raw, seq);
+    if (state.fsFollow) {
+      // the assignment is per position: swap the two positions in the table of every footswitch that has them
+      for (let f = 0; f < 3; f++) {
+        const on = presetFsSlots(r, f);
+        if (on[a] === on[b]) continue;
+        r = setPresetFsSlot(r, f, a, on[b]);
+        r = setPresetFsSlot(r, f, b, on[a]);
+        moved.push(f);
+      }
+      click = presetFs(r).click;
+    }
+    return r;
   })) return;
   renderEditor();
   await state.dev.send(CMD.REORDER, reorderPayload(seq));
+  if (!moved.length) return;
+  // like the Hotone editor after an assignment: the table of the footswitch, then the functions
+  const raw = state.presets.get(state.current);
+  for (const f of moved) await state.dev.send(FS_SLOTS_SET, fsSlotsPayload(f, presetFsSlots(raw, f)));
+  await state.dev.send(FS_SET, Uint8Array.from(click));
+  log(`footswitch ${moved.map((f) => `FS${f + 1}`).join(', ')} moved with the block`);
 }
 
 /** The pedal reports the new contents of a slot after SET_ALG: take its parameters (all scenes). */
@@ -2821,6 +2852,7 @@ async function init() {
   });
   try {
     localStorage.removeItem('ampero.scenes45'); // the experimental scenes 4/5 option was removed (crashes the Stomp)
+    state.fsFollow = localStorage.getItem('ampero.fsFollow') === '1';
   } catch { /* ignore */ }
   $('edSave').onclick = savePreset;
   $('edStyleSel').onchange = () => setStyleSlot(state.current, $('edStyleSel').value);

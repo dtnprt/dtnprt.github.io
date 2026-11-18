@@ -291,6 +291,7 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fs-box .fs-head { display: flex; align-items: center; gap: 8px; }
 .fs-box .fs-head b { width: 34px; }
 .fs-box .fs-hold { color: var(--muted); font-size: 12px; }
+.fs-follow { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
 .midi-box summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .midi-box.patch { border-top: 1px solid #262626; padding-top: 8px; }
 .midi-row { display: grid; grid-template-columns: 12px 64px 1fr 52px; gap: 4px; align-items: center; margin-top: 4px; }
