@@ -2654,7 +2654,7 @@ function renderDrum() {
   const d = drumValues();
   const live = canTalk() && !!d;
   const name = d && d.style != null ? DRUM_STYLES[d.style] ?? `rhythm ${d.style + 1}` : '';
-  $('drumSum').textContent = d ? `${d.play ? '■ ' : ''}${name} · ${d.bpm}` : 'Drum';
+  $('drumSum').textContent = d ? `${name} · ${d.bpm}` : 'Drum'; // playing: shown by the colour / ♩ only (fixed width)
   $('drumToggle').classList.toggle('playing', !!d?.play);
   $('drumToggle').classList.toggle('on', !!state.drumOpen);
   const box = $('edDrum');

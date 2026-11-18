@@ -561,8 +561,12 @@ a.version[href]:hover { color: var(--accent); }
 .node-ghost.bad { border-color: var(--red); background: rgba(229, 72, 77, .35); }
 
 /* drum machine on the edit page */
-.drum-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 260px; }
-.drum-toggle #drumSum { overflow: hidden; text-overflow: ellipsis; }
+/* fixed width: the text (rhythm · BPM) changes and must not push the BPM / volume sliders around */
+.drum-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; width: 210px; flex: none; }
+.drum-toggle #drumSum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; font-variant-numeric: tabular-nums; }
+.drum-toggle.playing .drum-ic { animation: drum-beat .5s ease-in-out infinite alternate; }
+@keyframes drum-beat { to { transform: scale(1.35); } }
+@media (prefers-reduced-motion: reduce) { .drum-toggle.playing .drum-ic { animation: none; } }
 .drum-toggle.on { border-color: var(--accent); }
 .drum-toggle.playing { color: var(--accent); }
 .drum-toggle .drum-ic { font-size: 16px; line-height: 1; }
