@@ -1182,7 +1182,7 @@ function renderFs(raw, chain) {
   sel.disabled = !live;
   sel.onchange = () => setFsFunction(f, +sel.value);
   const head = el('div', 'fs-head');
-  head.append(el('b', '', `FS${f + 1}`), sel);
+  head.append(sel); // which footswitch: the selected button above
   b.append(head);
   if (fs.hold[f] !== 0xff) b.append(el('span', 'fs-hold', `hold: ${fsFunctionName(fs.hold[f])} (not editable yet)`));
   if (isCtrlFunction(fs.click[f])) {
