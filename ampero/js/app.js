@@ -3825,10 +3825,6 @@ async function init() {
     e.preventDefault();
     showAbout();
   };
-  $('infoLink').onclick = (e) => {
-    e.preventDefault();
-    showTab('about');
-  };
   $('infoDisclaimer').onclick = (e) => {
     e.preventDefault();
     showAbout();
