@@ -46,6 +46,11 @@ export async function install() {
     log.push({ t: performance.now(), cmd, kind, payload });
     console.debug(`[sim] ${kind === KIND_SET ? 'set' : 'get'} ${hex32(cmd)} ${payload.length} B`);
     const get = kind !== KIND_SET;
+    // like the pedal: block structure changes only in scene 1 (the Stomp crashed when a block was added in scene 2)
+    if ((cmd === CMD.SET_ALG || cmd === CMD.REORDER || cmd === 0x02000003) && scene !== 0) {
+      console.error(`SIM: ${cmd.toString(16)} sent in scene ${scene + 1} – the pedal would crash`);
+      globalThis.simCrash = (globalThis.simCrash ?? 0) + 1;
+    }
     switch (cmd) {
       case CMD.CONNECT: // like the pedal: it reports its firmware version by itself a little later
         setTimeout(() => emit(CMD.FIRMWARE_VERSION, new TextEncoder().encode('V2.5.0\0\0\0\0\0\0')), 1400);

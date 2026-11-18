@@ -337,7 +337,7 @@ function onNotify({ cmd, payload }) {
   if (cmd === CMD.CURRENT_PRESET && payload.length >= 4) {
     setCurrent(rd32(payload, 0), state.scene);
   } else if (cmd === CMD.CURRENT_SCENE && payload.length >= 1) {
-    setCurrent(state.current, payload[0]);
+    if (!state.sceneHop) setCurrent(state.current, payload[0]); // not while a block change hops to scene 1
   }
   // Something was stored or changed by another program (the pedal forwards other hosts' set commands and
   // acknowledgements): read the names again soon.
@@ -491,7 +491,7 @@ async function refreshCurrent() {
   if (!dev) return;
   const index = await dev.currentPreset();
   const scene = await dev.currentScene().catch(() => -1);
-  setCurrent(index, scene);
+  if (!state.sceneHop) setCurrent(index, scene);
 }
 
 async function refreshNames() {
@@ -922,7 +922,8 @@ async function selectTemplate(id, mode, name) {
   if (!editPreset((raw) => (mode ? applyTemplate(raw, mode) : raw))) return;
   renderEditor();
   state.templateData = false;
-  await state.dev.send(TEMPLATE.SELECT, u32Payload(id));
+  // the chain structure changes: like block changes only in scene 1
+  if (!(await inScene1('chain template', (dev) => dev.send(TEMPLATE.SELECT, u32Payload(id))))) return;
   log(`chain template: ${mode ? mode.name : `user "${name}"`}`);
   if (mode) return;
   // a user template's routing is only known to the pedal: take it from the template data it reports
@@ -1556,6 +1557,47 @@ async function toggleOn(slot) {
   await state.dev.send(CMD.SLOT_ON, slotOnPayload(scene, on));
 }
 
+// ------------------------------------------------------------------ block changes only in scene 1
+//
+// Inserting, replacing, deleting and moving blocks is only allowed in scene 1: the pedal and the Hotone editor forbid
+// it in scenes 2/3, and inserting a block while the Stomp was in scene 2 crashed it. The editor may show any scene;
+// for such a change it switches the pedal to scene 1, checks that it is there, sends the change and switches back.
+
+/** Select scene 1 on the pedal and make sure it is there (throws otherwise). */
+async function pedalToScene1(dev) {
+  await dev.selectScene(0);
+  await dev.waitQuiet(150, 1500);
+  const now = await dev.currentScene();
+  if (now !== 0) throw new Error(`the pedal did not switch to scene 1 (it reports scene ${now + 1}) – nothing sent`);
+}
+
+/** Run `send(dev)` with the pedal in scene 1, then return to the scene shown in the editor. */
+async function inScene1(what, send) {
+  const dev = state.dev;
+  const back = editScene();
+  state.busy = true;
+  state.sceneHop = true;
+  updateButtons();
+  try {
+    if (back !== 0) await pedalToScene1(dev);
+    await send(dev);
+    return true;
+  } catch (e) {
+    log(`${what}: ${e.message}`);
+    return false;
+  } finally {
+    if (back !== 0) {
+      try {
+        await dev.waitQuiet(150, 1500);
+        await dev.selectScene(back);
+      } catch { /* ignore */ }
+    }
+    state.sceneHop = false;
+    state.busy = false;
+    updateButtons();
+  }
+}
+
 async function setBlockAlg(slot, category, code, wasEmpty) {
   const a = algInfo(code);
   const params = [];
@@ -1570,8 +1612,9 @@ async function setBlockAlg(slot, category, code, wasEmpty) {
   })) return;
   state.selSlot = slot;
   renderEditor();
-  await state.dev.send(CMD.SET_ALG, setAlgPayload(slot, category, code, on));
-  log(`slot ${slot + 1}: ${a?.name ?? hex32(code)}`);
+  if (await inScene1('change block', (dev) => dev.send(CMD.SET_ALG, setAlgPayload(slot, category, code, on)))) {
+    log(`slot ${slot + 1}: ${a?.name ?? hex32(code)}${editScene() ? ' (sent in scene 1)' : ''}`);
+  }
 }
 
 /**
@@ -1592,7 +1635,9 @@ async function restoreBlock(slot, block) {
   renderEditor();
   try {
     const dev = state.dev;
-    await dev.send(CMD.SET_ALG, setAlgPayload(slot, block.category, block.code, block.on[Math.min(scene, block.on.length - 1)]));
+    state.sceneHop = true;
+    await pedalToScene1(dev); // block changes only in scene 1 (see inScene1)
+    await dev.send(CMD.SET_ALG, setAlgPayload(slot, block.category, block.code, block.on[0]));
     await dev.waitQuiet(150, 1500);
     const nScenes = presetSceneCount(state.presets.get(state.current));
     for (let s = 0; s < nScenes; s++) {
@@ -1607,6 +1652,8 @@ async function restoreBlock(slot, block) {
     log(`restore block: ${e.message}`);
   } finally {
     await state.dev?.waitQuiet(150, 1500);
+    if (state.dev && editScene() !== 0) await state.dev.selectScene(editScene()).catch(() => {});
+    state.sceneHop = false;
     state.restoring = -1;
     state.busy = false;
     updateButtons();
@@ -1622,8 +1669,9 @@ async function removeBlock(slot) {
   })) return;
   renderEditor();
   // what the Hotone app sends (deleteSlotData) – not confirmed by a capture yet
-  await state.dev.send(CMD.SET_ALG, setAlgPayload(slot, 0xff, EMPTY_ALG, false));
-  log(`slot ${slot + 1}: deleted`);
+  if (await inScene1('delete block', (dev) => dev.send(CMD.SET_ALG, setAlgPayload(slot, 0xff, EMPTY_ALG, false)))) {
+    log(`slot ${slot + 1}: deleted`);
+  }
 }
 
 async function swapPositions(a, b) {
@@ -1646,13 +1694,15 @@ async function swapPositions(a, b) {
     return r;
   })) return;
   renderEditor();
-  await state.dev.send(CMD.REORDER, reorderPayload(seq));
-  if (!moved.length) return;
-  // like the Hotone editor after an assignment: the table of the footswitch, then the functions
   const raw = state.presets.get(state.current);
-  for (const f of moved) await state.dev.send(FS_SLOTS_SET, fsSlotsPayload(f, presetFsSlots(raw, f)));
-  await state.dev.send(FS_SET, Uint8Array.from(click));
-  log(`footswitch ${moved.map((f) => `FS${f + 1}`).join(', ')} moved with the block`);
+  await inScene1('move block', async (dev) => {
+    await dev.send(CMD.REORDER, reorderPayload(seq));
+    if (!moved.length) return;
+    // like the Hotone editor after an assignment: the table of the footswitch, then the functions
+    for (const f of moved) await dev.send(FS_SLOTS_SET, fsSlotsPayload(f, presetFsSlots(raw, f)));
+    await dev.send(FS_SET, Uint8Array.from(click));
+    log(`footswitch ${moved.map((f) => `FS${f + 1}`).join(', ')} moved with the block`);
+  });
 }
 
 /** The pedal reports the new contents of a slot after SET_ALG: take its parameters (all scenes). */
