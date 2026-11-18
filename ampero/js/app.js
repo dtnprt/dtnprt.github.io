@@ -343,8 +343,10 @@ function onNotify({ cmd, payload }) {
       ((cmd >>> 24) === 0x01 && (cmd & 0xffff) === 0x0001)) {
     state.namesDue = Math.min(state.namesDue, performance.now() + 300);
   }
-  if (OTHER_HOST_SIGNS.has(cmd) || ((cmd >>> 24) === 0x01 && (cmd & 0xffff) === 0x0001) ||
-      (cmd === CMD.WRITE_ACK && !state.busy)) {
+  // edits made on the pedal itself (footswitch assignment, functions, order) arrive with the same commands as an
+  // editor's set commands – apply them, they are no sign of another program
+  if (!state.dev?.askedRecently(cmd)) applyPedalEdit(cmd, payload);
+  if (OTHER_HOST_SIGNS.has(cmd) || (cmd === CMD.WRITE_ACK && !state.busy)) {
     otherHostDetected(cmd);
   }
   if (cmd === CMD.CURRENT_SCENE || cmd === CMD.CURRENT_PRESET || cmd === CMD.PRESET_CHANGED ||
@@ -354,6 +356,28 @@ function onNotify({ cmd, payload }) {
   if (n === 1 || n === 10 || n === 100 || n % 1000 === 0) {
     log(`device message ${hex32(cmd)} (${payload.length} bytes)${n > 1 ? ` – ${n}x so far` : ''}`);
   }
+}
+
+/** Apply an edit the pedal reports (made on the pedal) to the cached current preset. */
+function applyPedalEdit(cmd, p) {
+  const raw = state.presets.get(state.current);
+  if (!raw) return;
+  let next = null;
+  try {
+    if (cmd === FS_SLOTS_SET && p.length >= 13 && p[0] < 3) {
+      next = raw;
+      for (let s = 0; s < 12; s++) next = setPresetFsSlot(next, p[0], s, p[1 + s] === 1);
+    } else if (cmd === FS_SET && p.length >= 3) {
+      next = raw;
+      for (let f = 0; f < 3; f++) next = setPresetFsClick(next, f, p[f]);
+    } else if (cmd === CMD.REORDER && p.length >= 12) {
+      next = setPresetSeq(raw, Array.from(p.subarray(0, 12)));
+    }
+  } catch { /* ignore */ }
+  if (!next) return;
+  state.presets.set(state.current, next);
+  log(`changed on the pedal: ${hex32(cmd)} ${Array.from(p.subarray(0, 13), (b) => b.toString(16).padStart(2, '0')).join(' ')}`);
+  if (!state.dragging) renderEditor();
 }
 
 // ------------------------------------------------------------------ other program on the pedal
