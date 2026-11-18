@@ -279,6 +279,7 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fx .fx-pos { position: absolute; top: 2px; left: 3px; font-size: 9px; color: #888; font-weight: 600; }
 .fx .fx-fs { position: absolute; bottom: 2px; left: 3px; display: flex; gap: 2px; }
 .fx .fx-fs span { font-size: 8px; font-weight: 700; line-height: 1; padding: 1px 2px; border-radius: 2px; background: var(--accent-dim); color: #fff; }
+.fx .fx-fs span.cur { background: #fff; color: #000; font-size: 9px; padding: 1px 3px; }
 .port-sel { display: inline-flex; gap: 6px; }
 .port-sel[hidden] { display: none; }
 .style-sel { font-size: 12px; }
@@ -300,7 +301,8 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fs-grid button .fs-pos { color: var(--muted); font-size: 9px; }
 .fs-grid button.empty { color: #666; }
 .fs-grid button.on { border-color: var(--accent); color: var(--accent); background: rgba(245, 166, 35, .12); }
-.fx.fs-mark { outline: 2px dashed #fff; outline-offset: 4px; }
+.fx.fs-mark { background: #34302a; }
+.fx.empty.fs-mark { border-style: dashed; border-color: var(--accent); }
 .fs-follow { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
 .midi-box summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .midi-box.patch { border-top: 1px solid #262626; padding-top: 8px; }

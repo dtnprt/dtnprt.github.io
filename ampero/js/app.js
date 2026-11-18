@@ -817,6 +817,8 @@ function renderEditor() {
   const box = (c) => {
     if (!c || c.code === 0xffffffff) {
       const e = el('div', `fx empty${c && c.slot === state.selSlot ? ' sel' : ''}${c && fsMarked(raw, c.pos) ? ' fs-mark' : ''}`, '+');
+      const badges = c && raw ? fsBadges(raw, c.pos) : null;
+      if (badges) e.append(badges);
       if (c && raw) {
         e.title = `empty position ${c.pos + 1} – click to insert a block, or drop one here`;
         e.onclick = () => {
@@ -864,17 +866,13 @@ function renderEditor() {
     }
     const pos = `${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1}`;
     b.append(el('span', 'fx-label', mod), icon, dot, el('span', 'fx-pos', pos));
-    const fsOf = fsAssignments(raw, c.pos);
-    if (fsOf.length) {
-      const f = el('span', 'fx-fs');
-      for (const n of fsOf) f.append(el('span', '', `FS${n}`));
-      b.append(f);
-    }
+    const badges = fsBadges(raw, c.pos);
+    if (badges) b.append(badges);
     const shown = blockName(c.code, alg);
     if (shown) b.append(el('span', 'fx-name', shown));
     b.title = `${pos} · ${shown || mod}${alg && shown !== alg.name ? ` (${alg.name})` : ''} (${mod}) – slot ${c.slot + 1}, algorithm ` +
       `0x${c.code.toString(16).padStart(8, '0')}, ${on ? 'on' : 'off'} in scene ${scene + 1}` +
-      `${fsOf.length ? `, switched by ${fsOf.map((n) => `FS${n}`).join(' + ')}` : ''}`;
+      `${fsAssignments(raw, c.pos).length ? `, switched by ${fsAssignments(raw, c.pos).map((n) => `FS${n}`).join(' + ')}` : ''}`;
     return b;
   };
   const nodes = (target, k) => {
@@ -1058,6 +1056,22 @@ function fsMarked(raw, pos) {
   }
 }
 
+/** "FS n" badges of a chain position; the footswitch selected in the footswitch panel is highlighted. */
+function fsBadges(raw, pos) {
+  const fsOf = fsAssignments(raw, pos);
+  if (!fsOf.length) return null;
+  const f = document.createElement('span');
+  f.className = 'fx-fs';
+  for (const n of fsOf) {
+    const s = document.createElement('span');
+    s.textContent = `FS${n}`;
+    if (n - 1 === state.selFs) s.className = 'cur';
+    s.title = `switched by FS${n}`;
+    f.append(s);
+  }
+  return f;
+}
+
 /** Footswitches (1..3) that switch chain position pos (the assignment is per position, not per slot). */
 function fsAssignments(raw, pos) {
   if (!raw) return [];
@@ -1172,7 +1186,7 @@ function renderFs(raw, chain) {
   b.append(head);
   if (fs.hold[f] !== 0xff) b.append(el('span', 'fs-hold', `hold: ${fsFunctionName(fs.hold[f])} (not editable yet)`));
   if (isCtrlFunction(fs.click[f])) {
-    b.append(el('div', 'fs-title', 'Switches the positions marked in the chain – click to (un)assign:'));
+    b.append(el('div', 'fs-title', `Switches the blocks marked "FS${f + 1}" (white) in the chain – click a position to (un)assign:`));
     // the assignment belongs to the chain position (a moved block leaves it behind, like on the pedal)
     const on = presetFsSlots(raw, f);
     const grid = el('div', 'fs-grid');
