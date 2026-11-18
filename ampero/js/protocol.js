@@ -445,6 +445,23 @@ export function applyRoutingPush(raw, p) {
   return out;
 }
 
+// Moving the split / mixer node (captures/wine-split-mix-nodes-2026-11-18.txt): the Hotone editor always sends both,
+// 0x01050005 u32 split position, then 0x01050006 u32 mixer position (0..6 = before row-1 position k, 6 = end;
+// 0xFFFFFFFF = no node); the pedal answers with the routing push 0x0105000b (it may change the I/O sources itself,
+// e.g. Serial with the split moved left becomes a Y split). Seen: Split -> Mix with split < mix (also adjacent),
+// Y -> A/B and Serial with split 3..6.
+export const NODE = { SPLIT: 0x01050005, MIX: 0x01050006, NONE: 0xffffffff };
+
+export const nodePayload = (k) => u32le(k == null ? NODE.NONE : k);
+
+/** Copy of the preset with the split / mixer node at k (null = no node). */
+export function setPresetNodes(raw, split, merge) {
+  const out = raw.slice(), o = tagOffset(raw, 6);
+  out[o + 456] = split == null ? 0xff : split;
+  out[o + 457] = merge == null ? 0xff : merge;
+  return out;
+}
+
 /** Copy of the preset with a split (CMD.SPLIT_PARAM) or mixer (CMD.MIX_PARAM) node parameter. */
 export function applyNodeParam(raw, cmd, p) {
   if (p.length < 8) return raw;

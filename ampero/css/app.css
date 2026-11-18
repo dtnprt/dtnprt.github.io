@@ -551,3 +551,11 @@ a.version[href]:hover { color: var(--accent); }
 .info-list { margin: 0 0 10px; padding-left: 18px; color: #ccc; line-height: 1.45; }
 .info-list li { margin-bottom: 4px; }
 .about-text a { color: var(--accent); }
+
+/* split / mixer node: draggable along row 1 */
+.node.movable { cursor: grab; touch-action: none; background: var(--bg); }
+.node.movable:hover { box-shadow: 0 0 0 3px rgba(245, 166, 35, .35); }
+.node.dragging { opacity: .35; }
+.node-ghost { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+  border: 2px solid var(--accent); background: rgba(245, 166, 35, .35); pointer-events: none; z-index: 5; }
+.node-ghost.bad { border-color: var(--red); background: rgba(229, 72, 77, .35); }

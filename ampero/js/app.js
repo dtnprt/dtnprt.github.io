@@ -14,6 +14,7 @@ import {
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
   QKNOB, presetQuickKnobs, setPresetQuickKnob, qknobPayload,
   EXP, presetExpTargets, setPresetExpTarget, expTargetPayload, expRangePayload,
+  NODE, nodePayload, setPresetNodes,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -966,9 +967,21 @@ function renderEditor() {
       `${fsAssignments(raw, c.pos).length ? `, switched by ${fsAssignments(raw, c.pos).map((n) => `FS${n}`).join(' + ')}` : ''}`;
     return b;
   };
+  // split / mixer node: drag it along row 1 to another gap (like in the Hotone editor)
   const nodes = (target, k) => {
-    if (split === k) target.append(el('span', 'chain-link'), el('span', 'node split'));
-    if (merge === k) target.append(el('span', 'chain-link'), el('span', 'node merge'));
+    for (const kind of ['split', 'merge']) {
+      if ((kind === 'split' ? split : merge) !== k) continue;
+      const n = el('span', `node ${kind}`);
+      const movable = kind === 'split' || split !== null; // mixer alone (A/B -> Y): not captured yet
+      if (movable && rt) {
+        n.classList.add('movable');
+        n.title = `${kind === 'split' ? 'Split' : 'Mix'} node – drag it along the upper row to move it`;
+        n.onpointerdown = (e) => dragNode(e, n, kind, split, merge);
+      } else {
+        n.title = 'Mix node (moving it in A/B → Y is not supported yet)';
+      }
+      target.append(el('span', 'chain-link'), n);
+    }
   };
   const rowA = $('chainRowA'), rowB = $('chainRowB');
   rowA.replaceChildren();
@@ -1962,6 +1975,67 @@ function renderParams(raw, chain) {
   panel.append(head, grid);
   body.append(panel);
   box.replaceChildren(body);
+}
+
+// ------------------------------------------------------------------ moving the split / mixer node
+
+/** Is (split, merge) a combination the Hotone editor produced (see protocol.js NODE)? */
+function nodesValid(split, merge) {
+  if (split !== null && merge !== null) return split >= 0 && split <= 5 && merge > split && merge <= 6;
+  if (split !== null) return split >= 0 && split <= 6;
+  return false;
+}
+
+/** Drag a node along row 1; drop on a gap (0..6 = before block k / end). */
+function dragNode(e, node, kind, split, merge) {
+  if (!canTalk() || !sceneEditable()) return;
+  e.preventDefault();
+  e.stopPropagation();
+  node.setPointerCapture(e.pointerId);
+  state.dragging = true;
+  const chainEl = $('chain'), c = chainEl.getBoundingClientRect();
+  const boxes = [...$('chainRowA').children].filter((x) => !x.classList.contains('chain-link') && !x.classList.contains('node'));
+  if (boxes.length !== 6) return;
+  const r = boxes.map((b) => b.getBoundingClientRect());
+  const gapX = (k) => (k === 0 ? r[0].left - 14 : k === 6 ? r[5].right + 14 : (r[k - 1].right + r[k].left) / 2);
+  const y = node.getBoundingClientRect().top + node.offsetHeight / 2 - c.top;
+  const ghost = Object.assign(document.createElement('span'), { className: 'node-ghost' });
+  chainEl.append(ghost);
+  node.classList.add('dragging');
+  let target = kind === 'split' ? split : merge;
+  const place = (x) => {
+    let best = 0;
+    for (let k = 1; k <= 6; k++) if (Math.abs(gapX(k) - x) < Math.abs(gapX(best) - x)) best = k;
+    target = best;
+    const ok = kind === 'split' ? nodesValid(best, merge) : nodesValid(split, best);
+    ghost.classList.toggle('bad', !ok);
+    ghost.style.left = `${gapX(best) - c.left}px`;
+    ghost.style.top = `${y}px`;
+    ghost.title = ok ? '' : 'not possible here';
+  };
+  place(e.clientX);
+  node.onpointermove = (m) => place(m.clientX);
+  node.onpointerup = node.onpointercancel = (u) => {
+    node.onpointermove = node.onpointerup = node.onpointercancel = null;
+    state.dragging = false;
+    ghost.remove();
+    node.classList.remove('dragging');
+    const ns = kind === 'split' ? target : split, nm = kind === 'split' ? merge : target;
+    if (u.type === 'pointerup' && (ns !== split || nm !== merge) && nodesValid(ns, nm)) moveNodes(ns, nm);
+    else renderEditor();
+  };
+}
+
+/** Send the new node positions like the Hotone editor (split, then mixer), in scene 1; the pedal's routing push
+ * (handled in onNotify) then brings the I/O sources it changed itself. */
+async function moveNodes(split, merge) {
+  if (!editPreset((r) => setPresetNodes(r, split, merge))) return;
+  renderEditor();
+  const at = (k) => (k === null ? 'none' : k === 6 ? 'end' : `before ${k + 1}`);
+  if (await inScene1('move node', async (dev) => {
+    await dev.send(NODE.SPLIT, nodePayload(split));
+    await dev.send(NODE.MIX, nodePayload(merge));
+  })) log(`routing: split ${at(split)}, mix ${at(merge)}`);
 }
 
 // ------------------------------------------------------------------ input / output nodes
