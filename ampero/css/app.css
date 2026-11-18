@@ -219,8 +219,7 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .editor-params { display: flex; gap: 24px; min-height: 220px; }
 .mock-modules ul { list-style: none; margin: 6px 0 0; padding: 0; columns: 2; color: #999; }
 .ed-left { width: 250px; flex: none; display: flex; flex-direction: column; gap: 12px; }
-.ed-left .modules, .ed-left .editor-fs { padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
-.ed-left .editor-fs .fs-title { font-size: 11px; margin-top: -6px; }
+.ed-left .modules { padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: #181818; }
 .fs-box + .fs-box { border-top: 1px solid #262626; padding-top: 8px; }
 .modules .hint { font-size: 11px; }
 .modules li { cursor: pointer; border-radius: 3px; padding-left: 3px; }
@@ -284,7 +283,11 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .port-sel[hidden] { display: none; }
 .style-sel { font-size: 12px; }
 /* footswitches of the preset */
-.editor-fs { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.editor-fs { display: flex; flex-direction: row; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.editor-fs .fs-left { width: 240px; flex: none; border-right: 1px solid var(--line); padding-right: 16px; }
+.editor-fs .fs-box { flex: 1 1 360px; max-width: 560px; }
+.editor-fs .midi-box.patch { flex: 1 1 300px; max-width: 420px; border-top: 0; padding-top: 0; }
+.editor-fs .fs-title { font-size: 12px; }
 .editor-fs[hidden] { display: none; }
 .editor-fs .fs-title { width: 100%; color: var(--muted); font-size: 12px; }
 .fs-box { display: flex; flex-direction: column; gap: 5px; }

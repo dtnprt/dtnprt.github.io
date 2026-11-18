@@ -1163,7 +1163,9 @@ function renderFs(raw, chain) {
     };
     picks.append(b);
   }
-  box.replaceChildren(el('div', 'muted small', 'Footswitches (stomp mode)'), picks);
+  const left = el('div', 'fs-left');
+  left.append(el('div', 'muted small', 'Footswitches (stomp mode)'), picks);
+  box.replaceChildren(left);
 
   const f = sf;
   const b = el('div', 'fs-box');
