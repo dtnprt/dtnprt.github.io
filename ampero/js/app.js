@@ -865,9 +865,12 @@ function renderEditor() {
   const live = !!sv && canTalk();
   $('edTempo').disabled = $('edVolume').disabled = !live;
   markDirty();
-  if (document.activeElement !== $('edTempo')) $('edTempo').value = sv ? sv.tempo : '';
+  if (document.activeElement !== $('edTempo')) $('edTempo').value = sv ? sv.tempo : 120;
   if (document.activeElement !== $('edVolume')) $('edVolume').value = sv ? sv.volume : 0;
+  if (!$('edTempoVal').querySelector('input')) $('edTempoVal').textContent = sv ? $('edTempo').value : '';
   $('edVolumeVal').textContent = sv ? $('edVolume').value : '';
+  sliderFill($('edTempo'));
+  sliderFill($('edVolume'));
   let chain = [];
   try {
     chain = raw ? presetChain(raw) : [];
@@ -1217,6 +1220,38 @@ function sliderFill(r) {
   r.style.setProperty('--fill', `${((+r.value - min) / (max - min || 1)) * 100}%`);
 }
 const fillRanges = () => document.querySelectorAll('input[type=range]').forEach(sliderFill);
+
+/**
+ * Value next to a slider that can be typed in: double-click turns it into a number field (Enter / leaving it
+ * applies, Esc cancels). commit(v) gets the value clamped to lo..hi and rounded.
+ */
+function typeableValue(span, lo, hi, current, commit) {
+  span.classList.add('tap-edit');
+  span.ondblclick = (e) => {
+    e.preventDefault();
+    if (span.querySelector('input') || span.closest('label')?.querySelector('input[type=range]')?.disabled) return;
+    const old = span.textContent;
+    const inp = Object.assign(document.createElement('input'), { type: 'number', min: lo, max: hi, step: 1, value: current() });
+    inp.className = 'tap-input';
+    span.replaceChildren(inp);
+    inp.focus();
+    inp.select();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      const v = Math.round(+inp.value);
+      span.textContent = old;
+      if (ok && Number.isFinite(v)) commit(Math.max(lo, Math.min(hi, v)));
+    };
+    inp.onkeydown = (k) => {
+      if (k.key === 'Enter') finish(true);
+      else if (k.key === 'Escape') finish(false);
+      k.stopPropagation();
+    };
+    inp.onblur = () => finish(true);
+  };
+}
 document.addEventListener('input', (e) => {
   if (e.target.matches?.('input[type=range]')) sliderFill(e.target);
 });
@@ -2642,12 +2677,15 @@ function renderDrum() {
   style.value = String(d.style);
   style.disabled = !live;
   style.onchange = () => set(DRUM.STYLE, +style.value);
-  const slider = (label, addr, lo, hi, value, unit, off = false) => {
+  const slider = (label, addr, lo, hi, value, unit, off = false, typeable = false) => {
     const w = el('label', 'drum-slider');
     const r = el('input');
     Object.assign(r, { type: 'range', min: lo, max: hi, step: 1, value, disabled: !live || off });
     const val = el('span', 'drum-val', `${value}${unit}`);
-    r.oninput = () => { val.textContent = `${r.value}${unit}`; };
+    r.oninput = () => {
+      val.textContent = `${r.value}${unit}`;
+      sliderFill(r); // also after wheel steps (no input event)
+    };
     r.onchange = () => set(addr, +r.value);
     // mouse wheel: ±1 (Shift ±10), handy while playing
     r.onwheel = (e) => {
@@ -2661,6 +2699,15 @@ function renderDrum() {
       r.timer = setTimeout(() => set(addr, v), 250);
     };
     w.append(el('span', 'muted small', label), r, val);
+    sliderFill(r);
+    if (typeable) {
+      val.title = `double-click to type the ${label}`;
+      typeableValue(val, lo, hi, () => +r.value, (v) => {
+        r.value = v;
+        r.oninput();
+        set(addr, v);
+      });
+    }
     if (off) w.title = 'Drum Sync is on: the BPM follows the tempo of the patch / scene';
     return w;
   };
@@ -2673,7 +2720,7 @@ function renderDrum() {
   const close = el('button', 'small-btn drum-close', '✕');
   close.title = 'hide the drum machine';
   close.onclick = () => setDrumOpen(false);
-  box.replaceChildren(play, style, slider('BPM', DRUM.BPM, 40, 300, d.bpm, '', !!d.sync), slider('Volume', DRUM.VOL, 0, 100, d.vol, ''),
+  box.replaceChildren(play, style, slider('BPM', DRUM.BPM, 40, 300, d.bpm, '', !!d.sync, true), slider('Volume', DRUM.VOL, 0, 100, d.vol, ''),
     syncW, close);
 }
 
@@ -3958,7 +4005,16 @@ async function init() {
   if (legend && window.ResizeObserver) {
     new ResizeObserver(() => document.documentElement.style.setProperty('--legend-h', `${legend.offsetHeight}px`)).observe(legend);
   }
+  $('edTempo').oninput = () => {
+    $('edTempoVal').textContent = $('edTempo').value;
+  };
   $('edTempo').onchange = () => setSceneValue('tempo', +$('edTempo').value);
+  typeableValue($('edTempoVal'), 40, 300, () => +$('edTempo').value, (v) => {
+    $('edTempo').value = v;
+    $('edTempoVal').textContent = v;
+    sliderFill($('edTempo'));
+    setSceneValue('tempo', v);
+  });
   $('edVolume').oninput = () => {
     $('edVolumeVal').textContent = $('edVolume').value;
   };

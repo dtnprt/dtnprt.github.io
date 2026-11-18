@@ -608,3 +608,9 @@ a.version[href]:hover { color: var(--accent); }
 .demo-banner[hidden] { display: none; }
 .demo-banner b { letter-spacing: .12em; color: #b9a2ff; }
 .demo-banner .small-btn { margin-left: auto; }
+
+/* value next to a slider that can be typed in (double-click) */
+.tap-edit { cursor: text; border-radius: 3px; padding: 0 2px; }
+.tap-edit:hover { background: #2a2a2a; }
+.tap-input { width: 58px; padding: 1px 4px; background: var(--panel2); border: 1px solid var(--accent); border-radius: 3px; font-variant-numeric: tabular-nums; }
+.scene-vals #edTempo { width: 130px; }
