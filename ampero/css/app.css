@@ -578,3 +578,7 @@ a.version[href]:hover { color: var(--accent); }
 .drum-val { min-width: 32px; font-variant-numeric: tabular-nums; color: #ddd; }
 .drum-sync { display: flex; align-items: center; gap: 8px; }
 .drum-close { margin-left: auto; }
+
+/* current preset name: double-click renames */
+.renamable { cursor: text; border-radius: 3px; }
+.renamable:hover { background: #2a2a2a; box-shadow: 0 0 0 3px #2a2a2a; }

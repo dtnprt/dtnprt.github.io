@@ -3793,6 +3793,20 @@ async function init() {
   $('offConnect').onclick = () => (state.dev ? null : connect(false));
   try { state.drumOpen = localStorage.getItem('ampero.drumOpen') === '1'; } catch { /* ignore */ }
   $('drumToggle').onclick = () => setDrumOpen(!state.drumOpen);
+  // double-click the current preset (sidebar box or the editor's title) to rename it
+  for (const id of ['curName', 'edName']) {
+    const n = $(id);
+    n.classList.add('renamable');
+    n.title = 'double-click to rename this preset';
+    n.ondblclick = (e) => {
+      e.preventDefault();
+      window.getSelection()?.removeAllRanges();
+      if (state.current >= 0 && canTalk()) renameSlot(state.current);
+    };
+  }
+  document.querySelector('.current-box').ondblclick = (e) => {
+    if (e.target.id !== 'curName' && state.current >= 0 && canTalk()) renameSlot(state.current);
+  };
   renderDrum();
   editorVersion().then((v) => {
     for (const a of [$('version'), $('infoVersion')]) {
