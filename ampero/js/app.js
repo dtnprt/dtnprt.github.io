@@ -1224,10 +1224,29 @@ function renderFs(raw, chain) {
       .map((c) => `${posName(c.pos)} ${c.code === 0xffffffff ? '–' : algInfo(c.code)?.module ?? ''}`);
     return list.length ? list.join(', ') : 'Effect slots: none';
   };
+  // what a footswitch switches: module icons of its positions (one block: icon + name), else the function name
+  const summaryEl = (f) => {
+    const s = el('span', 'fs-sum');
+    if (!isCtrlFunction(fs.click[f])) {
+      s.textContent = fsFunctionName(fs.click[f]);
+      return s;
+    }
+    const on = presetFsSlots(raw, f);
+    const list = chain.filter((c) => on[c.pos]).sort((x, y) => x.pos - y.pos);
+    if (!list.length) s.textContent = 'Effect slots: none';
+    for (const c of list) {
+      const a = c.code === 0xffffffff ? null : algInfo(c.code);
+      const it = el('span', 'fs-sum-it');
+      if (a) it.append(modIcon(a.module, 'fs-ic'));
+      it.append(list.length === 1 && a ? `${posName(c.pos)} ${a.name}` : posName(c.pos));
+      s.append(it);
+    }
+    return s;
+  };
   const picks = el('div', 'fs-picks');
   for (let f = 0; f < 3; f++) {
     const b = el('button', `scene fs-pick${f === sf ? ' on' : ''}`);
-    b.append(el('b', '', `FS${f + 1}`), el('span', '', summary(f)));
+    b.append(el('b', '', `FS${f + 1}`), summaryEl(f));
     b.title = summary(f);
     b.onclick = () => {
       state.selFs = f;
@@ -1236,7 +1255,7 @@ function renderFs(raw, chain) {
     picks.append(b);
   }
   const left = el('div', 'fs-left');
-  left.append(el('div', 'muted small', 'Footswitches (stomp mode)'), picks);
+  left.append(secHead('Footswitches', 'stomp mode: what FS1–FS3 do in this preset'), picks);
   box.replaceChildren(left);
 
   const f = sf;
@@ -1257,10 +1276,12 @@ function renderFs(raw, chain) {
   sel.onchange = () => setFsFunction(f, +sel.value);
   const head = el('div', 'fs-head');
   head.append(sel); // which footswitch: the selected button above
-  b.append(head);
+  b.append(secHead(`FS${f + 1}`), head);
   if (fs.hold[f] !== 0xff) b.append(el('span', 'fs-hold', `hold: ${fsFunctionName(fs.hold[f])} (not editable yet)`));
   if (isCtrlFunction(fs.click[f])) {
-    b.append(el('div', 'fs-title', `Switches the blocks marked "FS${f + 1}" (white) in the chain – click a position to (un)assign:`));
+    const hint = el('div', 'fs-title', `Positions switched by FS${f + 1} – click to (un)assign`);
+    hint.title = `the blocks are marked "FS${f + 1}" (white) in the chain`;
+    b.append(hint);
     // the assignment belongs to the chain position (a moved block leaves it behind, like on the pedal)
     const on = presetFsSlots(raw, f);
     const grid = el('div', 'fs-grid');
@@ -1268,7 +1289,7 @@ function renderFs(raw, chain) {
       const empty = c.code === 0xffffffff;
       const a = empty ? null : algInfo(c.code);
       const t = el('button', `${on[c.pos] ? 'on' : ''}${empty ? ' empty' : ''}`);
-      t.append(el('span', 'fs-pos', posName(c.pos)), el('span', '', empty ? '+' : a?.module ?? '?'));
+      t.append(el('span', 'fs-pos', posName(c.pos)), empty ? el('span', 'fs-empty', '+') : a ? modIcon(a.module, 'fs-ic') : el('span', '', '?'));
       t.title = `${posName(c.pos)} ${empty ? 'empty' : a?.name ?? ''} – click to (un)assign`;
       t.disabled = !live;
       t.onclick = () => toggleFsSlot(f, c.pos);
@@ -1305,6 +1326,20 @@ function renderFs(raw, chain) {
 
 const posName = (p) => `${p < 6 ? 'A' : 'B'}${(p % 6) + 1}`;
 
+/** Module icon in its module color (as in the chain), e.g. for footswitch and quick knob fields. */
+function modIcon(mod, cls = '') {
+  const s = Object.assign(document.createElement('span'), { className: `mi ${cls}${mod ? ` m-${mod.replace(/ /g, '-')}` : ''}` });
+  s.innerHTML = moduleIcon(mod) || moduleIcon(/^FX /.test(mod) ? 'FX LOOP' : '') || (mod ?? '').slice(0, 3);
+  return s;
+}
+
+/** Section heading inside the footswitch / quick knob / expression card (same look everywhere). */
+function secHead(text, help = '') {
+  const h = Object.assign(document.createElement('div'), { className: 'sec-h', textContent: text });
+  if (help) h.title = help;
+  return h;
+}
+
 // small line icons for the two patch functions (same style as the module icons)
 const QK_FUNC_ICONS = {
   [QKNOB.VOLUME]: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
@@ -1312,6 +1347,9 @@ const QK_FUNC_ICONS = {
   [QKNOB.TEMPO]: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
     'stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6l4 18H5z"/><path d="M12 17l5-10"/><path d="M8 17h8"/></svg>',
 };
+
+const QK_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+  'aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>';
 
 /** What quick knob target {obj, param} shows: module (icon / color), name, parameter and its value. */
 function quickKnobView(raw, chain, q) {
@@ -1350,7 +1388,7 @@ function quickKnobItems(chain, k, q) {
 function quickKnobBox(raw, chain) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
   const box = el('div', 'qk-box');
-  box.append(el('div', 'muted small', 'Quick knobs – turn a knob to change its value; click the display field to assign it (or right-click a block parameter)'));
+  box.append(secHead('Quick knobs', 'turn a knob to change its value; click the field above it to assign it (or right-click a block parameter)'));
   let knobs;
   try {
     knobs = presetQuickKnobs(raw);
@@ -1372,7 +1410,7 @@ function quickKnobBox(raw, chain) {
     // like a block in the chain: module icon (in its color), then name, parameter and value
     const cell = el('button', `qk-cell${q.obj === QKNOB.OFF ? ' off' : ''}`);
     const icon = el('span', `qk-icon mi${v.mod ? ` m-${v.mod.replace(/ /g, '-')}` : ''}`);
-    icon.innerHTML = v.icon || (q.obj === QKNOB.OFF ? '' : v.mod.slice(0, 3));
+    icon.innerHTML = v.icon || (q.obj === QKNOB.OFF ? QK_OFF_ICON : v.mod.slice(0, 3));
     cell.append(icon, el('span', 'qk-name', v.name), el('span', 'qk-label', v.param || ' '),
       el('span', 'qk-val', v.value || ' '));
     cell.title = tip;
@@ -1507,7 +1545,7 @@ function expBox(raw, chain) {
     return box;
   }
   const head = el('div', 'exp-head');
-  head.append(el('span', 'muted small', 'Expression pedal'));
+  head.append(secHead('Expression pedal'));
   for (const e of [0, 1]) {
     const b = el('button', `small-btn${e === exp ? ' on' : ''}`, `EXP${e + 1}`);
     b.onclick = () => {

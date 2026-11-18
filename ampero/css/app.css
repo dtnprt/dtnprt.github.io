@@ -288,11 +288,22 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .style-sel { font-size: 12px; }
 /* footswitches of the preset */
 .editor-fs { display: flex; flex-direction: row; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
-.editor-fs .fs-left { width: 240px; flex: none; border-right: 1px solid var(--line); padding-right: 16px; }
+.editor-fs .fs-left { width: 240px; flex: none; }
+/* every section of the card: same heading, separated by a line */
+.editor-fs > * + * { border-left: 1px solid var(--line); padding-left: 16px; }
+.sec-h { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; line-height: 22px; }
+.exp-head .sec-h { margin: 0 6px 0 0; }
+.editor-fs .midi-box.patch > summary { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; line-height: 22px; margin: 0 0 6px; }
+.fs-sum { display: flex; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.fs-sum-it { display: inline-flex; align-items: center; gap: 3px; }
+.mi.fs-ic { display: inline-flex; width: 15px; height: 15px; flex: none; }
+.mi.fs-ic svg { width: 100%; height: 100%; }
+.fs-grid .fs-empty { color: var(--muted); }
+.qk-cell.off .qk-icon { color: #3d6f99; }
 .editor-fs .fs-box { flex: 1 1 360px; max-width: 560px; }
 .editor-fs .qk-box { flex: 1 1 300px; max-width: 460px; display: flex; flex-direction: column; gap: 6px; }
 .editor-fs .exp-box { flex: 1 1 340px; max-width: 520px; display: flex; flex-direction: column; gap: 8px; }
-.exp-head { display: flex; align-items: center; gap: 6px; }
+.exp-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .exp-head .small-btn.on { border-color: var(--accent); color: var(--accent); }
 .exp-row { display: flex; flex-direction: column; gap: 4px; }
 .exp-range { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 56px; }
@@ -326,7 +337,6 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .qk-row .qk-n { width: 48px; flex: none; color: var(--muted); font-size: 12px; }
 .qk-row select { flex: 1 1 0; min-width: 0; }
 .editor-fs .midi-box.patch { flex: 1 1 300px; max-width: 420px; border-top: 0; padding-top: 0; }
-.editor-fs .fs-title { font-size: 12px; }
 .editor-fs[hidden] { display: none; }
 .editor-fs .fs-title { width: 100%; color: var(--muted); font-size: 12px; }
 .fs-box { display: flex; flex-direction: column; gap: 5px; }
@@ -335,9 +345,9 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fs-box .fs-head b { width: 34px; }
 .fs-box .fs-hold { color: var(--muted); font-size: 12px; }
 .fs-picks { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
-.fs-pick { display: flex; gap: 8px; align-items: baseline; min-width: 0; width: 100%; }
-.fs-pick span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fs-pick.on span { color: inherit; }
+.fs-pick { display: flex; gap: 8px; align-items: center; min-width: 0; width: 100%; }
+.fs-pick .fs-sum { color: var(--muted); font-size: 12px; }
+.fs-pick.on .fs-sum { color: inherit; }
 .fs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 4px 0 8px; }
 .fs-grid button { display: flex; flex-direction: column; align-items: center; padding: 2px 0; min-width: 0; font-size: 10px; line-height: 1.2; }
 .fs-grid button .fs-pos { color: var(--muted); font-size: 9px; }
