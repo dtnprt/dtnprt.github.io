@@ -116,6 +116,8 @@ export class AmperoDevice extends EventTarget {
   }
 
   _send(cmd, payload, kind) {
+    // remember when this app itself last sent cmd: answers, late answers and echoes of it are not foreign traffic
+    (this.asked ??= new Map()).set(cmd, performance.now());
     const frames = encodeTransfer(cmd, payload, kind);
     const out = (f) => {
       this._record('OUT', f);
@@ -192,7 +194,7 @@ export class AmperoDevice extends EventTarget {
 
   /** Send one request and wait for the answer with the same cmd. Requests run one after another. */
   /** True if this app itself asked for `cmd` within the last `ms` (a late / repeated answer is then not foreign). */
-  askedRecently(cmd, ms = 10000) {
+  askedRecently(cmd, ms = 20000) {
     const t = this.asked?.get(cmd);
     return t !== undefined && performance.now() - t < ms;
   }
@@ -217,6 +219,7 @@ export class AmperoDevice extends EventTarget {
 
   _requestOnce(cmd, payload, kind, timeout, answer = cmd) {
     return new Promise((resolve, reject) => {
+      (this.asked ??= new Map()).set(answer, performance.now());
       this.pending = {
         cmd: answer,
         resolve,

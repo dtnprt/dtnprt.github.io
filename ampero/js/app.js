@@ -377,6 +377,7 @@ function otherHostDetected(cmd) {
   // itself right after connecting (e.g. its firmware version)
   if (dev?.askedRecently(cmd) || !dev?.connectedAt || performance.now() - dev.connectedAt < 5000) return;
   state.otherHost = true;
+  console.warn('other host detected by', hex32(cmd), 'asked:', [...(dev?.asked ?? [])].map(([c, t]) => `${hex32(c)} ${Math.round(performance.now() - t)} ms ago`));
   log(`Another program is talking to the pedal (message ${hex32(cmd)}) – probably the Hotone software. ` +
     'Automatic refresh and all reading/writing are paused so it is not disturbed. Click "Resume" after closing it.');
   updateOtherHost();
