@@ -725,7 +725,8 @@ export const FS_FUNCTIONS = new Map([
   [20, 'Mode Change'], [21, 'Ctrl Temp Change'],
   ...[1, 2, 3, 4, 5].map((n) => [21 + n, `Patch ${n}`]), ...[1, 2, 3, 4, 5].map((n) => [26 + n, `Scene ${n}`]),
   ...[2, 3, 4, 5, 6, 7].map((n) => [30 + n, `Ctrl ${n}`]),
-  [38, 'Patch +'], [39, 'Patch -'], [40, 'Bank Select'], [41, 'EXP 1/2'], // 40: "UI Open" in the app's table [42, 'Looper Rec/Play'], [43, 'Looper Stop'],
+  [38, 'Patch +'], [39, 'Patch -'], [40, 'Bank Select'], [41, 'EXP 1/2'], // 40: "UI Open" in the app's table
+  [42, 'Looper Rec/Play'], [43, 'Looper Stop'],
   [44, 'Looper 1/2 SPD'], [45, 'Looper Rev'], [46, 'Loop FX'], [47, 'Looper Undo/Redo'], [48, 'Drum Play/Stop'],
   [49, 'Looper Exit'], [50, 'Drum'], [51, 'Patch'], [52, 'Patch/FX Slot 1'], [53, 'Patch/Scene 2'], [54, 'Patch/Bypass'],
 ]);

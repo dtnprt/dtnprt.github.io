@@ -42,12 +42,16 @@ export const GLOBAL_GROUPS = [
         getByte: 7, base: 0x33, u32: true },
       { addr: 0x00080004, name: 'Bank Select Mode', options: ['Initial', 'Wait'] },
       { addr: 0x00080001, name: 'Auto Cab Match', switch: true },
-      // set: 4 bytes, the option in byte 2 (the editor sent 00 00 01 00 for "Single FS") – byte order not confirmed
+      // set: 4 bytes, the option in byte 2 (the editor sent 00 00 01 00 for "Single FS")
       { addr: 0x00070001, name: 'EXP/CTRL Function', options: ['EXP 1/2', 'Single FS', 'Dual FS'], getByte: 0,
-        encode: (v) => [0, 0, v, 0], guess: true },
-      // function of the external footswitch(es) when EXP/CTRL Function = Single FS / Dual FS (values = FS function codes)
-      { addr: 0x00070002, name: 'CTRL 1 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0] },
-      { addr: 0x00070003, name: 'CTRL 2 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0], guess: true },
+        encode: (v) => [0, 0, v, 0] },
+      // function of the external footswitch(es) (values = FS function codes). Tested on the pedal: Single FS ->
+      // CTRL 1 is EXT FS1; Dual FS -> CTRL 2 is EXT FS1, and CTRL 1 does NOT change EXT FS2 (its address is unknown).
+      // name(mode): label by EXP/CTRL Function (0 EXP 1/2, 1 Single FS, 2 Dual FS)
+      { addr: 0x00070002, name: 'CTRL 1 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0],
+        label: (mode) => (mode === 1 ? 'EXT FS1 (CTRL 1)' : 'CTRL 1 Function') },
+      { addr: 0x00070003, name: 'CTRL 2 Function', choices: CTRL_CHOICES, encode: (v) => [0, 0, v, 0],
+        label: (mode) => (mode === 2 ? 'EXT FS1 (CTRL 2)' : 'CTRL 2 Function') },
       { addr: 0x00070006, name: 'Global Tempo', switch: true },
     ],
   },
@@ -56,8 +60,7 @@ export const GLOBAL_GROUPS = [
       { addr: 0x00060001, name: 'MIDI In Source', options: ['DIN Only', 'USB Only', 'Mixed'] },
       { addr: 0x00060002, name: 'Input Channel (DIN)', channel: true },
       { addr: 0x00060003, name: 'Input Channel (USB)', channel: true },
-      // position in the get answer not confirmed (byte 7 or 8)
-      { addr: 0x00060008, name: 'Clock Source', options: ['Internal', 'DIN Only', 'USB Only', 'External', 'Mixed'], guess: true },
+      { addr: 0x00060008, name: 'Clock Source', options: ['Internal', 'DIN Only', 'USB Only', 'External', 'Mixed'] },
       { addr: 0x00060006, name: 'Clock Out (DIN)', switch: true },
       { addr: 0x00060007, name: 'Clock Out (USB)', switch: true },
     ],
