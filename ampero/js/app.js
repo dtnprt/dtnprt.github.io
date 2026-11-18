@@ -28,6 +28,7 @@ let sniffer = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = {
+  dragCat: null, // module (category) dragged from the legend
   fsPick: false, // "pick blocks in the chain" mode for the selected footswitch
   selFs: 0, // footswitch shown in the footswitch panel (its positions are marked in the chain)
   fsFollow: false, // footswitch assignments move with a dragged block (option in the footswitch panel)
@@ -808,6 +809,12 @@ function renderEditor() {
   const dnd = (b, c) => {
     if (!raw || !c) return;
     b.ondragover = (e) => {
+      if (state.dragCat != null) { // a module from the legend: insert / replace here
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        b.classList.add('drop');
+        return;
+      }
       if (state.dragPos == null || state.dragPos === c.pos) return;
       e.preventDefault();
       b.classList.add('drop');
@@ -816,6 +823,12 @@ function renderEditor() {
     b.ondrop = (e) => {
       e.preventDefault();
       b.classList.remove('drop');
+      if (state.dragCat != null) {
+        const cat = state.dragCat;
+        state.dragCat = null;
+        dropModule(c, cat);
+        return;
+      }
       const from = state.dragPos;
       state.dragPos = null;
       if (from != null && from !== c.pos) swapPositions(from, c.pos);
@@ -991,7 +1004,18 @@ function renderLegend(raw, chain) {
     li.className = m.i === cur ? 'active' : '';
     li.innerHTML = `<span class="mi m-${m.name.replace(/ /g, '-')}">${moduleIcon(m.name) || moduleIcon(/^FX /.test(m.name) ? 'FX LOOP' : '')}</span>`;
     li.append(m.name);
-    li.title = c ? `choose a ${m.name} algorithm for ${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1}` : 'select a block or an empty position in the chain first';
+    li.title = (c ? `choose a ${m.name} algorithm for ${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1}` : 'select a block or an empty position in the chain first') +
+      ' – or drag it onto a position in the chain';
+    // drag a module onto a chain position: inserts its first algorithm there (or replaces the block)
+    li.draggable = !!raw;
+    li.ondragstart = (e) => {
+      state.dragCat = m.i;
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', m.name);
+    };
+    li.ondragend = () => {
+      state.dragCat = null;
+    };
     li.onclick = () => {
       if (!c || !raw) {
         log('select a block or an empty position in the chain first');
@@ -1003,6 +1027,16 @@ function renderLegend(raw, chain) {
     };
     ul.append(li);
   }
+}
+
+/** A module dropped from the legend onto position c: its first algorithm there, the module's lists open. */
+function dropModule(c, cat) {
+  const group = groupsOfCategory(cat)[0] ?? null;
+  const a = algsOfCategory(cat, group)[0] ?? algsOfCategory(cat)[0];
+  if (!a) return;
+  state.selSlot = c.slot;
+  state.browse = { cat, group };
+  setBlockAlg(c.slot, cat, a.code, c.code === 0xffffffff);
 }
 
 /** Lists of sub-categories and algorithms of the browsed module; a click sets the algorithm of the block. */
