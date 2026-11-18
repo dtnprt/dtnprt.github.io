@@ -297,21 +297,26 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .exp-row { display: flex; flex-direction: column; gap: 4px; }
 .exp-range { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 56px; }
 .exp-range input[type=number] { width: 64px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 4px; }
-/* quick knobs: the three knobs of the pedal */
-.qk-knobs { display: flex; gap: 10px; }
-.qk-knob { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 8px 4px 6px; background: #181818; border: 1px solid var(--line); border-radius: 6px; position: relative; }
-.qk-knob .qk-no { position: absolute; top: 4px; left: 7px; color: var(--muted); font-size: 11px; }
-.qk-dial { width: 52px; height: 52px; border-radius: 50%; position: relative; margin-bottom: 4px;
-  background: radial-gradient(circle at 40% 35%, #4a4a4a, #161616 70%); border: 2px solid #2c2c2c;
-  box-shadow: 0 0 0 3px #1f1f1f, 0 2px 6px rgba(0, 0, 0, .6); }
-.qk-ptr { position: absolute; left: 50%; top: 50%; width: 3px; height: 21px; margin-left: -1.5px; margin-top: -21px;
-  background: var(--accent); border-radius: 2px; transform-origin: 50% 100%; }
-.qk-knob .qk-name { font-weight: 600; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qk-knob .qk-where, .qk-knob .qk-val { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qk-knob .qk-val { color: var(--accent); }
-.qk-knob.off .qk-name { color: var(--muted); font-weight: 400; }
-.qk-knob.off .qk-dial { opacity: .45; }
+/* quick knobs like on the pedal: display strip (value, bar, blue label), three small black knobs on the white plate */
+.qk-pedal { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #e8e8e4; }
+.qk-screen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 8px 8px 0; padding: 10px 12px 8px;
+  background: #05080c; border-radius: 8px; border: 3px solid #d6d6d2; }
+.qk-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 2px 0;
+  background: none; border: 1px solid transparent; border-radius: 4px; }
+.qk-cell:hover:not(:disabled) { border-color: #24425f; }
+.qk-cell .qk-val { color: #e3e6b4; font-size: 12px; font-variant-numeric: tabular-nums; }
+.qk-bar { display: block; width: 100%; height: 9px; padding: 1px; border: 1px solid #a9bf45; border-radius: 2px; }
+.qk-fill { display: block; height: 100%; background: linear-gradient(#d4e48a, #9dbd48); }
+.qk-cell .qk-label { color: #4db3ff; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qk-cell.off .qk-label { color: #3d6f99; }
+.qk-cell.off .qk-bar { border-color: #4a5a24; }
+.qk-plate { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; padding: 12px 8px 14px; }
+.qk-knob { width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 0; background: none; }
+.qk-knob .qk-cap { display: block; width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 42% 38%, #3a3a3a 0, #141414 55%, transparent 56%),
+    repeating-conic-gradient(#0c0c0c 0 6deg, #2c2c2c 6deg 12deg);
+  box-shadow: 0 3px 5px rgba(0, 0, 0, .45), inset 0 0 0 1px #000; }
+.qk-knob:hover:not(:disabled) .qk-cap { box-shadow: 0 0 0 2px var(--accent), 0 3px 5px rgba(0, 0, 0, .45); }
 .qk-badge { margin-left: 5px; padding: 0 4px; border-radius: 3px; background: var(--accent-dim); color: #fff; font-size: 10px; font-weight: 600; vertical-align: 1px; }
 .qk-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .qk-row .qk-n { width: 48px; flex: none; color: var(--muted); font-size: 12px; }

@@ -1305,22 +1305,24 @@ function renderFs(raw, chain) {
 
 const posName = (p) => `${p < 6 ? 'A' : 'B'}${(p % 6) + 1}`;
 
-/** Name, value text and dial position (0..1, null = no pointer) of quick knob target {obj, param}. */
+/** Label, value text and bar fill (0..1, null = empty) of quick knob target {obj, param}, like the pedal's display
+ * ("A2-DYN Attack", "Patch Volume", "Patch Tempo"; value above the bar). */
 function quickKnobView(raw, chain, q) {
   const scene = editScene();
   if (q.obj === QKNOB.VOLUME || q.obj === QKNOB.TEMPO) {
     const m = sceneMeta(raw, scene);
     return q.obj === QKNOB.VOLUME
-      ? { name: 'Volume', where: 'Patch', value: `${m.volume}`, at: m.volume / 100 }
-      : { name: 'Tempo', where: 'Patch', value: `${m.tempo} BPM`, at: (m.tempo - 40) / 260 };
+      ? { label: 'Patch Volume', value: `${m.volume}`, at: m.volume / 100 }
+      : { label: 'Patch Tempo', value: `${m.tempo}`, at: (m.tempo - 40) / 260 };
   }
   const c = q.obj < 12 ? chain.find((x) => x.pos === q.obj) : null;
   const a = c && c.code !== 0xffffffff ? algInfo(c.code) : null;
-  if (!a) return { name: q.obj === QKNOB.OFF ? 'OFF' : `target ${q.obj}`, where: '', value: '', at: null };
+  if (!a) return { label: q.obj === QKNOB.OFF ? 'OFF' : `target ${q.obj}`, value: '', at: null };
   const p = a.params.find((x) => x.id === q.param);
-  if (!p) return { name: `parameter ${q.param}`, where: `${posName(q.obj)} ${a.name}`, value: '', at: null };
+  const label = `${posName(q.obj)}-${a.module} ${p ? p.name : `parameter ${q.param}`}`;
+  if (!p) return { label, value: '', at: null };
   const v = sceneParam(raw, scene, c.slot, p.id);
-  return { name: p.name, where: `${posName(q.obj)} ${a.name}`, value: formatValue(p, v),
+  return { label, title: `${posName(q.obj)} ${a.name} · ${p.name}`, value: formatValue(p, v),
     at: p.max > p.min ? (v - p.min) / (p.max - p.min) : null };
 }
 
@@ -1339,11 +1341,12 @@ function quickKnobItems(chain, k, q) {
   return items;
 }
 
-/** Quick Access Para 1–3 as the three knobs of the pedal; click a knob to assign it. */
+/** Quick Access Para 1–3 like on the pedal: value, bar and label in the display, the three small knobs below.
+ * Click a display field or a knob to assign it. */
 function quickKnobBox(raw, chain) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
   const box = el('div', 'qk-box');
-  box.append(el('div', 'muted small', 'Quick knobs – click a knob to assign it, or right-click a parameter of a block'));
+  box.append(el('div', 'muted small', 'Quick knobs – click to assign, or right-click a parameter of a block'));
   let knobs;
   try {
     knobs = presetQuickKnobs(raw);
@@ -1351,28 +1354,35 @@ function quickKnobBox(raw, chain) {
     return box;
   }
   const live = canTalk();
-  const row = el('div', 'qk-knobs');
+  const pedal = el('div', 'qk-pedal');
+  const screen = el('div', 'qk-screen');
+  const plate = el('div', 'qk-plate');
   knobs.forEach((q, k) => {
     const v = quickKnobView(raw, chain, q);
-    const b = el('button', `qk-knob${q.obj === QKNOB.OFF ? ' off' : ''}`);
-    const dial = el('span', 'qk-dial');
-    if (v.at != null) {
-      const ptr = el('span', 'qk-ptr');
-      ptr.style.transform = `rotate(${-135 + 270 * Math.min(1, Math.max(0, v.at))}deg)`;
-      dial.append(ptr);
-    }
-    b.append(el('span', 'qk-no', `${k + 1}`), dial, el('span', 'qk-name', v.name), el('span', 'qk-where', v.where || ' '),
-      el('span', 'qk-val', v.value || ' '));
-    b.title = live ? `Quick knob ${k + 1} – click to assign` : 'connect the pedal to assign';
-    b.disabled = !live;
-    b.onclick = (e) => {
+    const open = (b) => (e) => {
       const r = b.getBoundingClientRect();
       e.stopPropagation();
       contextMenu(r.left, r.bottom + 2, quickKnobItems(chain, k, q));
     };
-    row.append(b);
+    const tip = live ? `Quick knob ${k + 1}${v.title ? ` – ${v.title}` : ''} – click to assign` : 'connect the pedal to assign';
+    const cell = el('button', `qk-cell${q.obj === QKNOB.OFF ? ' off' : ''}`);
+    const bar = el('span', 'qk-bar');
+    const fill = el('span', 'qk-fill');
+    fill.style.width = `${v.at == null ? 0 : 100 * Math.min(1, Math.max(0, v.at))}%`;
+    bar.append(fill);
+    cell.append(el('span', 'qk-val', v.value || ' '), bar, el('span', 'qk-label', v.label));
+    const knob = el('button', 'qk-knob');
+    knob.append(el('span', 'qk-cap'));
+    for (const b of [cell, knob]) {
+      b.title = tip;
+      b.disabled = !live;
+      b.onclick = open(b);
+    }
+    screen.append(cell);
+    plate.append(knob);
   });
-  box.append(row);
+  pedal.append(screen, plate);
+  box.append(pedal);
   return box;
 }
 
