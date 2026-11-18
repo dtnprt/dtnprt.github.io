@@ -21,7 +21,7 @@ import { wavToIr } from './irwav.js';
 import { DRUM_STYLES, EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramByte, paramPayload as globalPayload, paramValue, parseEq, rawByte, u32 as u32b } from './globals.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
-import { closeMenu, confirmSlots, contextMenu, promptText, showAbout } from './ui.js';
+import { closeMenu, confirmSlots, contextMenu, promptText, showAbout, showInfo } from './ui.js';
 import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
 import { editorVersion } from './version.js';
@@ -127,7 +127,7 @@ function updateOnlineView() {
       : state.midiError ? `Web MIDI is not available: ${state.midiError}` : 'Waiting for MIDI access (the browser may ask for permission)…';
   $('offConnect').disabled = state.busy || !state.access;
   $('offConnect').hidden = !!state.connecting;
-  if (!ready && state.tab !== 'sniffer' && state.tab !== 'about') $('offlineScreen').hidden = false;
+  if (!ready && state.tab !== 'sniffer') $('offlineScreen').hidden = false;
   else $('offlineScreen').hidden = true;
 }
 
@@ -172,9 +172,6 @@ function showTab(tab) {
   if (tab === 'edit') {
     requestAnimationFrame(drawRouting);
     requestAnimationFrame(scrollToCurrent);
-  }
-  if (tab === 'about') {
-    $('infoPedal').textContent = state.dev ? `${state.model || 'Ampero'} · firmware ${state.dev.firmware || '?'}` : 'not connected';
   }
   if (tab === 'global') {
     renderGlobals();
@@ -3814,8 +3811,11 @@ async function openProbe(file) {
 async function init() {
   fillRange();
   for (const b of document.querySelectorAll('.tab')) b.onclick = () => showTab(b.dataset.tab);
-  // About (next to the gear) toggles: a second click goes back (to the editor / the start screen)
-  $('aboutTab').onclick = () => showTab(state.tab === 'about' ? 'edit' : 'about');
+  // About: overlay like the disclaimer
+  $('aboutBtn').onclick = () => {
+    $('infoPedal').textContent = state.dev ? `${state.model || 'Ampero'} · firmware ${state.dev.firmware || '?'}` : 'not connected';
+    showInfo();
+  };
   $('irReadBtn').onclick = readFileLists;
   try {
     const c = JSON.parse(localStorage.getItem('ampero.blockClip') || 'null');
@@ -3827,13 +3827,14 @@ async function init() {
   };
   $('infoDisclaimer').onclick = (e) => {
     e.preventDefault();
+    $('infoClose').click();
     showAbout();
   };
   $('globalReadBtn').onclick = readGlobals;
   $('namReadBtn').onclick = readFileLists;
   initPresetListEvents();
   sniffer = initSniffer({ getAccess: () => state.access, getDevice: () => state.dev, log, download, onLive: setSniffing });
-  showTab(['edit', 'backup', 'files', 'global', 'about', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
+  showTab(['edit', 'backup', 'files', 'global', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
   $('connectBtn').onclick = () => connect(false);
   $('offConnect').onclick = () => (state.dev ? null : connect(false));
   try { state.drumOpen = localStorage.getItem('ampero.drumOpen') === '1'; } catch { /* ignore */ }

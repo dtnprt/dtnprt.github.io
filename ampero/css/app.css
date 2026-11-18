@@ -530,7 +530,7 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .off-brand { font-weight: 300; letter-spacing: 6px; color: var(--accent); font-size: 26px; }
 .off-brand small { color: var(--muted); letter-spacing: 1px; font-size: 13px; }
 /* without a pedal: no sidebar, pages, tabs (the sniffer stays reachable from the gear menu) */
-body.offline .layout > .sidebar, body.offline .layout > .page:not(#page-sniffer):not(#page-about) { display: none !important; }
+body.offline .layout > .sidebar, body.offline .layout > .page:not(#page-sniffer) { display: none !important; }
 body.offline .tabs { visibility: hidden; }
 body.offline #editHint { display: none; }
 .spinner { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #333; border-top-color: var(--accent);
@@ -583,9 +583,6 @@ a.version[href]:hover { color: var(--accent); }
 .renamable { cursor: text; border-radius: 3px; }
 .renamable:hover { background: #2a2a2a; box-shadow: 0 0 0 3px #2a2a2a; }
 
-/* about page */
-.about-page { max-width: 820px; }
-.about-page h2 { margin: 0 0 10px; font-size: 18px; font-weight: 500; }
 
 /* preset list: drag handle to move a preset to another slot */
 .preset-list li .grip { flex: none; width: 12px; color: #555; cursor: grab; visibility: hidden; user-select: none; }
@@ -596,8 +593,8 @@ a.version[href]:hover { color: var(--accent); }
 .preset-list li.drop-target::after { content: attr(data-drop); margin-left: auto; color: var(--accent); font-size: 12px; }
 .preset-list li.drop-target .menu-btn { display: none; }
 
-/* About: a tab in the connection area, right of the gear */
-.conn .tab-about { font-size: 15px; padding: 6px 8px; align-self: stretch; }
+/* About: a button right of the gear, opens the about overlay */
+.conn .about-btn { align-self: stretch; }
 
 /* online / offline pill in the status bar */
 .log-head #status { margin-right: 12px; font-size: 11px; padding: 2px 8px; }
