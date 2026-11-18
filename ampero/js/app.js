@@ -32,6 +32,7 @@ let sniffer = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = {
+  focusParam: null, // {slot, id}: parameter to highlight once (jump from a quick knob)
   selIo: null, // {out, chain}: input / output node shown in the parameter area (when no block is selected)
   dragCat: null, // module (category) dragged from the legend
   fsPick: false, // "pick blocks in the chain" mode for the selected footswitch
@@ -1414,8 +1415,18 @@ function quickKnobBox(raw, chain) {
     cell.append(icon, el('span', 'qk-name', v.name), el('span', 'qk-label', v.param || ' '),
       el('span', 'qk-val', v.value || ' '));
     cell.title = tip;
-    cell.disabled = !live;
-    cell.onclick = open(cell);
+    // not disabled while offline (a disabled button would swallow the icon's jump click); assigning needs the pedal
+    cell.classList.toggle('disabled', !live);
+    cell.onclick = (e) => live && open(cell)(e);
+    // the icon jumps to the target: the block (selected, its parameter highlighted) or the scene volume / tempo field
+    if (q.obj !== QKNOB.OFF) {
+      icon.classList.add('qk-jump');
+      icon.title = q.obj < 12 ? 'go to the block and this parameter' : `go to the scene ${q.obj === QKNOB.TEMPO ? 'tempo' : 'volume'}`;
+      icon.onclick = (e) => {
+        e.stopPropagation();
+        jumpToQuickKnob(chain, q);
+      };
+    }
     const knob = el('span', 'qk-knob');
     const cap = el('span', 'qk-cap');
     knob.append(cap);
@@ -1511,6 +1522,23 @@ function quickKnobControl(raw, chain, q, knob, cap, cell) {
       nudge(d, e.shiftKey);
     }
   };
+}
+
+/** Select the quick knob's block and highlight its parameter (or focus the scene volume / tempo field). */
+function jumpToQuickKnob(chain, q) {
+  if (q.obj === QKNOB.VOLUME || q.obj === QKNOB.TEMPO) {
+    const f = $(q.obj === QKNOB.TEMPO ? 'edTempo' : 'edVolume');
+    f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    f.focus();
+    return;
+  }
+  const c = chain.find((x) => x.pos === q.obj);
+  if (!c || c.code === 0xffffffff) return;
+  state.selSlot = c.slot;
+  state.selIo = null;
+  state.browse = null;
+  state.focusParam = { slot: c.slot, id: q.param };
+  renderEditor();
 }
 
 /** Quick knobs (1-based numbers) that point at parameter id of the block at chain position pos. */
@@ -1854,6 +1882,16 @@ function renderParams(raw, chain) {
       const on = quickKnobsOf(raw, c.pos, p.id);
       const name = ctl.querySelector('.name');
       if (name) for (const k of on) name.append(Object.assign(document.createElement('span'), { className: 'qk-badge', textContent: `Q${k}` }));
+      if (state.focusParam && state.focusParam.slot === c.slot && state.focusParam.id === p.id) {
+        // jumped here from a quick knob: highlight the parameter for a moment and focus its control
+        state.focusParam = null;
+        ctl.classList.add('qk-focus');
+        setTimeout(() => ctl.classList.remove('qk-focus'), 1600);
+        requestAnimationFrame(() => {
+          ctl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          (ctl.querySelector('.dial, select, button') ?? ctl).focus?.();
+        });
+      }
       ctl.oncontextmenu = (e) => {
         e.preventDefault();
         // check mark = toggle: a checked knob is set to OFF, an unchecked one gets this parameter
