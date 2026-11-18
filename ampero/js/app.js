@@ -18,7 +18,7 @@ import {
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
-import { EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramByte, paramPayload as globalPayload, paramValue, parseEq, rawByte, u32 as u32b } from './globals.js';
+import { DRUM_STYLES, EQ, EQ_BANDS, EQ_VOLUME, GLOBAL_GROUPS, eqValuePayload, groupOf, paramByte, paramPayload as globalPayload, paramValue, parseEq, rawByte, u32 as u32b } from './globals.js';
 import { buildBackup, dumpPresets, loadBackup } from './backup.js';
 import { decodePrst, encodePrst } from './prst.js';
 import { closeMenu, confirmSlots, contextMenu, promptText, showAbout, showInfo } from './ui.js';
@@ -250,6 +250,7 @@ async function connect(auto = false) {
     renderList();
     onlineStatus();
     updateButtons();
+    renderDrum();
   });
   state.busy = true;
   state.connecting = true;
@@ -281,6 +282,7 @@ async function connect(auto = false) {
   // names of the uploaded NAM models / IRs, shown under NAM and user IR blocks
   if (state.dev === dev && canTalk()) {
     await readFileLists();
+    await readDrum(); // drum button summary (and panel, if open)
     renderEditor();
   }
 }
@@ -386,6 +388,13 @@ function onNotify({ cmd, payload }) {
   // editor's set commands – apply them, they are no sign of another program
   // (block on/off is always applied: the pedal reports the whole state of the scene, e.g. after a footswitch)
   if (cmd === CMD.SLOT_ON || !state.dev?.askedRecently(cmd)) applyPedalEdit(cmd, payload);
+  // drum started / changed on the pedal (footswitch, its own menu): same addresses as the set commands
+  if (cmd > 0x000a0000 && cmd <= 0x000a0005 && payload.length && state.globals?.get(DRUM_GET)) {
+    const p = drumParam(cmd), ans = state.globals.get(DRUM_GET), i = paramByte(p);
+    if (i < ans.length) ans[i] = payload[0];
+    if (p.u16 && payload.length > 1 && i + 1 < ans.length) ans[i + 1] = payload[1];
+    renderDrum();
+  }
   if (OTHER_HOST_SIGNS.has(cmd) || (cmd === CMD.WRITE_ACK && !state.busy)) {
     otherHostDetected(cmd);
   }
@@ -2524,6 +2533,103 @@ function markDirty() {
   $('edSave').disabled = !canTalk();
 }
 
+// ------------------------------------------------------------------ drum machine / metronome (edit page)
+
+const DRUM_GET = 0x000a0000;
+const drumParam = (addr) => GLOBAL_GROUPS.find((g) => g.id === 'drum').params.find((p) => p.addr === addr);
+const DRUM = { SYNC: 0x000a0001, VOL: 0x000a0002, BPM: 0x000a0003, STYLE: 0x000a0004, PLAY: 0x000a0005 };
+
+/** Current drum values from the pedal's answer (or null). */
+function drumValues() {
+  const ans = state.globals?.get(DRUM_GET);
+  if (!ans) return null;
+  const v = (a) => paramValue(drumParam(a), ans);
+  return { sync: v(DRUM.SYNC), vol: v(DRUM.VOL), bpm: v(DRUM.BPM), style: v(DRUM.STYLE), play: v(DRUM.PLAY) };
+}
+
+async function readDrum() {
+  if (!canTalk()) return;
+  try {
+    const ans = await state.dev.request(DRUM_GET, new Uint8Array(0), { timeout: 2000, retries: 1 });
+    if (!state.globals) state.globals = new Map();
+    state.globals.set(DRUM_GET, ans);
+  } catch (e) {
+    log(`reading the drum settings: ${e.message}`);
+  }
+  renderDrum();
+}
+
+function setDrumOpen(open) {
+  state.drumOpen = open;
+  try { localStorage.setItem('ampero.drumOpen', open ? '1' : '0'); } catch { /* ignore */ }
+  renderDrum();
+  if (open && !drumValues()) readDrum();
+}
+
+/** The drum panel on the edit page and the summary on its toggle button. */
+function renderDrum() {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const d = drumValues();
+  const live = canTalk() && !!d;
+  const name = d && d.style != null ? DRUM_STYLES[d.style] ?? `rhythm ${d.style + 1}` : '';
+  $('drumSum').textContent = d ? `${d.play ? '■ ' : ''}${name} · ${d.bpm}` : 'Drum';
+  $('drumToggle').classList.toggle('playing', !!d?.play);
+  $('drumToggle').classList.toggle('on', !!state.drumOpen);
+  const box = $('edDrum');
+  box.hidden = !state.drumOpen;
+  if (!state.drumOpen) return;
+  if (!d) {
+    box.replaceChildren(el('span', 'muted small', canTalk() ? 'reading the drum settings…' : 'connect the pedal to use the drum machine'));
+    return;
+  }
+  const set = async (addr, value) => {
+    await setGlobal(drumParam(addr), value);
+    renderDrum();
+  };
+  const play = el('button', `drum-play${d.play ? ' on' : ''}`, d.play ? '■' : '▶');
+  play.title = d.play ? 'stop' : 'start';
+  play.disabled = !live;
+  play.onclick = () => set(DRUM.PLAY, d.play ? 0 : 1);
+  const style = el('select', 'drum-style');
+  DRUM_STYLES.forEach((n, i) => style.append(new Option(`${i + 1}. ${n}`, String(i))));
+  style.value = String(d.style);
+  style.disabled = !live;
+  style.onchange = () => set(DRUM.STYLE, +style.value);
+  const slider = (label, addr, lo, hi, value, unit, off = false) => {
+    const w = el('label', 'drum-slider');
+    const r = el('input');
+    Object.assign(r, { type: 'range', min: lo, max: hi, step: 1, value, disabled: !live || off });
+    const val = el('span', 'drum-val', `${value}${unit}`);
+    r.oninput = () => { val.textContent = `${r.value}${unit}`; };
+    r.onchange = () => set(addr, +r.value);
+    // mouse wheel: ±1 (Shift ±10), handy while playing
+    r.onwheel = (e) => {
+      if (r.disabled) return;
+      e.preventDefault();
+      const v = Math.max(lo, Math.min(hi, +r.value + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1)));
+      if (v === +r.value) return;
+      r.value = v;
+      r.oninput();
+      clearTimeout(r.timer);
+      r.timer = setTimeout(() => set(addr, v), 250);
+    };
+    w.append(el('span', 'muted small', label), r, val);
+    if (off) w.title = 'Drum Sync is on: the BPM follows the tempo of the patch / scene';
+    return w;
+  };
+  const sync = el('button', `sw${d.sync ? ' on' : ''}`, d.sync ? 'On' : 'Off');
+  sync.disabled = !live;
+  sync.onclick = () => set(DRUM.SYNC, d.sync ? 0 : 1);
+  const syncW = el('label', 'drum-sync');
+  syncW.title = 'BPM follows the tempo of the current patch / scene';
+  syncW.append(el('span', 'muted small', 'Sync'), sync);
+  const close = el('button', 'small-btn drum-close', '✕');
+  close.title = 'hide the drum machine';
+  close.onclick = () => setDrumOpen(false);
+  box.replaceChildren(play, style, slider('BPM', DRUM.BPM, 40, 300, d.bpm, '', !!d.sync), slider('Volume', DRUM.VOL, 0, 100, d.vol, ''),
+    syncW, close);
+}
+
 // ------------------------------------------------------------------ global settings
 
 async function readGlobals() {
@@ -2545,6 +2651,7 @@ async function readGlobals() {
     updateButtons();
   }
   renderGlobals();
+  renderDrum();
 }
 
 async function setGlobal(p, value) {
@@ -2581,6 +2688,7 @@ function renderGlobals() {
   const modeParam = GLOBAL_GROUPS.flatMap((g) => g.params).find((p) => p.addr === 0x00070001);
   const ctrlMode = paramValue(modeParam, state.globals?.get(groupOf(modeParam.addr)));
   for (const g of GLOBAL_GROUPS) {
+    if (g.id === 'drum') continue; // on the edit page (drum button)
     const card = el('div', 'card');
     card.append(el('h2', '', g.title));
     for (const p of g.params) {
@@ -3683,6 +3791,9 @@ async function init() {
   showTab(['edit', 'backup', 'files', 'global', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
   $('connectBtn').onclick = () => connect(false);
   $('offConnect').onclick = () => (state.dev ? null : connect(false));
+  try { state.drumOpen = localStorage.getItem('ampero.drumOpen') === '1'; } catch { /* ignore */ }
+  $('drumToggle').onclick = () => setDrumOpen(!state.drumOpen);
+  renderDrum();
   editorVersion().then((v) => {
     for (const a of [$('version'), $('infoVersion')]) {
       a.textContent = v.text;

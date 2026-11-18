@@ -559,3 +559,22 @@ a.version[href]:hover { color: var(--accent); }
 .node-ghost { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
   border: 2px solid var(--accent); background: rgba(245, 166, 35, .35); pointer-events: none; z-index: 5; }
 .node-ghost.bad { border-color: var(--red); background: rgba(229, 72, 77, .35); }
+
+/* drum machine on the edit page */
+.drum-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 260px; }
+.drum-toggle #drumSum { overflow: hidden; text-overflow: ellipsis; }
+.drum-toggle.on { border-color: var(--accent); }
+.drum-toggle.playing { color: var(--accent); }
+.drum-toggle .drum-ic { font-size: 16px; line-height: 1; }
+.drum-toggle .drum-caret { color: var(--muted); font-size: 10px; }
+.drum-toggle.on .drum-caret { transform: rotate(180deg); }
+.drum-card { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; padding: 10px 16px; }
+.drum-card[hidden] { display: none; }
+.drum-play { width: 44px; height: 44px; border-radius: 50%; font-size: 17px; padding: 0; border: 2px solid var(--accent); color: var(--accent); }
+.drum-play.on { background: var(--accent); color: #111; }
+.drum-style { min-width: 190px; }
+.drum-slider { display: flex; align-items: center; gap: 8px; }
+.drum-slider input[type=range] { width: 170px; }
+.drum-val { min-width: 32px; font-variant-numeric: tabular-nums; color: #ddd; }
+.drum-sync { display: flex; align-items: center; gap: 8px; }
+.drum-close { margin-left: auto; }

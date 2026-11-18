@@ -90,7 +90,11 @@
           <label class="muted small">Volume <input id="edVolume" type="range" min="0" max="100" step="1" disabled>
             <span id="edVolumeVal" class="vol-val"></span></label>
         </div>
+        <button id="drumToggle" class="drum-toggle" title="show / hide the drum machine (metronome)">
+          <span class="drum-ic" aria-hidden="true">♩</span> <span id="drumSum">Drum</span> <span class="drum-caret">▾</span></button>
       </div>
+      <!-- drum machine / metronome, shown on demand (for practising) -->
+      <div class="card drum-card" id="edDrum" hidden></div>
       <div class="card editor-chain">
         <div class="scenes" id="edScenes">
           <button class="scene on">Scene 1</button><button class="scene">Scene 2</button><button class="scene">Scene 3</button>
