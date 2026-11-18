@@ -297,10 +297,10 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .exp-row { display: flex; flex-direction: column; gap: 4px; }
 .exp-range { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 56px; }
 .exp-range input[type=number] { width: 64px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 4px; }
-/* quick knobs like on the pedal: display strip (value, bar, blue label), three small black knobs on the white plate */
-.qk-pedal { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #e8e8e4; }
-.qk-screen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 8px 8px 0; padding: 10px 12px 8px;
-  background: #05080c; border-radius: 8px; border: 3px solid #d6d6d2; }
+/* quick knobs like on the pedal: display strip (value, bar, blue label), three small black knobs below */
+.qk-pedal { display: flex; flex-direction: column; }
+.qk-screen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 10px 12px 8px;
+  background: #05080c; border-radius: 8px; border: 1px solid var(--line); }
 .qk-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 2px 0;
   background: none; border: 1px solid transparent; border-radius: 4px; }
 .qk-cell:hover:not(:disabled) { border-color: #24425f; }
@@ -310,9 +310,9 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .qk-cell .qk-label { color: #4db3ff; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qk-cell.off .qk-label { color: #3d6f99; }
 .qk-cell.off .qk-bar { border-color: #4a5a24; }
-.qk-plate { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; padding: 12px 8px 14px; }
+.qk-plate { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; padding: 10px 12px 2px; }
 .qk-knob { width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 0; background: none; }
-.qk-knob .qk-cap { display: block; width: 100%; height: 100%; border-radius: 50%;
+.qk-knob .qk-cap { display: block; width: 100%; height: 100%; border-radius: 50%; border: 1px solid #3a3a3a;
   background: radial-gradient(circle at 42% 38%, #3a3a3a 0, #141414 55%, transparent 56%),
     repeating-conic-gradient(#0c0c0c 0 6deg, #2c2c2c 6deg 12deg);
   box-shadow: 0 3px 5px rgba(0, 0, 0, .45), inset 0 0 0 1px #000; }
