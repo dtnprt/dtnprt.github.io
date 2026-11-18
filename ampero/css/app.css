@@ -562,7 +562,7 @@ a.version[href]:hover { color: var(--accent); }
 
 /* drum machine on the edit page */
 /* fixed width: the text (rhythm · BPM) changes and must not push the BPM / volume sliders around */
-.drum-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; width: 210px; flex: none; }
+.drum-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; width: 210px; flex: none; }
 .drum-toggle #drumSum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; font-variant-numeric: tabular-nums; }
 .drum-toggle.playing .drum-ic { animation: drum-beat .5s ease-in-out infinite alternate; }
 @keyframes drum-beat { to { transform: scale(1.35); } }
