@@ -1305,11 +1305,45 @@ function renderFs(raw, chain) {
 
 const posName = (p) => `${p < 6 ? 'A' : 'B'}${(p % 6) + 1}`;
 
-/** Quick Access Para 1–3: target (OFF, a block by chain position, Patch Volume / Tempo) and its parameter. */
+/** Name, value text and dial position (0..1, null = no pointer) of quick knob target {obj, param}. */
+function quickKnobView(raw, chain, q) {
+  const scene = editScene();
+  if (q.obj === QKNOB.VOLUME || q.obj === QKNOB.TEMPO) {
+    const m = sceneMeta(raw, scene);
+    return q.obj === QKNOB.VOLUME
+      ? { name: 'Volume', where: 'Patch', value: `${m.volume}`, at: m.volume / 100 }
+      : { name: 'Tempo', where: 'Patch', value: `${m.tempo} BPM`, at: (m.tempo - 40) / 260 };
+  }
+  const c = q.obj < 12 ? chain.find((x) => x.pos === q.obj) : null;
+  const a = c && c.code !== 0xffffffff ? algInfo(c.code) : null;
+  if (!a) return { name: q.obj === QKNOB.OFF ? 'OFF' : `target ${q.obj}`, where: '', value: '', at: null };
+  const p = a.params.find((x) => x.id === q.param);
+  if (!p) return { name: `parameter ${q.param}`, where: `${posName(q.obj)} ${a.name}`, value: '', at: null };
+  const v = sceneParam(raw, scene, c.slot, p.id);
+  return { name: p.name, where: `${posName(q.obj)} ${a.name}`, value: formatValue(p, v),
+    at: p.max > p.min ? (v - p.min) / (p.max - p.min) : null };
+}
+
+/** Menu items to assign quick knob k: OFF, every block with its parameters, Patch Volume / Tempo. */
+function quickKnobItems(chain, k, q) {
+  const items = [{ label: 'OFF', checked: q.obj === QKNOB.OFF, action: () => setQuickKnob(k, QKNOB.OFF, 0, false) }, '-'];
+  for (const c of chain.filter((x) => x.code !== 0xffffffff).sort((x, y) => x.pos - y.pos)) {
+    const a = algInfo(c.code);
+    if (!a) continue;
+    items.push({ label: `${posName(c.pos)}  ${a.module} : ${a.name}`, checked: q.obj === c.pos,
+      items: a.params.map((p) => ({ label: p.name, checked: q.obj === c.pos && q.param === p.id,
+        action: () => setQuickKnob(k, c.pos, p.id, q.obj === c.pos) })) });
+  }
+  items.push('-', { label: 'Patch Volume', checked: q.obj === QKNOB.VOLUME, action: () => setQuickKnob(k, QKNOB.VOLUME, 0, false) },
+    { label: 'Patch Tempo', checked: q.obj === QKNOB.TEMPO, action: () => setQuickKnob(k, QKNOB.TEMPO, 0, false) });
+  return items;
+}
+
+/** Quick Access Para 1–3 as the three knobs of the pedal; click a knob to assign it. */
 function quickKnobBox(raw, chain) {
   const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
   const box = el('div', 'qk-box');
-  box.append(el('div', 'muted small', 'Quick knobs (Quick Access Para)'));
+  box.append(el('div', 'muted small', 'Quick knobs – click a knob to assign it, or right-click a parameter of a block'));
   let knobs;
   try {
     knobs = presetQuickKnobs(raw);
@@ -1317,36 +1351,38 @@ function quickKnobBox(raw, chain) {
     return box;
   }
   const live = canTalk();
-  const blocks = chain.filter((c) => c.code !== 0xffffffff).sort((x, y) => x.pos - y.pos);
+  const row = el('div', 'qk-knobs');
   knobs.forEach((q, k) => {
-    const row = el('div', 'qk-row');
-    row.append(el('span', 'qk-n', `Para ${k + 1}`));
-    const t = el('select');
-    t.append(new Option('OFF', String(QKNOB.OFF)));
-    for (const c of blocks) {
-      const a = algInfo(c.code);
-      t.append(new Option(`${posName(c.pos)} ${a ? `${a.module} : ${a.name}` : hex32(c.code)}`, String(c.pos)));
+    const v = quickKnobView(raw, chain, q);
+    const b = el('button', `qk-knob${q.obj === QKNOB.OFF ? ' off' : ''}`);
+    const dial = el('span', 'qk-dial');
+    if (v.at != null) {
+      const ptr = el('span', 'qk-ptr');
+      ptr.style.transform = `rotate(${-135 + 270 * Math.min(1, Math.max(0, v.at))}deg)`;
+      dial.append(ptr);
     }
-    t.append(new Option('Patch Volume', String(QKNOB.VOLUME)), new Option('Patch Tempo', String(QKNOB.TEMPO)));
-    if (![...t.options].some((o) => +o.value === q.obj)) t.append(new Option(`target ${q.obj} (unknown)`, String(q.obj)));
-    t.value = String(q.obj);
-    t.disabled = !live;
-    t.onchange = () => setQuickKnob(k, +t.value, 0, false);
-    row.append(t);
-    const c = q.obj < 12 ? chain.find((x) => x.pos === q.obj) : null;
-    const a = c ? algInfo(c.code) : null;
-    if (a) {
-      const p = el('select');
-      for (const x of a.params) p.append(new Option(x.name, String(x.id)));
-      if (!a.params.some((x) => x.id === q.param)) p.append(new Option(`parameter ${q.param}`, String(q.param)));
-      p.value = String(q.param);
-      p.disabled = !live;
-      p.onchange = () => setQuickKnob(k, q.obj, +p.value, true);
-      row.append(p);
-    }
-    box.append(row);
+    b.append(el('span', 'qk-no', `${k + 1}`), dial, el('span', 'qk-name', v.name), el('span', 'qk-where', v.where || ' '),
+      el('span', 'qk-val', v.value || ' '));
+    b.title = live ? `Quick knob ${k + 1} – click to assign` : 'connect the pedal to assign';
+    b.disabled = !live;
+    b.onclick = (e) => {
+      const r = b.getBoundingClientRect();
+      e.stopPropagation();
+      contextMenu(r.left, r.bottom + 2, quickKnobItems(chain, k, q));
+    };
+    row.append(b);
   });
+  box.append(row);
   return box;
+}
+
+/** Quick knobs (1-based numbers) that point at parameter id of the block at chain position pos. */
+function quickKnobsOf(raw, pos, id) {
+  try {
+    return presetQuickKnobs(raw).map((q, k) => (q.obj === pos && q.param === id ? k + 1 : 0)).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 // ------------------------------------------------------------------ expression pedal targets
@@ -1492,14 +1528,19 @@ async function setQuickKnob(knob, obj, param, wide) {
   const c = obj < 12 ? presetChain(raw).find((x) => x.pos === obj) : null;
   const a = c ? algInfo(c.code) : null;
   if (obj < 12 && !a) return; // empty position / unknown block
-  // functions: the editor sent FF as parameter; in the preset the pedal stores 0
-  const sendParam = obj < 12 ? param : 0xff;
-  const payload = qknobPayload(knob, obj, a ? a.category : 0xff, a ? a.code : 0xffffffff, sendParam, wide);
+  // like the Hotone editor: a new target goes out with parameter 0 (FF for functions / OFF) in the 8-byte form,
+  // a parameter (also right after a new target) in the 9-byte form
+  const cat = a ? a.category : 0xff, code = a ? a.code : 0xffffffff;
+  const payloads = wide ? [qknobPayload(knob, obj, cat, code, param, true)]
+    : [qknobPayload(knob, obj, cat, code, obj < 12 ? 0 : 0xff, false)];
+  if (!wide && obj < 12 && param !== 0) payloads.push(qknobPayload(knob, obj, cat, code, param, true));
   if (!editPreset((r) => setPresetQuickKnob(r, knob, obj, obj < 12 ? param : 0))) return;
   renderEditor();
   // preset-wide like the I/O nodes: sent in scene 1 (the pedal switches there briefly and back)
   const what = `quick knob ${knob + 1}`;
-  if (await inScene1(what, (dev) => dev.send(QKNOB.SET, payload))) {
+  if (await inScene1(what, async (dev) => {
+    for (const p of payloads) await dev.send(QKNOB.SET, p);
+  })) {
     const name = obj === QKNOB.OFF ? 'OFF' : obj === QKNOB.VOLUME ? 'Patch Volume' : obj === QKNOB.TEMPO ? 'Patch Tempo'
       : `${posName(obj)} ${a.name} · ${a.params.find((x) => x.id === param)?.name ?? param}`;
     log(`${what}: ${name}`);
@@ -1670,7 +1711,19 @@ function renderParams(raw, chain) {
     grid.append(el('div', 'muted', `Choose a ${categoryNames()?.[cat] ?? ''} algorithm to replace ${alg.name}.`));
   } else {
     const live = canTalk();
-    for (const p of alg.params) grid.append(paramControl(raw, c.slot, p, scene, live));
+    for (const p of alg.params) {
+      const ctl = paramControl(raw, c.slot, p, scene, live);
+      // quick knobs: badge on assigned parameters, right-click to put the parameter on a knob
+      const on = quickKnobsOf(raw, c.pos, p.id);
+      const name = ctl.querySelector('.name');
+      if (name) for (const k of on) name.append(Object.assign(document.createElement('span'), { className: 'qk-badge', textContent: `Q${k}` }));
+      ctl.oncontextmenu = (e) => {
+        e.preventDefault();
+        contextMenu(e.clientX, e.clientY, [0, 1, 2].map((k) => ({ label: `Quick knob ${k + 1}`, checked: on.includes(k + 1),
+          disabled: !live, action: () => setQuickKnob(k, c.pos, p.id, false) })));
+      };
+      grid.append(ctl);
+    }
   }
   // block type + parameters in one framed area, like the lists
   const panel = el('div', 'param-panel');
