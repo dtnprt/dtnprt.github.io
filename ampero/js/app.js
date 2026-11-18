@@ -1734,7 +1734,7 @@ function midiRows(raw, kind, f) {
     const row = el('div', 'midi-row');
     const ch = el('select');
     ch.append(new Option('OFF', String(MIDI.OFF)));
-    for (let c = 0; c < 16; c++) ch.append(new Option(`ch ${c + 1}`, String(c)));
+    for (let c = 0; c < 16; c++) ch.append(new Option(`CH ${c + 1}`, String(c)));
     ch.value = String(m.ch);
     const cmd = el('select');
     for (let c = 0; c < 128; c++) cmd.append(new Option(`CC ${c}`, String(c)));

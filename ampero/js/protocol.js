@@ -877,7 +877,7 @@ export const midiValid = (m) => (m.ch === MIDI.OFF || (m.ch >= 0 && m.ch <= 15))
 
 export const fsMidiPayload = (fs, row, m) => concat(u32le(fs), u32le(row), Uint8Array.of(m.ch, m.cmd, m.data));
 export const patchMidiPayload = (row, m) => concat(u32le(row), Uint8Array.of(m.ch, m.cmd, m.data));
-export const midiText = (m) => (m.ch === MIDI.OFF ? 'OFF' : `ch ${m.ch + 1} · ${m.cmd === MIDI.PC ? 'PC' : `CC ${m.cmd}`} · ${m.data}`);
+export const midiText = (m) => (m.ch === MIDI.OFF ? 'OFF' : `CH ${m.ch + 1} · ${m.cmd === MIDI.PC ? 'PC' : `CC ${m.cmd}`} · ${m.data}`);
 
 /**
  * Footswitch functions the Ampero II Stomp accepts. The table above is from the app for both models; on the Stomp,
