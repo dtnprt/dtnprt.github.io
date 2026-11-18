@@ -861,7 +861,7 @@ function renderEditor() {
     }
     const pos = `${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1}`;
     b.append(el('span', 'fx-label', mod), icon, dot, el('span', 'fx-pos', pos));
-    const fsOf = fsAssignments(raw, c.slot);
+    const fsOf = fsAssignments(raw, c.pos);
     if (fsOf.length) {
       const f = el('span', 'fx-fs');
       for (const n of fsOf) f.append(el('span', '', `FS${n}`));
@@ -1046,11 +1046,12 @@ function blockName(code, alg) {
 }
 
 /** Footswitches (1..3) whose "Ctrl" function switches this slot. */
-function fsAssignments(raw, slot) {
+/** Footswitches (1..3) that switch chain position pos (the assignment is per position, not per slot). */
+function fsAssignments(raw, pos) {
   if (!raw) return [];
   try {
     const fs = presetFs(raw);
-    return [0, 1, 2].filter((f) => isCtrlFunction(fs.click[f]) && presetFsSlots(raw, f)[slot]).map((f) => f + 1);
+    return [0, 1, 2].filter((f) => isCtrlFunction(fs.click[f]) && presetFsSlots(raw, f)[pos]).map((f) => f + 1);
   } catch {
     return [];
   }
@@ -1126,13 +1127,16 @@ function renderFs(raw, chain) {
     if (isCtrlFunction(fs.click[f])) {
       const on = presetFsSlots(raw, f);
       const slots = el('div', 'fs-slots');
-      for (const c of chain) {
-        if (c.code === 0xffffffff) continue;
-        const a = algInfo(c.code);
-        const t = el('button', on[c.slot] ? 'on' : '', `${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1} ${a?.name ?? ''}`);
-        t.title = `slot ${c.slot + 1} – click to (un)assign`;
+      // the assignment belongs to the chain position: moving a block leaves it at the old position (like the pedal
+      // and the Hotone editor) – assigned empty positions are listed too, so they can be removed
+      for (const c of [...chain].sort((x, y) => x.pos - y.pos)) {
+        const empty = c.code === 0xffffffff;
+        if (empty && !on[c.pos]) continue;
+        const a = empty ? null : algInfo(c.code);
+        const t = el('button', on[c.pos] ? 'on' : '', `${c.pos < 6 ? 'A' : 'B'}${(c.pos % 6) + 1} ${empty ? '(empty)' : a?.name ?? ''}`);
+        t.title = `position ${c.pos + 1} – click to (un)assign`;
         t.disabled = !live;
-        t.onclick = () => toggleFsSlot(f, c.slot);
+        t.onclick = () => toggleFsSlot(f, c.pos);
         slots.append(t);
       }
       b.append(slots);
@@ -1213,10 +1217,10 @@ async function setFsFunction(f, code) {
   log(`FS${f + 1}: ${fsFunctionName(code)}`);
 }
 
-async function toggleFsSlot(f, slot) {
+async function toggleFsSlot(f, pos) {
   let on, click;
   if (!editPreset((raw) => {
-    const r = setPresetFsSlot(raw, f, slot, !presetFsSlots(raw, f)[slot]);
+    const r = setPresetFsSlot(raw, f, pos, !presetFsSlots(raw, f)[pos]);
     on = presetFsSlots(r, f);
     click = presetFs(r).click;
     return r;

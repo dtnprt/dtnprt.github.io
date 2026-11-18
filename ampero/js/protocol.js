@@ -736,7 +736,7 @@ export const fsFunctionName = (code) => FS_FUNCTIONS.get(code) ?? `function ${co
 export const isCtrlFunction = (code) => code === 12 || (code >= 32 && code <= 37);
 
 export const FS_SET = 0x01030001; // u8 click[3] (confirmed: windows/wireshark.pcapng)
-export const FS_SLOTS_SET = 0x01070001; // u8 fs, u8 slot_on[12] (confirmed)
+export const FS_SLOTS_SET = 0x01070001; // u8 fs, u8 on[12] per chain position (confirmed)
 
 /** Footswitches of a preset: {click: [3], hold: [3]} (tag 3). */
 export function presetFs(raw) {
@@ -750,7 +750,11 @@ export function setPresetFsClick(raw, fs, code) {
   return out;
 }
 
-/** Slots switched by footswitch fs (tag 8: u8 led[3], u8 slot_on[3][12]). */
+/**
+ * Chain positions switched by footswitch fs (tag 8: u8 led[3], u8 on[3][12]). Indexed by position A1..B6, not by slot:
+ * the Hotone editor sends index 1 for a block at A2, and after moving the block the footswitch keeps switching A2
+ * (captures/session-2026-11-18-watch.txt). The block on/off states (tag 5, SLOT_ON) are per slot.
+ */
 export function presetFsSlots(raw, fs) {
   const o = tagOffset(raw, 8) + 3 + 12 * fs;
   return Array.from(raw.subarray(o, o + 12), (b) => b === 1);
