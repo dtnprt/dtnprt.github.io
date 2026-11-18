@@ -290,6 +290,10 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .editor-fs { display: flex; flex-direction: row; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
 .editor-fs .fs-left { width: 240px; flex: none; border-right: 1px solid var(--line); padding-right: 16px; }
 .editor-fs .fs-box { flex: 1 1 360px; max-width: 560px; }
+.editor-fs .qk-box { flex: 1 1 300px; max-width: 460px; display: flex; flex-direction: column; gap: 6px; }
+.qk-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.qk-row .qk-n { width: 48px; flex: none; color: var(--muted); font-size: 12px; }
+.qk-row select { flex: 1 1 0; min-width: 0; }
 .editor-fs .midi-box.patch { flex: 1 1 300px; max-width: 420px; border-top: 0; padding-top: 0; }
 .editor-fs .fs-title { font-size: 12px; }
 .editor-fs[hidden] { display: none; }

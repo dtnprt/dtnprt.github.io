@@ -12,6 +12,7 @@ import {
   MIDI, fsMidiPayload, midiText, midiValid, patchMidiPayload, presetMidi, setPresetMidi, fsFunctionName, fsSlotsPayload, isCtrlFunction, presetFs, presetFsSlots, setPresetFsClick, setPresetFsSlot,
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush, presetSceneCount,
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
+  QKNOB, presetQuickKnobs, setPresetQuickKnob, qknobPayload,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -1214,7 +1215,6 @@ function renderFs(raw, chain) {
   // like the scenes: one button per footswitch (its function at a glance), the selected one's settings below;
   // with "Effect slots" the positions it switches are marked in the chain above
   const sf = state.selFs;
-  const posName = (p) => `${p < 6 ? 'A' : 'B'}${(p % 6) + 1}`;
   const summary = (f) => {
     if (!isCtrlFunction(fs.click[f])) return fsFunctionName(fs.click[f]);
     const on = presetFsSlots(raw, f);
@@ -1294,7 +1294,77 @@ function renderFs(raw, chain) {
   }
   b.append(midiRows(raw, 'fs', f));
   box.append(b);
+  box.append(quickKnobBox(raw, chain));
   box.append(midiRows(raw, 'patch', 0));
+}
+
+// ------------------------------------------------------------------ quick knobs
+
+const posName = (p) => `${p < 6 ? 'A' : 'B'}${(p % 6) + 1}`;
+
+/** Quick Access Para 1–3: target (OFF, a block by chain position, Patch Volume / Tempo) and its parameter. */
+function quickKnobBox(raw, chain) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const box = el('div', 'qk-box');
+  box.append(el('div', 'muted small', 'Quick knobs (Quick Access Para)'));
+  let knobs;
+  try {
+    knobs = presetQuickKnobs(raw);
+  } catch {
+    return box;
+  }
+  const live = canTalk();
+  const blocks = chain.filter((c) => c.code !== 0xffffffff).sort((x, y) => x.pos - y.pos);
+  knobs.forEach((q, k) => {
+    const row = el('div', 'qk-row');
+    row.append(el('span', 'qk-n', `Para ${k + 1}`));
+    const t = el('select');
+    t.append(new Option('OFF', String(QKNOB.OFF)));
+    for (const c of blocks) {
+      const a = algInfo(c.code);
+      t.append(new Option(`${posName(c.pos)} ${a ? `${a.module} : ${a.name}` : hex32(c.code)}`, String(c.pos)));
+    }
+    t.append(new Option('Patch Volume', String(QKNOB.VOLUME)), new Option('Patch Tempo', String(QKNOB.TEMPO)));
+    if (![...t.options].some((o) => +o.value === q.obj)) t.append(new Option(`target ${q.obj} (unknown)`, String(q.obj)));
+    t.value = String(q.obj);
+    t.disabled = !live;
+    t.onchange = () => setQuickKnob(k, +t.value, 0, false);
+    row.append(t);
+    const c = q.obj < 12 ? chain.find((x) => x.pos === q.obj) : null;
+    const a = c ? algInfo(c.code) : null;
+    if (a) {
+      const p = el('select');
+      for (const x of a.params) p.append(new Option(x.name, String(x.id)));
+      if (!a.params.some((x) => x.id === q.param)) p.append(new Option(`parameter ${q.param}`, String(q.param)));
+      p.value = String(q.param);
+      p.disabled = !live;
+      p.onchange = () => setQuickKnob(k, q.obj, +p.value, true);
+      row.append(p);
+    }
+    box.append(row);
+  });
+  return box;
+}
+
+/** wide: only the parameter changed (the Hotone editor then sends the 9-byte form). */
+async function setQuickKnob(knob, obj, param, wide) {
+  const raw = state.presets.get(state.current);
+  if (!raw) return;
+  const c = obj < 12 ? presetChain(raw).find((x) => x.pos === obj) : null;
+  const a = c ? algInfo(c.code) : null;
+  if (obj < 12 && !a) return; // empty position / unknown block
+  // functions: the editor sent FF as parameter; in the preset the pedal stores 0
+  const sendParam = obj < 12 ? param : 0xff;
+  const payload = qknobPayload(knob, obj, a ? a.category : 0xff, a ? a.code : 0xffffffff, sendParam, wide);
+  if (!editPreset((r) => setPresetQuickKnob(r, knob, obj, obj < 12 ? param : 0))) return;
+  renderEditor();
+  // preset-wide like the I/O nodes: sent in scene 1 (the pedal switches there briefly and back)
+  const what = `quick knob ${knob + 1}`;
+  if (await inScene1(what, (dev) => dev.send(QKNOB.SET, payload))) {
+    const name = obj === QKNOB.OFF ? 'OFF' : obj === QKNOB.VOLUME ? 'Patch Volume' : obj === QKNOB.TEMPO ? 'Patch Tempo'
+      : `${posName(obj)} ${a.name} · ${a.params.find((x) => x.id === param)?.name ?? param}`;
+    log(`${what}: ${name}${obj === QKNOB.OFF || obj === QKNOB.TEMPO ? ' (not confirmed by a capture yet)' : ''}`);
+  }
 }
 
 /** MIDI messages of footswitch f (3) or of the preset (patch MIDI, 6) – collapsible, like the Hotone editor. */

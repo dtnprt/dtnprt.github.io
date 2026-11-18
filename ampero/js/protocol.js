@@ -745,6 +745,39 @@ export function presetFs(raw) {
   return { click: Array.from(raw.subarray(o, o + 3)), hold: Array.from(raw.subarray(o + 3, o + 6)) };
 }
 
+// ------------------------------------------------------------------ quick knobs (Quick Access Para)
+// Tag 2: u8 obj[3], u8 param[3]. obj = chain position 0–11 (A1–B6, not the slot: Blue Sustainer in slot 0 on A2
+// is stored as 1), 0x0C Patch Volume, 0x0D Patch Tempo, 0xFF OFF; param = parameter Widget.ID (0 for functions).
+// Set 0x01020001: u8 knob, u8 obj, u8 category, u32 alg, then u8 param when the target is chosen (8 bytes, param 0,
+// FF for a function) or u16 param when only the parameter changes (9 bytes) – exactly what the Hotone editor sent
+// (captures/wine-quick-knobs-2026-11-18.txt, export data/A98-1-MIDI-Test 2.prst, screenshots data/quick1..4.png).
+// OFF and Patch Tempo were not in the capture (OFF = FF like the EXP targets, Tempo = 0x0D like there).
+export const QKNOB = { SET: 0x01020001, VOLUME: 0x0c, TEMPO: 0x0d, OFF: 0xff, COUNT: 3 };
+
+export function presetQuickKnobs(raw) {
+  const o = tagOffset(raw, 2);
+  return [0, 1, 2].map((k) => ({ obj: raw[o + k], param: raw[o + 3 + k] }));
+}
+
+export function setPresetQuickKnob(raw, knob, obj, param) {
+  const r = raw.slice(), o = tagOffset(raw, 2);
+  r[o + knob] = obj;
+  r[o + 3 + knob] = param;
+  return r;
+}
+
+/** wide = false: target chosen (u8 param); wide = true: only the parameter changed (u16 param). */
+export function qknobPayload(knob, obj, category, code, param, wide) {
+  const p = new Uint8Array(wide ? 9 : 8), v = new DataView(p.buffer);
+  p[0] = knob;
+  p[1] = obj;
+  p[2] = category & 0xff;
+  v.setUint32(3, code >>> 0, true);
+  if (wide) v.setUint16(7, param, true);
+  else p[7] = param;
+  return p;
+}
+
 export function setPresetFsClick(raw, fs, code) {
   const out = raw.slice();
   out[tagOffset(raw, 3) + fs] = code;
