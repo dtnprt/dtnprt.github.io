@@ -14,14 +14,17 @@
       <button class="tab" data-tab="files">IR &amp; NAM</button>
       <button class="tab" data-tab="global">Global Settings</button>
       <button class="tab" data-tab="backup">Backup &amp; Restore</button>
-      <button class="tab tab-tool" data-tab="sniffer" title="MIDI traffic analyzer">Sniffer</button>
     </nav>
     <div class="conn">
-      <span id="portSel" class="port-sel" hidden>
-        <select id="inPort" title="MIDI input"></select>
-        <select id="outPort" title="MIDI output"></select>
-      </span>
-      <button id="portToggle" title="choose the MIDI ports manually (normally the Ampero is found and connected automatically)">⚙</button>
+      <button id="portToggle" title="MIDI ports and tools" aria-haspopup="true" aria-expanded="false">⚙</button>
+      <!-- gear menu: manual MIDI ports (normally the Ampero is found automatically) and the sniffer -->
+      <div id="portSel" class="gear-panel" hidden>
+        <label>MIDI input <select id="inPort"></select></label>
+        <label>MIDI output <select id="outPort"></select></label>
+        <p class="muted small">Normally the Ampero is found and connected automatically.</p>
+        <hr>
+        <button id="snifferBtn" class="gear-tool">Sniffer <span class="muted small">– MIDI traffic analyzer</span></button>
+      </div>
       <button id="connectBtn" class="primary">Connect</button>
       <span id="model" class="model" hidden></span>
       <span id="status" class="status off">offline</span>

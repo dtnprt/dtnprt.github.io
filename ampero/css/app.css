@@ -39,8 +39,18 @@ select, input[type=search] { background: var(--panel2); border: 1px solid var(--
 .tabs { display: flex; gap: 6px; }
 .tab { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; font-size: 17px; padding: 6px 10px; }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.conn { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-.conn select { max-width: 180px; }
+.conn { margin-left: auto; display: flex; gap: 8px; align-items: center; position: relative; }
+.conn #portToggle.on { border-color: var(--accent); color: var(--accent); }
+/* gear menu under the ⚙ button: wide enough for full MIDI port names */
+.gear-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: min(440px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 10px; padding: 14px; background: #2b2b2b; border: 1px solid #444;
+  border-radius: 6px; box-shadow: 0 6px 24px rgba(0, 0, 0, .55); }
+.gear-panel[hidden] { display: none; }
+.gear-panel label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.gear-panel select { width: 100%; padding: 7px 8px; font-size: 14px; }
+.gear-panel p { margin: 0; }
+.gear-panel hr { width: 100%; border: 0; border-top: 1px solid #444; margin: 2px 0; }
+.gear-panel .gear-tool { text-align: left; }
 .conn #portToggle { align-self: stretch; min-width: 34px; padding: 0 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; }
 .status { font-size: 12px; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
 .status.off { background: #3a1d1d; color: #f08080; }
@@ -286,8 +296,6 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .fx .fx-fs { position: absolute; bottom: 2px; left: 3px; display: flex; gap: 2px; }
 .fx .fx-fs span { font-size: 8px; font-weight: 700; line-height: 1; padding: 1px 2px; border-radius: 2px; background: var(--accent-dim); color: #fff; }
 .fx .fx-fs span.cur { background: #fff; color: #000; font-size: 9px; padding: 1px 3px; }
-.port-sel { display: inline-flex; gap: 6px; }
-.port-sel[hidden] { display: none; }
 .style-sel { font-size: 12px; }
 /* footswitches of the preset */
 .editor-fs { display: flex; flex-direction: row; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
@@ -521,9 +529,9 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .off-box p { margin: 0; line-height: 1.45; }
 .off-brand { font-weight: 300; letter-spacing: 6px; color: var(--accent); font-size: 26px; }
 .off-brand small { color: var(--muted); letter-spacing: 1px; font-size: 13px; }
-/* without a pedal: no sidebar, pages, tabs (except the sniffer, a tool of its own) */
+/* without a pedal: no sidebar, pages, tabs (the sniffer stays reachable from the gear menu) */
 body.offline .layout > .sidebar, body.offline .layout > .page:not(#page-sniffer) { display: none !important; }
-body.offline .tabs .tab:not([data-tab=sniffer]) { visibility: hidden; }
+body.offline .tabs { visibility: hidden; }
 body.offline #editHint { display: none; }
 .spinner { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #333; border-top-color: var(--accent);
   animation: spin .8s linear infinite; }

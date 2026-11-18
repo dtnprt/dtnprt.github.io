@@ -158,6 +158,9 @@ function updateButtons() {
 
 function showTab(tab) {
   state.tab = tab;
+  // the sniffer has no tab of its own (gear menu); its entry there leads back to the editor
+  const sb = $('snifferBtn');
+  if (sb) sb.firstChild.textContent = tab === 'sniffer' ? '← Back to the editor ' : 'Sniffer ';
   for (const b of document.querySelectorAll('.tab')) b.classList.toggle('active', b.dataset.tab === tab);
   for (const p of document.querySelectorAll('.page')) p.hidden = p.id !== `page-${tab}`;
   document.querySelector('.layout').classList.toggle('no-sidebar', tab !== 'edit');
@@ -3654,8 +3657,25 @@ async function init() {
   } catch { /* ignore */ }
   $('edSave').onclick = savePreset;
   $('edStyleSel').onchange = () => setStyleSlot(state.current, $('edStyleSel').value);
-  $('portToggle').onclick = () => {
-    $('portSel').hidden = !$('portSel').hidden;
+  // gear menu: ports + sniffer; closes on a click outside or Esc
+  const gear = (open) => {
+    $('portSel').hidden = !open;
+    $('portToggle').setAttribute('aria-expanded', String(open));
+    $('portToggle').classList.toggle('on', open);
+  };
+  $('portToggle').onclick = (e) => {
+    e.stopPropagation();
+    gear($('portSel').hidden);
+  };
+  document.addEventListener('mousedown', (e) => {
+    if (!$('portSel').hidden && !$('portSel').contains(e.target) && e.target !== $('portToggle')) gear(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('portSel').hidden) gear(false);
+  });
+  $('snifferBtn').onclick = () => {
+    gear(false);
+    showTab(state.tab === 'sniffer' ? 'edit' : 'sniffer');
   };
   // sub-category / algorithm lists as high as the module legend next to them (no jumping layout)
   const legend = document.querySelector('.ed-left .modules');
