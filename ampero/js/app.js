@@ -1478,15 +1478,14 @@ function ioPanel(raw, out, chainNo) {
   const io = presetIo(raw, out, chainNo);
   const names = out ? OUT_TARGETS : IN_SOURCES;
   const allowed = (isStage() ? STAGE_IO : STOMP_IO)[out ? 'out' : 'in'][chainNo];
-  // like block changes: only in scene 1 (to be safe – what the pedal allows in other scenes is not known)
-  const scene1 = editScene() === 0;
-  const live = canTalk() && scene1;
-  const wrap = el('div', 'io-panel');
+  // the pedal only takes I/O changes in scene 1 – outside it the editor hops there and back (like block changes)
+  const live = canTalk();
+  const wrap = el('div', 'param-panel io-panel');
   const head = el('div', 'params-head');
   head.append(el('span', 'p-title', `${chainNo ? 'B' : 'A'} ${out ? 'Output' : 'Input'} Node`),
     el('span', 'muted small', 'for the whole preset (all scenes)'));
   wrap.append(head);
-  if (!scene1) wrap.append(el('div', 'muted', 'Input / output settings can only be changed in scene 1 – switch to scene 1.'));
+  if (editScene() !== 0) wrap.append(el('div', 'muted small', 'Changes are sent in scene 1 (the pedal switches there briefly and back).'));
   const grid = el('div', 'params-grid');
   // source / target
   const sw = el('div', `pk${live ? '' : ' disabled'}`);
@@ -1512,23 +1511,52 @@ function ioPanel(raw, out, chainNo) {
     }
   }
   wrap.append(grid);
-  return wrap;
+  const body = el('div', 'params-body');
+  body.append(wrap);
+  return body;
 }
 
 async function setIoSource(out, chainNo, source) {
   const allowed = (isStage() ? STAGE_IO : STOMP_IO)[out ? 'out' : 'in'][chainNo];
-  if (!allowed.includes(source) || editScene() !== 0) return;
+  if (!allowed.includes(source) || !canTalk()) return;
   if (!editPreset((raw) => setPresetIoSource(raw, out, chainNo, source))) return;
   renderEditor();
-  await state.dev.send(out ? IO.OUT_SOURCE : IO.IN_SOURCE, ioSourcePayload(chainNo, source));
-  log(`${chainNo ? 'B' : 'A'} ${out ? 'output to' : 'input source'}: ${(out ? OUT_TARGETS : IN_SOURCES).get(source)}`);
+  const what = `${chainNo ? 'B' : 'A'} ${out ? 'output to' : 'input source'}`;
+  if (await inScene1(what, (dev) => dev.send(out ? IO.OUT_SOURCE : IO.IN_SOURCE, ioSourcePayload(chainNo, source)))) {
+    log(`${what}: ${(out ? OUT_TARGETS : IN_SOURCES).get(source)}`);
+  }
 }
 
+// I/O levels outside scene 1: collected while the control moves, then sent in one hop to scene 1
+const pendingIo = new Map(); // "out/chain/param" -> {out, chainNo, p, value}
+let ioTimer = 0;
+const IO_HOP_MS = 400;
+
 function setIoParam(out, chainNo, p, value) {
-  if (editScene() !== 0) return;
+  if (!canTalk()) return;
   if (!editPreset((raw) => setPresetIoParam(raw, out, chainNo, p, value))) return;
   markDirty();
-  state.dev.send(out ? IO.OUT_PARAM : IO.IN_PARAM, ioParamPayload(chainNo, p, value));
+  if (editScene() === 0 && !state.sceneHop) {
+    state.dev.send(out ? IO.OUT_PARAM : IO.IN_PARAM, ioParamPayload(chainNo, p, value)).catch((e) => log(`I/O level: ${e.message}`));
+    return;
+  }
+  pendingIo.set(`${+out}/${chainNo}/${p}`, { out, chainNo, p, value });
+  clearTimeout(ioTimer);
+  ioTimer = setTimeout(flushIo, IO_HOP_MS);
+}
+
+async function flushIo() {
+  ioTimer = 0;
+  if (!pendingIo.size || !state.dev) return;
+  if (state.sceneHop) { // another hop is running – try again afterwards
+    ioTimer = setTimeout(flushIo, IO_HOP_MS);
+    return;
+  }
+  const items = [...pendingIo.values()];
+  pendingIo.clear();
+  await inScene1('I/O level', async (dev) => {
+    for (const x of items) await dev.send(x.out ? IO.OUT_PARAM : IO.IN_PARAM, ioParamPayload(x.chainNo, x.p, x.value));
+  });
 }
 
 function paramControl(raw, slot, p, scene, live, own = null) {
@@ -1658,7 +1686,7 @@ function blockMenu(e, raw, c) {
     { label: 'Save as file…', action: () => saveBlockFile(raw, c), disabled: empty },
     { label: 'Load from file…', action: () => loadBlockFile(c), disabled: !live },
     '-',
-    { label: 'Delete', action: () => removeBlock(c.slot), disabled: empty || !live },
+    { label: 'Delete', action: () => removeBlock(c.slot), disabled: empty || !live, danger: true },
     '-',
     ...[0, 1, 2].map((f) => {
       const fs = presetFs(raw);
@@ -2519,7 +2547,7 @@ function openPresetMenu(i, x, y, li) {
     ] },
     { label: 'Rename…', action: () => renameSlot(i), disabled: !online || state.busy, title: why },
     { label: 'Move to… (untested)', action: () => movePreset(i), disabled: !online || state.busy, title: why },
-    { label: 'Delete… (untested)', action: () => deletePreset(i), disabled: !online || state.busy, title: why },
+    { label: 'Delete… (untested)', action: () => deletePreset(i), disabled: !online || state.busy, title: why, danger: true },
     { label: 'Style', disabled: !online || state.busy, title: why, items: [
       ...STYLES.map((s) => ({ label: s, checked: style === s, action: () => setStyleSlot(i, s) })),
       '-',

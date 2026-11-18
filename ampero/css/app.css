@@ -139,6 +139,8 @@ tr.diff td:nth-child(4) { color: var(--accent); }
 .ctx-menu li { position: relative; padding: 7px 28px 7px 16px; cursor: pointer; white-space: nowrap; }
 .ctx-menu li:hover:not(.disabled):not(.sep) { background: #3a3a3a; }
 .ctx-menu li.disabled { color: #666; cursor: default; }
+.ctx-menu li.danger:not(.disabled) { color: var(--red); }
+.ctx-menu li.danger:hover:not(.disabled) { background: var(--red); color: #fff; }
 .ctx-menu li.sep { padding: 0; margin: 4px 0; border-top: 1px solid #444; cursor: default; }
 .ctx-menu li.sub::after { content: '▸'; position: absolute; right: 10px; color: var(--muted); }
 .ctx-menu li.checked::before { content: '✓'; position: absolute; left: 4px; color: var(--accent); }
@@ -339,8 +341,9 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .gs-row input[type=range] { flex: 1; min-width: 60px; }
 .gs-eq { grid-column: 1 / -1; }
 .gs-row .gs-val { min-width: 54px; color: #ddd; font-variant-numeric: tabular-nums; }
-.gs-colors { display: flex; gap: 6px; }
-.gs-colors button { width: 24px; height: 24px; padding: 0; border-radius: 3px; border: 2px solid transparent; }
+/* one row, always: the swatches shrink with the space next to the label (same width as the selects) */
+.gs-colors { display: flex; flex-wrap: nowrap; gap: 4px; flex: 1; min-width: 0; max-width: 200px; }
+.gs-colors button { flex: 1 1 0; min-width: 0; max-width: 22px; aspect-ratio: 1; height: auto; padding: 0; border-radius: 3px; border: 2px solid transparent; }
 .gs-colors button.on { border-color: #fff; }
 .eq-table td, .eq-table th { padding: 3px 6px; }
 .eq-graph { width: 100%; max-width: 1100px; height: auto; background: #101010; border: 1px solid var(--line); border-radius: 4px; touch-action: none; }

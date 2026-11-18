@@ -122,6 +122,7 @@ function build(items) {
     if (it.title) li.title = it.title;
     if (it.checked) li.classList.add('checked');
     if (it.disabled) li.classList.add('disabled');
+    if (it.danger) li.classList.add('danger');
     if (it.items) {
       li.classList.add('sub');
       const sub = build(it.items);
