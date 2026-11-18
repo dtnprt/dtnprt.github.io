@@ -598,3 +598,6 @@ a.version[href]:hover { color: var(--accent); }
 
 /* About: a tab in the connection area, right of the gear */
 .conn .tab-about { font-size: 15px; padding: 6px 8px; align-self: stretch; }
+
+/* online / offline pill in the status bar */
+.log-head #status { margin-right: 12px; font-size: 11px; padding: 2px 8px; }
