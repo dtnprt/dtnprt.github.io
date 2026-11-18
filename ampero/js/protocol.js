@@ -753,7 +753,7 @@ export function setPresetFsClick(raw, fs, code) {
 /**
  * Chain positions switched by footswitch fs (tag 8: u8 led[3], u8 on[3][12]). Indexed by position A1..B6, not by slot:
  * the Hotone editor sends index 1 for a block at A2, and after moving the block the footswitch keeps switching A2
- * (captures/session-2026-11-18-watch.txt). The block on/off states (tag 5, SLOT_ON) are per slot.
+ * (captures/wine-fs-position-2026-11-18.txt). The block on/off states (tag 5, SLOT_ON) are per slot.
  */
 export function presetFsSlots(raw, fs) {
   const o = tagOffset(raw, 8) + 3 + 12 * fs;
