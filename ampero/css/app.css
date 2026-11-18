@@ -507,3 +507,25 @@ input[type=range]:disabled { opacity: .45; cursor: default; }
 .floating-chat-kofi-popup-iframe, .floating-chat-kofi-popup-iframe-mobi {
   left: auto !important; right: 16px !important; bottom: calc(var(--kofi-bottom, 56px) + 60px) !important;
 }
+
+/* ------------------------------------------------------------------ start screen (no pedal) / connecting */
+.offline-screen { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.offline-screen[hidden] { display: none; }
+.off-box { max-width: 460px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.off-box h2 { margin: 4px 0 0; font-size: 20px; font-weight: 500; }
+.off-box p { margin: 0; line-height: 1.45; }
+.off-brand { font-weight: 300; letter-spacing: 6px; color: var(--accent); font-size: 26px; }
+.off-brand small { color: var(--muted); letter-spacing: 1px; font-size: 13px; }
+/* without a pedal: no sidebar, pages, tabs (except the sniffer, a tool of its own) */
+body.offline .layout > .sidebar, body.offline .layout > .page:not(#page-sniffer) { display: none !important; }
+body.offline .tabs .tab:not([data-tab=sniffer]) { visibility: hidden; }
+body.offline #editHint { display: none; }
+.spinner { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #333; border-top-color: var(--accent);
+  animation: spin .8s linear infinite; }
+.spinner[hidden] { display: none; }
+.status.connecting::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: -1px;
+  border-radius: 50%; border: 2px solid #5a4a20; border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner, .status.connecting::before { animation-duration: 2.4s; } }
+.version { margin-right: 12px; white-space: nowrap; text-decoration: none; font-variant-numeric: tabular-nums; }
+a.version[href]:hover { color: var(--accent); }

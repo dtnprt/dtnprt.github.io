@@ -6,7 +6,7 @@
   <title>Ampero II – Web Editor</title>
   <link rel="stylesheet" href="css/app.css">
 </head>
-<body>
+<body class="offline">
   <header class="topbar">
     <div class="brand">AMPERO II <small>web</small></div>
     <nav class="tabs">
@@ -36,6 +36,19 @@
   </div>
 
   <main class="layout">
+    <!-- shown instead of the editor while no Ampero is connected -->
+    <section id="offlineScreen" class="offline-screen">
+      <div class="off-box">
+        <div class="off-brand">AMPERO II <small>web</small></div>
+        <div id="offSpinner" class="spinner" hidden></div>
+        <h2 id="offTitle">No Ampero connected</h2>
+        <p id="offText" class="muted">Connect the pedal with USB and close the Hotone software – the Ampero is connected
+          automatically when it is found.</p>
+        <button id="offConnect" class="primary">Connect</button>
+        <p class="muted small">Needs a browser with Web MIDI (Chrome, Edge, Brave, Firefox with SysEx permission).
+          Ports can be chosen by hand with ⚙.</p>
+      </div>
+    </section>
     <!-- preset list: only on the Edit page -->
     <aside class="sidebar" id="sidebar">
       <div class="current-box">
@@ -262,6 +275,7 @@
       <span id="logLast" class="muted small"></span>
       <span class="spacer"></span>
       <span id="editHint" class="muted small edit-hint">Click a block to edit · right-click: copy, paste, save, load, delete · drag to swap · Save stores the preset</span>
+      <a id="version" class="muted small version" target="_blank" rel="noopener"></a>
       <a href="#" id="aboutLink" class="muted small about-link" title="disclaimer and legal notes">Unofficial – not affiliated with Hotone · Disclaimer</a>
       <button id="traceBtn" class="small-btn" disabled title="raw MIDI frames of this connection – send this file when something goes wrong">Save trace</button>
     </div>

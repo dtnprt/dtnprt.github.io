@@ -23,6 +23,7 @@ import { decodePrst, encodePrst } from './prst.js';
 import { closeMenu, confirmSlots, contextMenu, promptText, showAbout } from './ui.js';
 import { initSniffer } from './sniffer-ui.js';
 import { moduleIcon } from './icons.js';
+import { editorVersion } from './version.js';
 import { diffProbes, probe } from './probe.js';
 import { commandGroup } from './sniffer.js';
 import { algDbLoaded, algInfo, algsOfCategory, categoryNames, clampValue, formatValue, groupsOfCategory, loadAlgDb } from './algdb.js';
@@ -32,6 +33,7 @@ let sniffer = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = {
+  connecting: false, // connect() running: start screen with spinner until the preset list and preset are read
   focusParam: null, // {slot, id}: parameter to highlight once (jump from a quick knob)
   selIo: null, // {out, chain}: input / output node shown in the parameter area (when no block is selected)
   dragCat: null, // module (category) dragged from the legend
@@ -111,7 +113,25 @@ function canTalk() {
   return !!state.dev && !state.busy && !state.otherHost && !state.sniffing;
 }
 
+/** Without a connected pedal only the start screen is shown (and the sniffer, a tool of its own). */
+function updateOnlineView() {
+  const ready = !!state.dev && !state.connecting;
+  document.body.classList.toggle('offline', !ready);
+  document.body.classList.toggle('connecting', !!state.connecting);
+  $('offSpinner').hidden = !state.connecting;
+  $('offTitle').textContent = state.connecting ? 'Connecting…' : 'No Ampero connected';
+  $('offText').textContent = state.connecting
+    ? 'Reading the preset list and the current preset from the pedal.'
+    : state.access ? ($('status').title || 'Connect the pedal with USB and close the Hotone software – the Ampero is connected automatically when it is found.')
+      : state.midiError ? `Web MIDI is not available: ${state.midiError}` : 'Waiting for MIDI access (the browser may ask for permission)…';
+  $('offConnect').disabled = state.busy || !state.access;
+  $('offConnect').hidden = !!state.connecting;
+  if (!ready && state.tab !== 'sniffer') $('offlineScreen').hidden = false;
+  else $('offlineScreen').hidden = true;
+}
+
 function updateButtons() {
+  updateOnlineView();
   const online = !!state.dev;
   const free = canTalk();
   $('connectBtn').textContent = online ? 'Disconnect' : 'Connect';
@@ -141,6 +161,7 @@ function showTab(tab) {
   for (const b of document.querySelectorAll('.tab')) b.classList.toggle('active', b.dataset.tab === tab);
   for (const p of document.querySelectorAll('.page')) p.hidden = p.id !== `page-${tab}`;
   document.querySelector('.layout').classList.toggle('no-sidebar', tab !== 'edit');
+  updateOnlineView();
   $('editHint').hidden = tab !== 'edit';
   if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
   closeMenu();
@@ -180,7 +201,8 @@ function autoConnect() {
   if (state.dev || state.busy || state.manualOff || !state.access) return;
   const { input, output } = listPorts(state.access);
   if (!input || !output) {
-    if (!state.dev) $('status').title = 'no Ampero found – plug it in, or choose the ports manually (⚙)';
+    if (!state.dev) $('status').title = 'No Ampero found – plug it in (USB), or choose the ports manually (⚙).';
+    updateOnlineView();
     return;
   }
   $('inPort').value = input.id;
@@ -226,8 +248,9 @@ async function connect(auto = false) {
     updateButtons();
   });
   state.busy = true;
+  state.connecting = true;
   updateButtons();
-  setStatus('busy', 'connecting…');
+  setStatus('busy connecting', 'connecting…');
   try {
     await dev.open();
     state.dev = dev;
@@ -246,6 +269,7 @@ async function connect(auto = false) {
     onlineStatus();
   } finally {
     state.busy = false;
+    state.connecting = false;
     updateButtons();
   }
   // like the Hotone software at start-up: read the preset that is active on the pedal, so the editor shows it
@@ -3536,6 +3560,14 @@ async function init() {
   sniffer = initSniffer({ getAccess: () => state.access, getDevice: () => state.dev, log, download, onLive: setSniffing });
   showTab(['edit', 'backup', 'files', 'global', 'sniffer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'edit');
   $('connectBtn').onclick = () => connect(false);
+  $('offConnect').onclick = () => (state.dev ? null : connect(false));
+  editorVersion().then((v) => {
+    const a = $('version');
+    a.textContent = v.text;
+    a.title = v.title;
+    if (v.url) a.href = v.url;
+    else a.removeAttribute('href');
+  });
   $('dumpBtn').onclick = dump;
   $('cancelBtn').onclick = () => state.abort?.abort();
   $('search').oninput = renderList;
@@ -3630,8 +3662,10 @@ async function init() {
     autoConnect();
   } catch (e) {
     $('connectBtn').disabled = true;
+    state.midiError = e.message || 'not supported or permission denied';
     log(`MIDI not available: ${e.message}`);
   }
+  updateOnlineView();
 }
 
 init();
