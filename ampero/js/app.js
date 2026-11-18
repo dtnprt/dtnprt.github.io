@@ -345,7 +345,8 @@ function onNotify({ cmd, payload }) {
   }
   // edits made on the pedal itself (footswitch assignment, functions, order) arrive with the same commands as an
   // editor's set commands – apply them, they are no sign of another program
-  if (!state.dev?.askedRecently(cmd)) applyPedalEdit(cmd, payload);
+  // (block on/off is always applied: the pedal reports the whole state of the scene, e.g. after a footswitch)
+  if (cmd === CMD.SLOT_ON || !state.dev?.askedRecently(cmd)) applyPedalEdit(cmd, payload);
   if (OTHER_HOST_SIGNS.has(cmd) || (cmd === CMD.WRITE_ACK && !state.busy)) {
     otherHostDetected(cmd);
   }
@@ -370,6 +371,11 @@ function applyPedalEdit(cmd, p) {
     } else if (cmd === FS_SET && p.length >= 3) {
       next = raw;
       for (let f = 0; f < 3; f++) next = setPresetFsClick(next, f, p[f]);
+    } else if (cmd === CMD.SLOT_ON && p.length >= 13 && p[0] < presetSceneCount(raw)) {
+      // u8 scene, u8 on[12] (+ 7 more bytes in the pedal's report) – sent when a footswitch switches blocks
+      next = raw;
+      for (let s = 0; s < 12; s++) next = setPresetOn(next, p[0], s, p[1 + s] === 1);
+      if (presetOn(next, p[0]).join() === presetOn(raw, p[0]).join()) return;
     } else if (cmd === CMD.REORDER && p.length >= 12) {
       next = setPresetSeq(raw, Array.from(p.subarray(0, 12)));
     }
