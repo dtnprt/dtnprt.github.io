@@ -1305,25 +1305,29 @@ function renderFs(raw, chain) {
 
 const posName = (p) => `${p < 6 ? 'A' : 'B'}${(p % 6) + 1}`;
 
-/** Label, value text and bar fill (0..1, null = empty) of quick knob target {obj, param}, like the pedal's display
- * ("A2-DYN Attack", "Patch Volume", "Patch Tempo"; value above the bar). */
+// small line icons for the two patch functions (same style as the module icons)
+const QK_FUNC_ICONS = {
+  [QKNOB.VOLUME]: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+    'stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9c1.5 1.5 1.5 4.5 0 6M19 6.5c3 3 3 8 0 11"/></svg>',
+  [QKNOB.TEMPO]: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+    'stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6l4 18H5z"/><path d="M12 17l5-10"/><path d="M8 17h8"/></svg>',
+};
+
+/** What quick knob target {obj, param} shows: module (icon / color), name, parameter and its value. */
 function quickKnobView(raw, chain, q) {
   const scene = editScene();
   if (q.obj === QKNOB.VOLUME || q.obj === QKNOB.TEMPO) {
-    const m = sceneMeta(raw, scene);
-    return q.obj === QKNOB.VOLUME
-      ? { label: 'Patch Volume', value: `${m.volume}`, at: m.volume / 100 }
-      : { label: 'Patch Tempo', value: `${m.tempo}`, at: (m.tempo - 40) / 260 };
+    const m = sceneMeta(raw, scene), vol = q.obj === QKNOB.VOLUME;
+    return { icon: QK_FUNC_ICONS[q.obj], mod: '', name: 'Patch', param: vol ? 'Volume' : 'Tempo',
+      value: vol ? `${m.volume}` : `${m.tempo} BPM` };
   }
   const c = q.obj < 12 ? chain.find((x) => x.pos === q.obj) : null;
   const a = c && c.code !== 0xffffffff ? algInfo(c.code) : null;
-  if (!a) return { label: q.obj === QKNOB.OFF ? 'OFF' : `target ${q.obj}`, value: '', at: null };
+  if (!a) return { icon: '', mod: '', name: q.obj === QKNOB.OFF ? 'OFF' : `target ${q.obj}`, param: '', value: '' };
   const p = a.params.find((x) => x.id === q.param);
-  const label = `${posName(q.obj)}-${a.module} ${p ? p.name : `parameter ${q.param}`}`;
-  if (!p) return { label, value: '', at: null };
-  const v = sceneParam(raw, scene, c.slot, p.id);
-  return { label, title: `${posName(q.obj)} ${a.name} · ${p.name}`, value: formatValue(p, v),
-    at: p.max > p.min ? (v - p.min) / (p.max - p.min) : null };
+  return { icon: moduleIcon(a.module) || moduleIcon(/^FX /.test(a.module) ? 'FX LOOP' : ''), mod: a.module,
+    name: `${posName(q.obj)} ${a.name}`, param: p ? p.name : `parameter ${q.param}`,
+    value: p ? formatValue(p, sceneParam(raw, scene, c.slot, p.id)) : '', title: `${posName(q.obj)} ${a.module} : ${a.name}` };
 }
 
 /** Menu items to assign quick knob k: OFF, every block with its parameters, Patch Volume / Tempo. */
@@ -1364,13 +1368,13 @@ function quickKnobBox(raw, chain) {
       e.stopPropagation();
       contextMenu(r.left, r.bottom + 2, quickKnobItems(chain, k, q));
     };
-    const tip = live ? `Quick knob ${k + 1}${v.title ? ` – ${v.title}` : ''} – click to assign` : 'connect the pedal to assign';
+    const tip = live ? `Quick knob ${k + 1}${v.title ? ` – ${v.title}` : ''}${v.param ? ` · ${v.param}` : ''} – click to assign` : 'connect the pedal to assign';
+    // like a block in the chain: module icon (in its color), then name, parameter and value
     const cell = el('button', `qk-cell${q.obj === QKNOB.OFF ? ' off' : ''}`);
-    const bar = el('span', 'qk-bar');
-    const fill = el('span', 'qk-fill');
-    fill.style.width = `${v.at == null ? 0 : 100 * Math.min(1, Math.max(0, v.at))}%`;
-    bar.append(fill);
-    cell.append(el('span', 'qk-val', v.value || ' '), bar, el('span', 'qk-label', v.label));
+    const icon = el('span', `qk-icon mi${v.mod ? ` m-${v.mod.replace(/ /g, '-')}` : ''}`);
+    icon.innerHTML = v.icon || (q.obj === QKNOB.OFF ? '' : v.mod.slice(0, 3));
+    cell.append(icon, el('span', 'qk-name', v.name), el('span', 'qk-label', v.param || ' '),
+      el('span', 'qk-val', v.value || ' '));
     cell.title = tip;
     cell.disabled = !live;
     cell.onclick = open(cell);
@@ -1396,6 +1400,7 @@ function quickKnobControl(raw, chain, q, knob, cap, cell) {
     p = tempo ? { min: 40, max: 300, step: 1 } : { min: 0, max: 100, step: 1 };
     value = sceneMeta(raw, scene)[tempo ? 'tempo' : 'volume'];
     apply = (v) => setSceneValue(tempo ? 'tempo' : 'volume', v);
+    if (tempo) fmt = (v) => `${v} BPM`;
   } else if (q.obj < 12) {
     const c = chain.find((x) => x.pos === q.obj);
     const a = c && c.code !== 0xffffffff ? algInfo(c.code) : null;
@@ -1418,7 +1423,6 @@ function quickKnobControl(raw, chain, q, knob, cap, cell) {
     const f = range > 0 ? (value - p.min) / range : 0;
     cap.style.transform = `rotate(${-135 + 270 * f}deg)`; // the knurling turns with the value
     cell.querySelector('.qk-val').textContent = fmt(value);
-    cell.querySelector('.qk-fill').style.width = `${100 * f}%`;
   };
   // block parameters are throttled in changeParam; scene volume / tempo here (one send per 80 ms, the last one wins)
   let timer = 0, sent = value;
