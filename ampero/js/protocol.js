@@ -751,7 +751,7 @@ export function presetFs(raw) {
 // Set 0x01020001: u8 knob, u8 obj, u8 category, u32 alg, then u8 param when the target is chosen (8 bytes, param 0,
 // FF for a function) or u16 param when only the parameter changes (9 bytes) – exactly what the Hotone editor sent
 // (captures/wine-quick-knobs-2026-11-18.txt, export data/A98-1-MIDI-Test 2.prst, screenshots data/quick1..4.png).
-// OFF (FF) tested on the pedal; Patch Tempo was not in the capture (0x0D like for the EXP targets).
+// OFF (FF) and Patch Tempo (0x0D) were not in the capture but work on the pedal (tested with this editor).
 export const QKNOB = { SET: 0x01020001, VOLUME: 0x0c, TEMPO: 0x0d, OFF: 0xff, COUNT: 3 };
 
 export function presetQuickKnobs(raw) {
@@ -775,6 +775,55 @@ export function qknobPayload(knob, obj, category, code, param, wide) {
   v.setUint32(3, code >>> 0, true);
   if (wide) v.setUint16(7, param, true);
   else p[7] = param;
+  return p;
+}
+
+// ------------------------------------------------------------------ expression pedal targets (tools/FORMAT.md 6.9)
+// Tag 7: u8 expState[2], u8 pos[8], u8 param[8], f32 min[8] @18, max[8] @50, curve[8] @82, autoOff[8] @114,
+// offTime[8] @146; index = exp * 4 + target. pos = chain position 0–11, 0x0C Patch Volume, 0x0D Patch Tempo,
+// 0xFF OFF. Min / max in the target's display values (min > max = reversed). Set the target with 0x01060002
+// (u8 exp, u8 target, u8 pos, u8 category, u32 alg, u8 param; FF for functions / OFF), the range with 0x01060003
+// (u16 exp, u16 target, f32 min, max, curve, autoOff, offTime) – the Hotone editor sends all range fields each time.
+// After a target change the pedal resets the range itself (block 0–100, Patch Tempo 40–300), no range is sent.
+// Captures/wine-exp-targets-2026-11-18.txt, exports data/A98-1-MIDI-Test.prst / "… 1.prst" (OFF).
+export const EXP = { TARGET: 0x01060002, RANGE: 0x01060003, TARGETS: 4, VOLUME: 0x0c, TEMPO: 0x0d, OFF: 0xff,
+  CURVES: ['Line', 'Exp', 'Log'], OFF_TIME: [20, 2000] };
+
+export function presetExpTargets(raw, exp) {
+  const o = tagOffset(raw, 7), d = new DataView(raw.buffer, raw.byteOffset);
+  return Array.from({ length: EXP.TARGETS }, (_, t) => {
+    const i = exp * EXP.TARGETS + t, f = (base) => d.getFloat32(o + base + 4 * i, true);
+    return { pos: raw[o + 2 + i], param: raw[o + 10 + i], min: f(18), max: f(50), curve: f(82), autoOff: f(114) !== 0,
+      offTime: f(146) };
+  });
+}
+
+/** x = {pos, param, min, max, curve, autoOff, offTime} (all fields). */
+export function setPresetExpTarget(raw, exp, t, x) {
+  const r = raw.slice(), o = tagOffset(raw, 7), d = new DataView(r.buffer);
+  const i = exp * EXP.TARGETS + t, f = (base, v) => d.setFloat32(o + base + 4 * i, v, true);
+  r[o + 2 + i] = x.pos;
+  r[o + 10 + i] = x.param;
+  f(18, x.min); f(50, x.max); f(82, x.curve); f(114, x.autoOff ? 1 : 0); f(146, x.offTime);
+  return r;
+}
+
+export function expTargetPayload(exp, t, pos, category, code, param) {
+  const p = new Uint8Array(9), v = new DataView(p.buffer);
+  p[0] = exp;
+  p[1] = t;
+  p[2] = pos;
+  p[3] = category & 0xff;
+  v.setUint32(4, code >>> 0, true);
+  p[8] = param;
+  return p;
+}
+
+export function expRangePayload(exp, t, x) {
+  const p = new Uint8Array(24), v = new DataView(p.buffer);
+  v.setUint16(0, exp, true);
+  v.setUint16(2, t, true);
+  [x.min, x.max, x.curve, x.autoOff ? 1 : 0, x.offTime].forEach((n, k) => v.setFloat32(4 + 4 * k, n, true));
   return p;
 }
 

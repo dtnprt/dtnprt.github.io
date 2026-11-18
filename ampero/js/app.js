@@ -13,6 +13,7 @@ import {
   checkBlock, presetBlock, setPresetBlock, applyNodeParam, applyRoutingPush, presetSceneCount,
   TEMPLATE, applyTemplate, applyTemplateData, templateSavePayload, CHAIN_MODES,
   QKNOB, presetQuickKnobs, setPresetQuickKnob, qknobPayload,
+  EXP, presetExpTargets, setPresetExpTarget, expTargetPayload, expRangePayload,
 } from './protocol.js';
 import { isNamb, namToNamb } from './nam2namb.js';
 import { wavToIr } from './irwav.js';
@@ -35,6 +36,7 @@ const state = {
   dragCat: null, // module (category) dragged from the legend
   fsPick: false, // "pick blocks in the chain" mode for the selected footswitch
   selFs: 0, // footswitch shown in the footswitch panel (its positions are marked in the chain)
+  selExp: 0, // expression pedal shown in the EXP panel (0 EXP1, 1 EXP2)
   fsFollow: false, // footswitch assignments move with a dragged block (option in the footswitch panel)
   access: null,
   dev: null,
@@ -1295,6 +1297,7 @@ function renderFs(raw, chain) {
   b.append(midiRows(raw, 'fs', f));
   box.append(b);
   box.append(quickKnobBox(raw, chain));
+  box.append(expBox(raw, chain));
   box.append(midiRows(raw, 'patch', 0));
 }
 
@@ -1346,6 +1349,142 @@ function quickKnobBox(raw, chain) {
   return box;
 }
 
+// ------------------------------------------------------------------ expression pedal targets
+
+/** Display range of an EXP target (what the Hotone editor's Min / Max sliders offer). */
+function expRange(raw, pos, param) {
+  if (pos === EXP.TEMPO) return [40, 300];
+  if (pos === EXP.VOLUME) return [0, 100];
+  const c = pos < 12 ? presetChain(raw).find((x) => x.pos === pos) : null;
+  const p = c ? algInfo(c.code)?.params.find((x) => x.id === param) : null;
+  return p && Number.isFinite(p.min) && Number.isFinite(p.max) ? [p.min, p.max] : [0, 100];
+}
+
+/** EXP1 / EXP2: four targets each (OFF, a block parameter, Patch Volume, Patch Tempo) with range and curve. */
+function expBox(raw, chain) {
+  const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls ?? '', textContent: text ?? '' });
+  const box = el('div', 'exp-box');
+  let targets;
+  const exp = state.selExp;
+  try {
+    targets = presetExpTargets(raw, exp);
+  } catch {
+    return box;
+  }
+  const head = el('div', 'exp-head');
+  head.append(el('span', 'muted small', 'Expression pedal'));
+  for (const e of [0, 1]) {
+    const b = el('button', `small-btn${e === exp ? ' on' : ''}`, `EXP${e + 1}`);
+    b.onclick = () => {
+      state.selExp = e;
+      renderEditor();
+    };
+    head.append(b);
+  }
+  box.append(head);
+  const live = canTalk();
+  const blocks = chain.filter((c) => c.code !== 0xffffffff).sort((x, y) => x.pos - y.pos);
+  targets.forEach((x, t) => {
+    const row = el('div', 'exp-row');
+    const line = el('div', 'qk-row');
+    line.append(el('span', 'qk-n', `Target ${t + 1}`));
+    const sel = el('select');
+    sel.append(new Option('OFF', String(EXP.OFF)));
+    for (const c of blocks) {
+      const a = algInfo(c.code);
+      sel.append(new Option(`${posName(c.pos)} ${a ? `${a.module} : ${a.name}` : hex32(c.code)}`, String(c.pos)));
+    }
+    sel.append(new Option('Patch Volume', String(EXP.VOLUME)), new Option('Patch Tempo', String(EXP.TEMPO)));
+    if (![...sel.options].some((o) => +o.value === x.pos)) sel.append(new Option(`target ${x.pos} (unknown)`, String(x.pos)));
+    sel.value = String(x.pos);
+    sel.disabled = !live;
+    line.append(sel);
+    const c = x.pos < 12 ? chain.find((y) => y.pos === x.pos) : null;
+    const a = c ? algInfo(c.code) : null;
+    sel.onchange = () => {
+      const pos = +sel.value;
+      const c2 = pos < 12 ? chain.find((y) => y.pos === pos) : null;
+      setExpTarget(exp, t, pos, c2 ? algInfo(c2.code)?.params[0]?.id ?? 0 : 0xff);
+    };
+    if (a) {
+      const p = el('select');
+      for (const q of a.params) p.append(new Option(q.name, String(q.id)));
+      if (!a.params.some((q) => q.id === x.param)) p.append(new Option(`parameter ${x.param}`, String(x.param)));
+      p.value = String(x.param);
+      p.disabled = !live;
+      p.onchange = () => setExpTarget(exp, t, x.pos, +p.value);
+      line.append(p);
+    }
+    row.append(line);
+    if (x.pos !== EXP.OFF) {
+      const [lo, hi] = expRange(raw, x.pos, x.param);
+      const r = el('div', 'exp-range');
+      const num = (label, key, min, max, step = 1) => {
+        const lab = el('label', 'small', `${label} `);
+        const i = el('input');
+        Object.assign(i, { type: 'number', min, max, step, value: Math.round(x[key] * 100) / 100, disabled: !live });
+        i.onchange = () => {
+          const v = Math.min(max, Math.max(min, +i.value));
+          if (!Number.isFinite(v)) return;
+          setExpRange(exp, t, { ...x, [key]: v });
+        };
+        lab.append(i);
+        return lab;
+      };
+      r.append(num('Min', 'min', lo, hi), num('Max', 'max', lo, hi));
+      const cv = el('select');
+      EXP.CURVES.forEach((n, k) => cv.append(new Option(n, String(k))));
+      cv.value = String(Math.round(x.curve));
+      cv.disabled = !live;
+      cv.onchange = () => setExpRange(exp, t, { ...x, curve: +cv.value });
+      r.append(cv);
+      if (x.pos < 12) { // Auto-OFF only for block targets, like the Hotone editor
+        const lab = el('label', 'small');
+        const cb = el('input');
+        Object.assign(cb, { type: 'checkbox', checked: x.autoOff, disabled: !live });
+        cb.onchange = () => setExpRange(exp, t, { ...x, autoOff: cb.checked });
+        lab.append(cb, ' Auto-OFF');
+        lab.title = 'the pedal switches the block off when the expression pedal is at its minimum for the OFF time';
+        r.append(lab);
+        if (x.autoOff) r.append(num('OFF ms', 'offTime', EXP.OFF_TIME[0], EXP.OFF_TIME[1], 10));
+      }
+      row.append(r);
+    }
+    box.append(row);
+  });
+  return box;
+}
+
+async function setExpTarget(exp, t, pos, param) {
+  const raw = state.presets.get(state.current);
+  if (!raw) return;
+  const c = pos < 12 ? presetChain(raw).find((x) => x.pos === pos) : null;
+  const a = c ? algInfo(c.code) : null;
+  if (pos < 12 && !a) return; // empty position / unknown block
+  const payload = a ? expTargetPayload(exp, t, pos, a.category, a.code, param)
+    : expTargetPayload(exp, t, pos, 0xff, 0xffffffff, 0xff);
+  // the pedal resets the range after a target change (block 0–100, Patch Tempo 40–300); mirror that in the preset
+  const [lo, hi] = pos === EXP.OFF ? [0, 100] : pos === EXP.TEMPO ? [40, 300] : [0, 100];
+  if (!editPreset((r) => setPresetExpTarget(r, exp, t,
+    { pos, param: a ? param : 0xff, min: lo, max: hi, curve: 0, autoOff: false, offTime: 600 }))) return;
+  renderEditor();
+  const what = `EXP${exp + 1} target ${t + 1}`;
+  if (await inScene1(what, (dev) => dev.send(EXP.TARGET, payload))) {
+    const name = pos === EXP.OFF ? 'OFF' : pos === EXP.VOLUME ? 'Patch Volume' : pos === EXP.TEMPO ? 'Patch Tempo'
+      : `${posName(pos)} ${a.name} · ${a.params.find((x) => x.id === param)?.name ?? param}`;
+    log(`${what}: ${name}${pos === EXP.OFF ? ' (OFF not confirmed by a capture yet)' : ''}`);
+  }
+}
+
+async function setExpRange(exp, t, x) {
+  if (!editPreset((r) => setPresetExpTarget(r, exp, t, x))) return;
+  renderEditor();
+  const what = `EXP${exp + 1} target ${t + 1} range`;
+  if (await inScene1(what, (dev) => dev.send(EXP.RANGE, expRangePayload(exp, t, x)))) {
+    log(`${what}: ${x.min}–${x.max}, ${EXP.CURVES[Math.round(x.curve)] ?? x.curve}${x.autoOff ? `, Auto-OFF ${x.offTime} ms` : ''}`);
+  }
+}
+
 /** wide: only the parameter changed (the Hotone editor then sends the 9-byte form). */
 async function setQuickKnob(knob, obj, param, wide) {
   const raw = state.presets.get(state.current);
@@ -1363,7 +1502,7 @@ async function setQuickKnob(knob, obj, param, wide) {
   if (await inScene1(what, (dev) => dev.send(QKNOB.SET, payload))) {
     const name = obj === QKNOB.OFF ? 'OFF' : obj === QKNOB.VOLUME ? 'Patch Volume' : obj === QKNOB.TEMPO ? 'Patch Tempo'
       : `${posName(obj)} ${a.name} · ${a.params.find((x) => x.id === param)?.name ?? param}`;
-    log(`${what}: ${name}${obj === QKNOB.TEMPO ? ' (not confirmed by a capture yet)' : ''}`);
+    log(`${what}: ${name}`);
   }
 }
 
