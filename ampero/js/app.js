@@ -634,9 +634,10 @@ function presetItem(i, name, extraClass = '') {
   const li = document.createElement('li');
   li.className = `${i === state.current ? 'current' : ''} ${extraClass}`;
   li.dataset.index = i;
-  li.innerHTML = '<span class="lbl"></span><span class="nm"></span><span class="menu-btn" title="menu">☰</span>';
-  li.children[0].textContent = label;
-  li.children[1].textContent = name;
+  li.innerHTML = '<span class="grip" draggable="true" title="drag to move this preset to another slot">⠿</span>' +
+    '<span class="lbl"></span><span class="nm"></span><span class="menu-btn" title="menu">☰</span>';
+  li.children[1].textContent = label;
+  li.children[2].textContent = name;
   li.title = `${label} ${name}`;
   return li;
 }
@@ -688,6 +689,51 @@ function initPresetListEvents() {
     if (!li) return;
     e.preventDefault();
     openPresetMenu(+li.dataset.index, e.clientX, e.clientY, li);
+  });
+  // move a preset: drag it by its handle onto another slot (the browser scrolls the list near its edges)
+  let from = -1, over = null;
+  const clear = () => {
+    over?.classList.remove('drop-target');
+    over?.removeAttribute('data-drop');
+    over = null;
+  };
+  ul.addEventListener('dragstart', (e) => {
+    const li = itemOf(e);
+    if (!li || !e.target.closest('.grip') || !canTalk()) {
+      if (e.target.closest?.('.grip')) e.preventDefault();
+      return;
+    }
+    from = +li.dataset.index;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', presetLabel(from));
+    e.dataTransfer.setDragImage(li, 12, 12);
+    li.classList.add('dragging');
+  });
+  ul.addEventListener('dragover', (e) => {
+    if (from < 0) return;
+    const li = itemOf(e);
+    if (!li) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (li === over) return;
+    clear();
+    if (+li.dataset.index === from) return;
+    over = li;
+    li.classList.add('drop-target');
+    li.dataset.drop = `→ ${presetLabel(+li.dataset.index)}`;
+  });
+  ul.addEventListener('drop', (e) => {
+    if (from < 0) return;
+    e.preventDefault();
+    const li = itemOf(e), f = from;
+    clear();
+    from = -1;
+    if (li && +li.dataset.index !== f) movePresetTo(f, +li.dataset.index);
+  });
+  ul.addEventListener('dragend', () => {
+    clear();
+    from = -1;
+    for (const x of ul.querySelectorAll('li.dragging')) x.classList.remove('dragging');
   });
 }
 
@@ -3236,8 +3282,8 @@ function openPresetMenu(i, x, y, li) {
       { label: '.raw (TLV)', action: () => exportSlot(i, 'raw') },
     ] },
     { label: 'Rename…', action: () => renameSlot(i), disabled: !online || state.busy, title: why },
-    { label: 'Move to… (untested)', action: () => movePreset(i), disabled: !online || state.busy, title: why },
-    { label: 'Delete… (untested)', action: () => deletePreset(i), disabled: !online || state.busy, title: why, danger: true },
+    { label: 'Move to…', action: () => movePreset(i), disabled: !online || state.busy, title: why },
+    { label: 'Delete…', action: () => deletePreset(i), disabled: !online || state.busy, title: why, danger: true },
     { label: 'Style', disabled: !online || state.busy, title: why, items: [
       ...STYLES.map((s) => ({ label: s, checked: style === s, action: () => setStyleSlot(i, s) })),
       '-',
@@ -3356,17 +3402,22 @@ const UNTESTED = 'This command is taken from the Hotone app and has not been con
 /** 0x05000004: move a preset to another slot (like dragging it in the Hotone app's patch list). */
 async function movePreset(i) {
   const t = await promptText({ title: `Move ${presetLabel(i)} "${state.deviceNames?.[i] ?? ''}"`,
-    text: `Target slot, e.g. A12-3. ${UNTESTED}`, value: presetLabel(i), maxLength: 5, ok: 'Move',
+    text: 'Target slot, e.g. A12-3 – or drag the preset by its handle (⠿) in the list.', value: presetLabel(i), maxLength: 5, ok: 'Move',
     validate: (v) => (labelIndex(v) < 0 ? 'enter a slot like A12-3' : labelIndex(v) === i ? 'choose another slot' : '') });
   if (t == null) return;
-  const to = labelIndex(t);
+  await movePresetTo(i, labelIndex(t));
+}
+
+/** 0x05000004 (u32 to, u32 from): move preset `from` to slot `to` (tested on the pedal). */
+async function movePresetTo(i, to) {
+  if (to < 0 || to >= PRESET_COUNT || to === i || !canTalk()) return;
   await withPedal('move preset', async () => {
     await state.dev.send(CMD.PRESET_MOVE, u32Payload(to, i));
     await state.dev.waitQuiet(300, 3000);
     state.presets.delete(i);
     state.presets.delete(to);
     await refreshNames();
-    log(`moved ${presetLabel(i)} → ${presetLabel(to)} (check the list)`);
+    log(`moved ${presetLabel(i)} → ${presetLabel(to)}`);
   });
 }
 
@@ -3377,7 +3428,7 @@ function labelIndex(t) {
 
 /** 0x05000001: delete a preset (the slot becomes an empty preset). */
 async function deletePreset(i) {
-  const ok = await confirmSlots({ title: `Delete ${presetLabel(i)}?`, text: `The preset is deleted on the pedal. ${UNTESTED}`,
+  const ok = await confirmSlots({ title: `Delete ${presetLabel(i)}?`, text: 'The preset is deleted on the pedal.',
     rows: [{ slot: presetLabel(i), now: state.deviceNames?.[i] ?? '', next: '(deleted)' }], ok: 'Delete' });
   if (!ok) return;
   await withPedal('delete preset', async () => {
